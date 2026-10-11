@@ -38,6 +38,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.executeDueAutoPlanSteps = executeDueAutoPlanSteps;
 exports.executeDueTransactionPlanSteps = executeDueTransactionPlanSteps;
+const workspaceGrants_js_1 = require("./core/workspaceGrants.js");
+const accountInbound_js_1 = require("./core/accountInbound.js");
+const durableDmQueue_js_1 = require("./core/durableDmQueue.js");
+const publicLinks_js_1 = require("./core/publicLinks.js");
 const accountBridge_js_1 = require("./core/accountBridge.js");
 const workspaceAccess_js_1 = require("./core/workspaceAccess.js");
 const tenantData_js_1 = require("./core/tenantData.js");
@@ -156,7 +160,6 @@ const index_js_22 = require("./agents/mojoOutreach/index.js");
 const index_js_23 = require("./agents/conversationEscalations/index.js");
 const textingRules_js_1 = require("./core/textingRules.js");
 const marcoLog_js_1 = require("./app/marcoLog.js");
-const conversationUtils_js_1 = require("./app/conversationUtils.js");
 const messageDebounce_js_1 = require("./app/messageDebounce.js");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
 const index_js_24 = require("./integrations/voxcpm/index.js");
@@ -196,6 +199,10 @@ app.use((0, tenantGateway_js_1.accountMiddleware)(sessionUserSync, internalCall_
  * an async gate would have to be awaited by every caller and is one forgotten
  * `await` away from letting a request through.
  */
+function sessionMember(req) {
+    const user = sessionUserSync(req);
+    return user ? (process.env.ACCOUNT_ISOLATION === "true" ? (0, workspaceGrants_js_1.workspaceMember)(user.id) : user.name.trim().split(/\s+/)[0].toLowerCase()) : undefined;
+}
 function sessionUserSync(req) {
     try {
         const token = getCookieValue(req, SESSION_COOKIE);
@@ -990,7 +997,7 @@ async function quoWebhookUrl(override) {
         .trim().replace(/\/+$/, "");
     if (!/^https:\/\//.test(base))
         return null; // Quo will not call plain http
-    return `${base}/api/quo/webhook?key=${secret}`;
+    return `${base}${(0, accountInbound_js_1.accountInboundPath)("quo")}?key=${secret}`;
 }
 app.get("/api/quo/status", async (req, res) => {
     if (!dashboardTokenOk(req)) {
@@ -5335,7 +5342,7 @@ app.post("/api/cma/sessions/:id/send", express_1.default.json({ limit: "64kb" })
         const { cmaResults } = await Promise.resolve().then(() => __importStar(require("./core/cmaComps.js")));
         const results = cmaResults(session, comps);
         const { publicBaseUrl, esc } = await Promise.resolve().then(() => __importStar(require("./core/outreachEmail.js")));
-        const viewUrl = `${publicBaseUrl()}/c/${encodeURIComponent(session.id)}`;
+        const viewUrl = `${publicBaseUrl()}${(0, publicLinks_js_1.publicLink)(`/c/${encodeURIComponent(session.id)}`)}`;
         const money = (n) => (n == null ? null : "$" + Math.round(n).toLocaleString());
         const range = session.suggestedMinListPrice != null && session.suggestedMaxListPrice != null
             ? `${money(session.suggestedMinListPrice)} – ${money(session.suggestedMaxListPrice)}`
@@ -5484,7 +5491,7 @@ app.post("/api/cma/sessions/:id/publish", express_1.default.json({ limit: "64kb"
         res.json({
             ok: true,
             session: updated,
-            url: unpublish ? null : `/c/${session.id}`,
+            url: unpublish ? null : (0, publicLinks_js_1.publicLink)(`/c/${session.id}`),
             note: unpublish
                 ? "Unpublished. The client link now returns a not-available page."
                 : "Published. The link below is live and readable by anyone who has it. Nothing was emailed — sending is a separate action.",
@@ -6209,11 +6216,83 @@ app.post("/api/website/lead", express_1.default.json({ limit: "256kb" }), async 
  * opener, so the funnel, the intent gate and the pinned layer all behave
  * exactly as they do on Instagram today.
  */
+async function processZernioDm(job) {
+    const evt = job.event;
+    const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
+    const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(evt.platform, evt.senderId);
+    const { fetchConversationHistory, toIncomingWebhookPayload, sendZernioReply } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
+    const { markCommenterDmReceived } = await Promise.resolve().then(() => __importStar(require("./core/commentAgentStore.js")));
+    /* Close the comment→DM loop. The commenter's platform id and the DM
+       participantId are the SAME string on TikTok (verified byte-for-byte on
+       a live thread), so this join needs no username matching. It also takes
+       the person off the VA's follow-up list, which is the point: nobody
+       should be chased by hand for a DM they already sent. */
+    let reply = job.reply;
+    if (reply === undefined) {
+        const attributed = markCommenterDmReceived(evt.senderId);
+        if (attributed > 0) {
+            (0, marcoLog_js_1.marcoLog)("comment_to_dm_converted", {
+                requestId,
+                correlationId,
+                comment_rows_marked: attributed,
+            });
+        }
+        const history = await fetchConversationHistory({ conversationId: evt.conversationId,
+            accountId: evt.accountId, beforeMessageId: evt.platformMessageId, beforeAt: evt.sentAt });
+        const latestOutbound = [...history.messages].reverse().find(m => m.role === "assistant")?.text;
+        const payload = toIncomingWebhookPayload(evt, latestOutbound ?? null);
+        payload.conversationHistory = history.messages;
+        if (!history.complete)
+            (0, marcoLog_js_1.marcoLog)("history_incomplete", { requestId, correlationId });
+        /* The existing per-user debounce, unchanged: a lead firing off three
+           quick messages becomes ONE pipeline turn, and only the last waiter
+           carries a reply. It was written for ManyChat and never wired up; it
+           does exactly the right thing here. */
+        const result = (0, messageDebounce_js_1.shouldSkipMessageDebounce)(payload)
+            ? await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId })
+            : await (0, messageDebounce_js_1.scheduleDebouncedInbound)(payload, { requestId, correlationId }, (p, log) => (0, webhook_js_1.handleIncomingPayload)(p, log));
+        reply = result.reply?.trim() || "";
+        (0, durableDmQueue_js_1.saveDmReply)(job, reply);
+    }
+    if (!reply)
+        return;
+    const send = await sendZernioReply({
+        conversationId: evt.conversationId,
+        accountId: evt.accountId,
+        text: reply,
+        /* Keyed on the inbound event, so a retry of the same inbound replays
+           the original send instead of delivering a second DM. */
+        idempotencyKey: `zernio:${evt.eventId}`,
+    });
+    (0, marcoLog_js_1.marcoLog)("zernio_reply_send", {
+        requestId,
+        correlationId,
+        conversation_id: evt.conversationId,
+        success: send.success,
+        status: send.status,
+        reply_chars: reply.length,
+        reply_preview: (0, marcoLog_js_1.previewText)(reply),
+        error: send.error ?? null,
+    });
+    if (!send.success) {
+        /* Most likely cause by far: TikTok's 48-hour / 10-message reply
+           window has closed. Named explicitly so it does not read as a bug in
+           the agent. */
+        throw new Error(`[zernio] reply NOT delivered to conversation ${evt.conversationId} ` +
+            `(HTTP ${send.status}): ${send.error ?? "unknown"}`);
+    }
+}
+function startDurableDmWorker() {
+    if ((0, tenantData_js_2.tenantOwner)())
+        return;
+    const tick = () => void (0, durableDmQueue_js_1.drainDmQueue)(processZernioDm).catch(error => console.error("[dm-queue]", error));
+    tick();
+    setInterval(tick, 10000).unref();
+}
 app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json", limit: "1mb" }), async (req, res) => {
-    const { verifyZernioSignature, zernioWebhookSecretConfigured, parseZernioInboundMessage, toIncomingWebhookPayload, fetchConversationHistory, sendZernioReply, zernioTikTokAccountId, } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
+    const { verifyZernioSignature, zernioWebhookSecretConfigured, parseZernioInboundMessage, zernioTikTokAccountId, } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/dm.js")));
     const { parseZernioInboundComment } = await Promise.resolve().then(() => __importStar(require("./integrations/zernio/comments.js")));
     const { enqueueComment, drainCommentQueue } = await Promise.resolve().then(() => __importStar(require("./agents/commentAgent/index.js")));
-    const { markCommenterDmReceived } = await Promise.resolve().then(() => __importStar(require("./core/commentAgentStore.js")));
     if (!zernioWebhookSecretConfigured()) {
         /* Refuse rather than accept anonymous writes. This endpoint creates leads
            and sends real DMs; an unset secret must close it, not open it. */
@@ -6264,95 +6343,18 @@ app.post("/api/zernio/webhook", express_1.default.raw({ type: "application/json"
         res.status(200).json({ ok: true, ignored: true });
         return;
     }
-    if ((0, conversationUtils_js_1.isDuplicateHandle)(evt.eventId)) {
-        (0, marcoLog_js_1.marcoLog)("inbound_rejected", { reason: "zernio_duplicate_event", message_handle: evt.eventId });
-        res.status(200).json({ ok: true, duplicate: true });
-        return;
-    }
-    const requestId = (0, marcoLog_js_1.newMarcoRequestId)();
-    const correlationId = (0, marcoLog_js_1.marcoCorrelationId)(evt.platform, evt.senderId);
-    (0, marcoLog_js_1.marcoLog)("inbound_accepted", {
-        requestId,
-        correlationId,
-        platform: evt.platform,
-        comment_or_dm: "dm",
-        transport: "zernio",
-        message_chars: evt.text.length,
-        message_preview: (0, marcoLog_js_1.previewText)(evt.text),
-        username_set: Boolean(evt.senderUsername),
-        display_name_set: Boolean(evt.senderName),
-    });
-    /* ACK NOW. Everything below this line runs after the response. */
-    res.status(200).json({ ok: true });
-    void (async () => {
-        try {
-            /* Close the comment→DM loop. The commenter's platform id and the DM
-               participantId are the SAME string on TikTok (verified byte-for-byte on
-               a live thread), so this join needs no username matching. It also takes
-               the person off the VA's follow-up list, which is the point: nobody
-               should be chased by hand for a DM they already sent. */
-            const attributed = markCommenterDmReceived(evt.senderId);
-            if (attributed > 0) {
-                (0, marcoLog_js_1.marcoLog)("comment_to_dm_converted", {
-                    requestId,
-                    correlationId,
-                    comment_rows_marked: attributed,
-                });
-            }
-            const history = await fetchConversationHistory({ conversationId: evt.conversationId,
-                accountId: evt.accountId, beforeMessageId: evt.platformMessageId, beforeAt: evt.sentAt });
-            const latestOutbound = [...history.messages].reverse().find(m => m.role === "assistant")?.text;
-            const payload = toIncomingWebhookPayload(evt, latestOutbound ?? null);
-            payload.conversationHistory = history.messages;
-            if (!history.complete)
-                (0, marcoLog_js_1.marcoLog)("history_incomplete", { requestId, correlationId });
-            /* The existing per-user debounce, unchanged: a lead firing off three
-               quick messages becomes ONE pipeline turn, and only the last waiter
-               carries a reply. It was written for ManyChat and never wired up; it
-               does exactly the right thing here. */
-            const result = (0, messageDebounce_js_1.shouldSkipMessageDebounce)(payload)
-                ? await (0, webhook_js_1.handleIncomingPayload)(payload, { requestId, correlationId })
-                : await (0, messageDebounce_js_1.scheduleDebouncedInbound)(payload, { requestId, correlationId }, (p, log) => (0, webhook_js_1.handleIncomingPayload)(p, log));
-            const reply = result.reply?.trim();
-            if (!reply)
-                return;
-            const send = await sendZernioReply({
-                conversationId: evt.conversationId,
-                accountId: evt.accountId,
-                text: reply,
-                /* Keyed on the inbound event, so a retry of the same inbound replays
-                   the original send instead of delivering a second DM. */
-                idempotencyKey: `zernio:${evt.eventId}`,
-            });
-            (0, marcoLog_js_1.marcoLog)("zernio_reply_send", {
-                requestId,
-                correlationId,
-                conversation_id: evt.conversationId,
-                success: send.success,
-                status: send.status,
-                reply_chars: reply.length,
-                reply_preview: (0, marcoLog_js_1.previewText)(reply),
-                error: send.error ?? null,
-            });
-            if (!send.success) {
-                /* Most likely cause by far: TikTok's 48-hour / 10-message reply
-                   window has closed. Named explicitly so it does not read as a bug in
-                   the agent. */
-                console.error(`[zernio] reply NOT delivered to conversation ${evt.conversationId} ` +
-                    `(HTTP ${send.status}): ${send.error ?? "unknown"}`);
-            }
-        }
-        catch (err) {
-            console.error("[zernio] inbound processing failed:", err);
-            (0, marcoLog_js_1.marcoLog)("zernio_inbound_failed", {
-                requestId,
-                correlationId,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        }
-    })();
+    const queued = (0, durableDmQueue_js_1.enqueueDm)(evt);
+    res.status(200).json({ ok: true, ...(!queued ? { duplicate: true } : {}) });
+    void (0, durableDmQueue_js_1.drainDmQueue)(processZernioDm).catch(error => console.error("[dm-queue]", error));
 });
 /** Is the Zernio transport actually wired — key valid, account connected? */
+app.get("/api/dm/queue", async (req, res) => {
+    if (!dashboardTokenOk(req)) {
+        res.sendStatus(401);
+        return;
+    }
+    res.json((await Promise.resolve().then(() => __importStar(require("./core/durableDmQueue.js")))).dmQueueStatus());
+});
 app.get("/api/zernio/status", async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
@@ -7674,7 +7676,7 @@ app.get("/api/email/gmail-oauth/start", (req, res) => {
     for (const [s, t] of gmailOauthStates)
         if (now - t > 600_000)
             gmailOauthStates.delete(s);
-    const state = (0, crypto_1.randomUUID)();
+    const state = ((0, tenantData_js_2.tenantOwner)() ? Buffer.from((0, tenantData_js_2.tenantOwner)()).toString("base64url") + "." : "") + (0, crypto_1.randomUUID)();
     gmailOauthStates.set(state, now);
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     url.searchParams.set("client_id", clientId);
@@ -7696,7 +7698,7 @@ app.get("/api/email/gmail-oauth/callback", async (req, res) => {
         `<p><a style="color:#00d4ff" href="/api/email/gmail-oauth/start">Try again</a></p></body>`);
     if (!code)
         return fail(String(req.query.error || "Google returned no authorization code."));
-    if (!state || !gmailOauthStates.has(state))
+    if (!state || !gmailOauthStates.has(state) || Date.now() - gmailOauthStates.get(state) > 600_000)
         return fail("Invalid or expired state — start over.");
     gmailOauthStates.delete(state);
     const clientId = process.env.GMAIL_CLIENT_ID?.trim() || "";
@@ -8531,8 +8533,9 @@ app.post("/webhook/twilio", express_1.default.urlencoded({ extended: false }), a
     try {
         const signature = req.get("x-twilio-signature") ?? "";
         const protocol = req.get("x-forwarded-proto") || req.protocol;
-        const url = `${protocol}://${req.get("host")}${req.originalUrl}`;
-        if (signature && !(0, index_js_17.validateTwilioSignature)(signature, url, req.body)) {
+        const originalPath = (0, tenantData_js_2.tenantOwner)() ? String(req.headers["x-original-inbound-path"] || req.originalUrl) : req.originalUrl;
+        const url = `${protocol}://${req.get("host")}${originalPath}`;
+        if (!signature || !(0, index_js_17.validateTwilioSignature)(signature, url, req.body)) {
             console.warn("[Twilio Webhook] Invalid signature — rejecting");
             res.status(403).send("Invalid signature");
             return;
@@ -11470,7 +11473,7 @@ function spawnNextRecurrence(done) {
 }
 app.post("/api/tasks", express_1.default.json({ limit: "1mb" }), (req, res) => {
     const actor = sessionUserSync(req);
-    const actorMember = actor?.name.trim().split(/\s+/)[0].toLowerCase();
+    const actorMember = sessionMember(req);
     if (actor && ((req.body?.expectedActorId && req.body.expectedActorId !== actor.id)
         || (req.body?.createdBy && req.body.createdBy !== actorMember))) {
         res.status(409).json({ error: "Your signed-in account changed or does not match this task page. Refresh or sign in to the intended account before saving. Your draft has not been submitted." });
@@ -12472,7 +12475,7 @@ app.get("/api/team/roster", (_req, res) => {
     res.json({ members: (0, teamRoster_js_1.listTeamMembers)() });
 });
 app.get("/api/team/notifications", (req, res) => {
-    const user = sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || String(req.query.user || "").toLowerCase();
+    const user = sessionMember(req) || String(req.query.user || "").toLowerCase();
     if (!user) {
         res.status(400).json({ error: "user required" });
         return;
@@ -12486,10 +12489,10 @@ app.post("/api/team/notifications/read", express_1.default.json({ limit: "64kb" 
         res.status(400).json({ error: "user required" });
         return;
     }
-    res.json({ marked: (0, teamStore_js_1.markNotificationsRead)(sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || body.user, body.ids) });
+    res.json({ marked: (0, teamStore_js_1.markNotificationsRead)(sessionMember(req) || body.user, body.ids) });
 });
 app.get("/api/team/chat", (req, res) => {
-    const me = sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || String(req.query.me || "").toLowerCase();
+    const me = sessionMember(req) || String(req.query.me || "").toLowerCase();
     const withUser = String(req.query.with || "").toLowerCase();
     if (!me || !withUser) {
         res.status(400).json({ error: "me and with required" });
@@ -12504,7 +12507,7 @@ app.post("/api/team/chat", express_1.default.json({ limit: "64kb" }), (req, res)
         res.status(400).json({ error: "from, to, text required" });
         return;
     }
-    const from = sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || body.from;
+    const from = sessionMember(req) || body.from;
     (0, teamStore_js_1.touchPresence)(from);
     res.json({ message: (0, teamStore_js_1.addChatMessage)(from, body.to, String(body.text).trim()) });
 });
@@ -12514,7 +12517,7 @@ app.post("/api/team/chat/read", express_1.default.json({ limit: "64kb" }), (req,
         res.status(400).json({ error: "me and with required" });
         return;
     }
-    res.json({ marked: (0, teamStore_js_1.markChatRead)(sessionUserSync(req)?.name.trim().split(/\s+/)[0].toLowerCase() || body.me, body.with) });
+    res.json({ marked: (0, teamStore_js_1.markChatRead)(sessionMember(req) || body.me, body.with) });
 });
 app.get("/api/team/presence", (_req, res) => {
     res.json({ presence: (0, teamStore_js_1.getPresence)() });
@@ -14758,6 +14761,7 @@ if (process.env.ACCOUNT_ISOLATION !== "true") {
 }
 httpServer.listen(PORT, (0, tenantData_js_2.tenantOwner)() ? "127.0.0.1" : "0.0.0.0", () => {
     PORT = httpServer.address().port;
+    startDurableDmWorker();
     if ((0, tenantData_js_2.isTenantGateway)()) {
         (0, crmApiSurface_js_1.setCrmApiCatalogue)([], `http://127.0.0.1:${PORT}`);
         require("./core/accountBootstrap.js").bootstrapAccounts();
@@ -14929,3 +14933,15 @@ if (!(0, tenantData_js_2.tenantOwner)()) {
         startCommentQueueWorker(async (id) => !!(await getLead("tiktok", id)));
     });
 }
+// IPC is inherited from the sign-in gateway, never an HTTP import endpoint.
+if ((0, tenantData_js_2.tenantOwner)())
+    process.on("message", (message) => {
+        if (message?.type === "shared-social") {
+            try {
+                require("./core/db.js").mergeSharedSocial(message.rows);
+            }
+            catch (error) {
+                console.error("[social-handoff] Import failed; retained source will retry", error);
+            }
+        }
+    });

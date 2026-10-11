@@ -12,7 +12,7 @@ The default branch is **master**. This overview describes the source on that bra
 - **Harvey:** persistent projects/chats, per-chat model selection and hosted browser, connected apps, files, taught workflows, memory, background jobs and scheduled agents.
 - **Team access:** Marco and Wesley have separate account stores. Carlos has combined access to authorized business records and chats. Task Center, knowledge and MLS have explicit shared storage.
 
-The original 12 numbered modules are not a completion checklist. Some are implemented, while modules 09–12 retain scaffold/no-op functions. Newer agents implement some related follow-up and retention behavior separately. The Amazon, New Home Buddy and directory-form Brivity clients remain stubs; the implemented Brivity client is `src/integrations/brivity.ts`.
+The original 12 numbered modules are not a completion checklist. Modules 09–12 now adapt existing workflows or produce explicit repair/review/evaluation results; automatic gifting, new next-day SMS campaigns and randomized DM experiments remain unconfigured. See [reliability changes](docs/reliability-fixes.md). The Amazon, New Home Buddy and directory-form Brivity clients remain stubs; the implemented Brivity client is `src/integrations/brivity.ts`.
 
 The old Content Manager, Content Calendar, OpenShorts/CapCut sidecars and OpenReel editor were removed. Social analytics, comment automation, content suggestions and voice-clone support remain.
 

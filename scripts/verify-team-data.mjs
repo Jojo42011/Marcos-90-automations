@@ -7,6 +7,7 @@ const require=createRequire(import.meta.url),root=mkdtempSync(join(tmpdir(),'tea
 process.env.TENANT_DATA_ROOT=root;process.env.SHARED_KNOWLEDGE_DB_PATH=join(root,'shared-knowledge.db');
 writeFileSync(join(root,'users.json'),JSON.stringify(['Marco','Wesley','Carlos'].map(name=>({id:name.toLowerCase(),name,email:name.toLowerCase()+'@example.com',active:true,role:'agent'}))));
 const users=require('../dist/src/core/users.js'),f=require('../dist/src/core/accountFederation.js');
+require('../dist/src/core/workspaceGrants.js').initializeWorkspaceGrants();
 const marco=users.getAccountUserById('marco'),wesley=users.getAccountUserById('wesley'),carlos=users.getAccountUserById('carlos');
 const a=f.scopeRecords({id:'same',leadId:'same',count:3,assignedUserId:'marco'},marco),b=f.scopeRecords({id:'same',leadId:'same',count:3,assignedUserId:'wesley'},wesley);
 assert.notEqual(a.id,b.id);assert.equal(a.count,3);assert.equal(a.assignedUserId,'marco');

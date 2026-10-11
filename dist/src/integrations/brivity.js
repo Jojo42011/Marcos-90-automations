@@ -54,11 +54,13 @@ async function findByPhone(phone) {
         return null;
     }
     catch (error) {
-        console.error("[Brivity] findByPhone failed:", error);
-        return null;
+        // A failed lookup is not evidence that no contact exists. Never create on lookup failure.
+        throw error;
     }
 }
 async function createOrUpdateLead(lead) {
+    if (!BRIVITY_API_KEY)
+        return null;
     try {
         const payload = toContactPayload(lead);
         const response = await brivityClient.post("/contacts", payload);
@@ -70,6 +72,8 @@ async function createOrUpdateLead(lead) {
     }
 }
 async function syncLead(lead) {
+    if (!BRIVITY_API_KEY)
+        return null;
     try {
         if (!lead.phone && !lead.email) {
             return null;

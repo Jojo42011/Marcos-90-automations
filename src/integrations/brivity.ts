@@ -55,12 +55,13 @@ async function findByPhone(phone: string): Promise<{ id?: string } | null> {
     }
     return null;
   } catch (error) {
-    console.error("[Brivity] findByPhone failed:", error);
-    return null;
+    // A failed lookup is not evidence that no contact exists. Never create on lookup failure.
+    throw error;
   }
 }
 
 export async function createOrUpdateLead(lead: Lead): Promise<unknown | null> {
+  if (!BRIVITY_API_KEY) return null;
   try {
     const payload = toContactPayload(lead);
     const response = await brivityClient.post("/contacts", payload);
@@ -72,6 +73,7 @@ export async function createOrUpdateLead(lead: Lead): Promise<unknown | null> {
 }
 
 export async function syncLead(lead: Lead): Promise<unknown | null> {
+  if (!BRIVITY_API_KEY) return null;
   try {
     if (!lead.phone && !lead.email) {
       return null;

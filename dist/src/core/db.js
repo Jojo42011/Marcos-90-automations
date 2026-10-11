@@ -74,6 +74,9 @@ exports.appendLeadActivity = appendLeadActivity;
 exports.normalizeRelationships = normalizeRelationships;
 exports.normalizeIsoDay = normalizeIsoDay;
 exports.updateLeadCrmFields = updateLeadCrmFields;
+exports.sharedSocialSnapshot = sharedSocialSnapshot;
+exports.mergeSharedSocial = mergeSharedSocial;
+const atomicJson_js_1 = require("./atomicJson.js");
 const sharedTasks_js_1 = require("./sharedTasks.js");
 const tenantData_js_1 = require("./tenantData.js");
 const crypto_1 = require("crypto");
@@ -159,6 +162,12 @@ const leadKeyToId = new Map(); // platform + userId -> leadId
 const conversationsByLeadId = new Map();
 let commandTasksStore = [];
 let idCounter = 1;
+let socialSnapshots = {};
+function nextLeadId() {
+    while (leadsById.has(String(idCounter)))
+        idCounter++;
+    return String(idCounter++);
+}
 function nowIso() {
     return new Date().toISOString();
 }
@@ -272,6 +281,18 @@ function normalizeCommandTask(raw) {
             : undefined,
     };
 }
+let committed = JSON.stringify({ idCounter: 1, leadsById: {}, leadKeyToId: {}, conversationsByLeadId: {}, commandTasks: [] });
+function restoreCommitted() {
+    const data = JSON.parse(committed);
+    idCounter = data.idCounter;
+    commandTasksStore = data.commandTasks || [];
+    socialSnapshots = data.socialSnapshots || {};
+    for (const [map, values] of [[leadsById, data.leadsById], [leadKeyToId, data.leadKeyToId], [conversationsByLeadId, data.conversationsByLeadId]]) {
+        map.clear();
+        for (const [key, value] of Object.entries(values))
+            map.set(key, value);
+    }
+}
 function persistToFile() {
     try {
         (0, fs_1.mkdirSync)((0, path_1.dirname)(DB_PATH), { recursive: true });
@@ -281,11 +302,17 @@ function persistToFile() {
             leadKeyToId: Object.fromEntries(leadKeyToId),
             conversationsByLeadId: Object.fromEntries(conversationsByLeadId),
             commandTasks: commandTasksStore,
+            socialSnapshots,
         };
-        (0, fs_1.writeFileSync)(DB_PATH, JSON.stringify(data), "utf8");
+        const serialized = JSON.stringify(data);
+        if (serialized === committed && (0, fs_1.existsSync)(DB_PATH))
+            return;
+        (0, atomicJson_js_1.atomicJson)(DB_PATH, data);
+        committed = serialized;
     }
     catch (err) {
-        console.error("[db] persistToFile failed:", err);
+        restoreCommitted();
+        throw err;
     }
 }
 function loadFromFile() {
@@ -294,10 +321,12 @@ function loadFromFile() {
             return;
         }
         const raw = (0, fs_1.readFileSync)(DB_PATH, "utf8");
-        if (!raw.trim()) {
-            return;
-        }
+        if (!raw.trim())
+            throw new Error("CRM store is empty; original file preserved for recovery");
         const data = JSON.parse(raw);
+        if (!data || !data.leadsById || Array.isArray(data.leadsById) || typeof data.leadsById !== "object")
+            throw new Error("Invalid CRM store; original file preserved for recovery");
+        socialSnapshots = data.socialSnapshots || {};
         if (typeof data.idCounter === "number" && data.idCounter >= 1) {
             idCounter = data.idCounter;
         }
@@ -334,10 +363,11 @@ function loadFromFile() {
         }
     }
     catch (err) {
-        console.error("[db] loadFromFile failed, starting empty:", err);
+        throw new Error("CRM store could not be loaded; refusing to overwrite it", { cause: err });
     }
 }
 loadFromFile();
+committed = JSON.stringify({ idCounter, leadsById: Object.fromEntries(leadsById), leadKeyToId: Object.fromEntries(leadKeyToId), conversationsByLeadId: Object.fromEntries(conversationsByLeadId), commandTasks: commandTasksStore, socialSnapshots });
 /** Clear all leads and conversations; persists empty state. */
 function resetMemoryStore() {
     leadsById.clear();
@@ -345,6 +375,7 @@ function resetMemoryStore() {
     conversationsByLeadId.clear();
     commandTasksStore = [];
     idCounter = 1;
+    socialSnapshots = {};
     persistToFile();
 }
 function getCommandTasks() {
@@ -549,7 +580,6 @@ function applyPhoneCaptureTransition(existing, lead) {
             phoneCapturedAt: nowIso(),
             phoneNumberSeen: false,
         };
-        notifyNewPhoneCapture(enriched).catch((err) => console.error("[PhoneCapture] Notification error:", err));
         return enriched;
     }
     if (!existing) {
@@ -674,7 +704,7 @@ function pauseAutoPlansOnInboundText(lead) {
     return changed ? { ...lead, autoPlanEnrollments: next } : null;
 }
 async function createLead(lead) {
-    const id = String(idCounter++);
+    const id = nextLeadId();
     const createdAt = nowIso();
     let next = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
     next = applyAutoPlanAutomations(null, next);
@@ -684,12 +714,13 @@ async function createLead(lead) {
             phoneCapturedAt: createdAt,
             phoneNumberSeen: false,
         };
-        notifyNewPhoneCapture(next).catch((err) => console.error("[PhoneCapture] Notification error:", err));
     }
     leadsById.set(id, next);
     leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
     conversationsByLeadId.set(id, { messages: [] });
     persistToFile();
+    if (leadHasPhone(next.phone))
+        void notifyNewPhoneCapture(next).catch(err => console.error("[PhoneCapture]", err));
     const routed = await triggerSourceRoutingIfNeeded(next);
     if (leadHasEmail(routed.email) && !routed.autoReplyEmailSentAt) {
         void triggerEmailMarketingIfNeeded(routed);
@@ -718,7 +749,7 @@ function upsertLeadQuiet(input) {
         persistToFile();
         return merged;
     }
-    const id = input.id && !leadsById.has(input.id) ? input.id : String(idCounter++);
+    const id = input.id && !leadsById.has(input.id) ? input.id : nextLeadId();
     const created = normalizeCrmDefaults({ ...input, id, createdAt: now, updatedAt: now });
     leadsById.set(id, created);
     leadKeyToId.set(leadKey(created.platform, created.userId), id);
@@ -744,6 +775,8 @@ async function updateLead(lead) {
         normalized = applyPhoneCaptureTransition(null, normalized);
         leadsById.set(lead.id, normalized);
         persistToFile();
+        if (leadHasPhone(normalized.phone))
+            void notifyNewPhoneCapture(normalized).catch(err => console.error("[PhoneCapture]", err));
         return leadsById.get(lead.id);
     }
     const normalized = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
@@ -751,6 +784,8 @@ async function updateLead(lead) {
     leadsById.set(lead.id, updated);
     persistToFile();
     const phoneNewlyCaptured = existing && !leadHasPhone(existing.phone) && leadHasPhone(updated.phone);
+    if (phoneNewlyCaptured)
+        void notifyNewPhoneCapture(updated).catch(err => console.error("[PhoneCapture]", err));
     if (phoneNewlyCaptured && !updated.sourceRoutingCompletedAt) {
         return await triggerSourceRoutingIfNeeded(updated);
     }
@@ -1598,4 +1633,51 @@ async function updateLeadCrmFields(input) {
     const finalNext = managed ? next : applyAutoPlanAutomations(lead, next);
     await updateLead(finalNext);
     return finalNext;
+}
+/** Social intake is explicitly assigned to one owner. Import never replays outbound automations. */
+function sharedSocialSnapshot() {
+    return [...leadsById.values()].filter(l => ["tiktok", "instagram", "facebook", "manychat"].includes(l.platform?.toLowerCase()))
+        .map(lead => ({ lead, conversation: conversationsByLeadId.get(lead.id) || { messages: [] } }));
+}
+function mergeSharedSocial(rows) {
+    try {
+        const fields = ["username", "name", "phone", "email", "state", "source", "adCampaign", "propertyInquired", "criteria", "brivityId"];
+        for (const { lead: source, conversation } of rows) {
+            if (!source?.id || !source.platform || !source.userId)
+                continue;
+            const key = leadKey(source.platform, source.userId);
+            const receipt = socialSnapshots[key];
+            const existing = leadsById.get(receipt?.id || leadKeyToId.get(key) || "");
+            // A contact deliberately removed after import must not be resurrected by polling.
+            if (receipt && !existing)
+                continue;
+            const id = existing?.id || `social_${(0, crypto_1.randomUUID)()}`;
+            const next = existing ? { ...existing } : normalizeCrmDefaults({ ...source, id });
+            if (existing)
+                for (const field of fields) {
+                    const current = existing[field], incoming = source[field];
+                    if (incoming !== undefined && (receipt ? JSON.stringify(current) === JSON.stringify(receipt.source[field]) : current == null || current === ""))
+                        next[field] = incoming;
+                }
+            leadsById.set(id, next);
+            leadKeyToId.set(key, id);
+            const local = conversationsByLeadId.get(id)?.messages || [];
+            const messageKey = (m) => m.providerMessageId || JSON.stringify([m.role, m.at, m.text]);
+            const seen = new Set(local.map(messageKey));
+            const merged = [...local];
+            for (const message of conversation?.messages || [])
+                if (!seen.has(messageKey(message))) {
+                    merged.push(message);
+                    seen.add(messageKey(message));
+                }
+            merged.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+            conversationsByLeadId.set(id, { messages: merged });
+            socialSnapshots[key] = { id, source: structuredClone(source) };
+        }
+        persistToFile();
+    }
+    catch (error) {
+        restoreCommitted();
+        throw error;
+    }
 }

@@ -43,6 +43,7 @@ exports.anchorFor = anchorFor;
 exports.runOutreach = runOutreach;
 exports.scheduleOutreach = scheduleOutreach;
 exports.noteEngagement = noteEngagement;
+const publicLinks_js_1 = require("./publicLinks.js");
 /**
  * The send loop for Listing Alerts and Market Reports.
  *
@@ -148,7 +149,7 @@ function newMatchesFor(alert, limit = MAX_PER_EMAIL) {
     return out.slice(0, limit);
 }
 function unsubUrl(kind, id) {
-    return `${(0, outreachEmail_js_1.publicBaseUrl)()}/r/stop?k=${kind}&id=${encodeURIComponent(id)}`;
+    return `${(0, outreachEmail_js_1.publicBaseUrl)()}${(0, publicLinks_js_1.publicLink)(`/r/stop?k=${kind}&id=${encodeURIComponent(id)}`)}`;
 }
 /**
  * Send one alert. `force` sends whatever currently matches even if nothing has
@@ -241,7 +242,7 @@ async function sendReportNow(reportId) {
         customMessage: isFirst ? report.emailMessage : null,
         frequencyLabel: exports.REPORT_FREQUENCY_LABELS[report.frequency],
         unsubscribeUrl: unsubUrl("report", report.id),
-        viewUrl: `${(0, outreachEmail_js_1.publicBaseUrl)()}/r/report?id=${encodeURIComponent(report.id)}&s=${encodeURIComponent(sendId)}`,
+        viewUrl: `${(0, outreachEmail_js_1.publicBaseUrl)()}${(0, publicLinks_js_1.publicLink)(`/r/report?id=${encodeURIComponent(report.id)}&s=${encodeURIComponent(sendId)}`)}`,
     });
     try {
         await (0, index_js_1.sendEmail)({ to, subject, body: html, html: true, cc: ccList(report.cc) });

@@ -1,8 +1,9 @@
+import { combinedWorkspaceUser } from "./workspaceGrants.js";
 import http from "node:http";
 import type {Request,Response} from "express";
 import type {CRMUser} from "./types.js";
 import {getUsers} from "./users.js";
-import {canViewWorkspace,memberName} from "./workspaceAccess.js";
+import {canViewWorkspace} from "./workspaceAccess.js";
 import {accountReference,businessPath,combinedRead,combineValues,decodeReferences,scopeRecords} from "./accountFederation.js";
 import {workDb} from "../harvey/work/store.js";
 import {accountBridgeUser,accountBridgeToken} from "./accountBridge.js";
@@ -46,7 +47,7 @@ function workOwner(path:string,body:any,actor:CRMUser):string|undefined {
   return allowed[0].owner;
 }
 export async function proxyAccount(req:Request,res:Response,actor:CRMUser,ensureWorker:(owner:string)=>Promise<number>) {
-  const combined=memberName(actor)==="carlos";
+  const combined=combinedWorkspaceUser(actor.id);
   const originalBody=await readAccountJson(req), owners=new Set<string>();
   const bodyValue=decodeReferences(originalBody,actor,owners);
   const url=new URL(req.originalUrl,"http://account.local");

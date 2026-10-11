@@ -300,11 +300,14 @@ function dueSoonTick(): void {
 let started = false;
 export function initTeamStore(): void {
   if (started) return;
-  started = true;
   load();
+  started = true;
   const timer = setInterval(() => {
     try { dueSoonTick(); } catch (err) { console.error("[team] due-soon tick:", err); }
   }, 60 * 1000);
   if (timer.unref) timer.unref();
   console.log(`[team] store initialized — ${state.chats.length} msgs, ${state.notifications.length} notifications`);
 }
+
+/** Prepare shared schema before workers race to open it; no reminder timer in the gateway. */
+export function prepareSharedTeamStore(): void { sharedDb(); }

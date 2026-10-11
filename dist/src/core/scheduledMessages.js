@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MAX_ATTEMPTS = void 0;
+exports.claimScheduled = claimScheduled;
+exports.markUncertain = markUncertain;
 exports.scheduleMessage = scheduleMessage;
 exports.listScheduled = listScheduled;
 exports.getScheduled = getScheduled;
@@ -10,28 +12,10 @@ exports.markSent = markSent;
 exports.markAttemptFailed = markAttemptFailed;
 exports.rescheduleMessage = rescheduleMessage;
 exports.scheduledCounts = scheduledCounts;
+const atomicJson_js_1 = require("./atomicJson.js");
 const tenantData_js_1 = require("./tenantData.js");
-/**
- * Scheduled sending — queue a text or an email to go out later.
- *
- * Two ways in, both landing in the same queue:
- *   1. The user picks a send time in the CRM.
- *   2. Harvey queues it, either at a time described in plain language
- *      ("send this Tuesday morning") or at a suggested good hour.
- *
- * File-backed JSON on the /data volume, same pattern as teamStore — the
- * volume is what makes a queue survive the deploys this app does constantly.
- *
- * IMPORTANT — this queue is real, but delivery depends on credentials this
- * app does not currently have. As of 2026-07-28 Twilio is unconfigured and
- * the Gmail refresh token is dead, so a due message will attempt, fail, and
- * be recorded `status: "failed"` with the provider's reason. That is the
- * honest behaviour: nothing is silently dropped and nothing pretends to have
- * sent. `canSendOn()` lets callers say so up front instead of queueing into
- * a channel that cannot deliver.
- */
+/** Account-local scheduled messages. Pending and unresolved work is never pruned. */
 const fs_1 = require("fs");
-const path_1 = require("path");
 const crypto_1 = require("crypto");
 function resolvePath() {
     const explicit = process.env.SCHEDULED_MESSAGES_PATH?.trim();
@@ -47,34 +31,56 @@ const MAX_KEPT = 5000;
 exports.MAX_ATTEMPTS = 3;
 let state = { messages: [] };
 let loaded = false;
+let committed = JSON.stringify(state);
 function load() {
     if (loaded)
         return;
+    if ((0, fs_1.existsSync)(PATH)) {
+        const data = JSON.parse((0, fs_1.readFileSync)(PATH, "utf8"));
+        if (!data || !Array.isArray(data.messages))
+            throw new Error("Invalid scheduled message store; preserved for recovery");
+        state = data;
+        // A provider may have accepted an interrupted send. Never automatically replay it.
+        for (const message of state.messages)
+            if (message.status === "sending") {
+                message.status = "uncertain";
+                message.error = "Delivery interrupted; verify with the provider before scheduling another send.";
+            }
+    }
+    committed = JSON.stringify(state);
     loaded = true;
-    try {
-        if (!(0, fs_1.existsSync)(PATH))
-            return;
-        const raw = (0, fs_1.readFileSync)(PATH, "utf8");
-        if (!raw.trim())
-            return;
-        const data = JSON.parse(raw);
-        state.messages = Array.isArray(data.messages) ? data.messages : [];
-    }
-    catch (err) {
-        console.error("[scheduled] load failed:", err);
-    }
 }
 function persist() {
     try {
-        (0, fs_1.mkdirSync)((0, path_1.dirname)(PATH), { recursive: true });
-        if (state.messages.length > MAX_KEPT) {
-            state.messages = state.messages.slice(-MAX_KEPT);
-        }
-        (0, fs_1.writeFileSync)(PATH, JSON.stringify(state), "utf8");
+        const terminal = state.messages.filter(m => ["sent", "canceled"].includes(m.status));
+        const keep = new Set(terminal.slice(-MAX_KEPT).map(m => m.id));
+        state.messages = state.messages.filter(m => !["sent", "canceled"].includes(m.status) || keep.has(m.id));
+        (0, atomicJson_js_1.atomicJson)(PATH, state);
+        committed = JSON.stringify(state);
     }
-    catch (err) {
-        console.error("[scheduled] persist failed:", err);
+    catch (error) {
+        state = JSON.parse(committed);
+        throw error;
     }
+}
+function claimScheduled(id) {
+    load();
+    const message = state.messages.find(m => m.id === id && m.status === "pending");
+    if (!message)
+        return;
+    message.status = "sending";
+    message.attempts++;
+    persist();
+    return { ...message };
+}
+function markUncertain(id, error) {
+    load();
+    const message = state.messages.find(m => m.id === id);
+    if (!message)
+        return;
+    message.status = "uncertain";
+    message.error = error;
+    persist();
 }
 const nowIso = () => new Date().toISOString();
 function scheduleMessage(input) {
@@ -139,7 +145,6 @@ function markSent(id) {
         return;
     m.status = "sent";
     m.sentAt = nowIso();
-    m.attempts += 1;
     persist();
 }
 /**
@@ -152,10 +157,10 @@ function markAttemptFailed(id, error) {
     const m = state.messages.find((x) => x.id === id);
     if (!m)
         return;
-    m.attempts += 1;
+    if (m.status !== "sending")
+        m.attempts += 1;
     m.error = error;
-    if (m.attempts >= exports.MAX_ATTEMPTS)
-        m.status = "failed";
+    m.status = m.attempts >= exports.MAX_ATTEMPTS ? "failed" : "pending";
     persist();
 }
 /** Reschedule a pending message. Returns false if it already went out. */
@@ -170,7 +175,7 @@ function rescheduleMessage(id, sendAt) {
 }
 function scheduledCounts() {
     load();
-    const out = { pending: 0, sent: 0, failed: 0, canceled: 0 };
+    const out = { pending: 0, sending: 0, uncertain: 0, sent: 0, failed: 0, canceled: 0 };
     for (const m of state.messages)
         out[m.status]++;
     return out;

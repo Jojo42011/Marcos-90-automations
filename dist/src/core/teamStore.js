@@ -13,6 +13,7 @@ exports.getChat = getChat;
 exports.markChatRead = markChatRead;
 exports.chatUnreadCounts = chatUnreadCounts;
 exports.initTeamStore = initTeamStore;
+exports.prepareSharedTeamStore = prepareSharedTeamStore;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const tenantData_js_1 = require("./tenantData.js");
 /**
@@ -322,8 +323,8 @@ let started = false;
 function initTeamStore() {
     if (started)
         return;
-    started = true;
     load();
+    started = true;
     const timer = setInterval(() => {
         try {
             dueSoonTick();
@@ -336,3 +337,5 @@ function initTeamStore() {
         timer.unref();
     console.log(`[team] store initialized — ${state.chats.length} msgs, ${state.notifications.length} notifications`);
 }
+/** Prepare shared schema before workers race to open it; no reminder timer in the gateway. */
+function prepareSharedTeamStore() { sharedDb(); }

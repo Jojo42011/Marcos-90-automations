@@ -1,28 +1,15 @@
-import { createUser, getUsers, backupAccountIdentities, updateUser } from "./users.js";
-import { hashPassword, getSecurityState, setSecurityState } from "./authStore.js";
-import { ROLE_PERMISSIONS } from "./types.js";
+import { getUsers, updateUser, backupAccountIdentities } from "./users.js";
+import { hashPassword } from "./authStore.js";
+import { initializeWorkspaceGrants } from "./workspaceGrants.js";
 
-/** One-time requested login repair; preserve IDs, business records and other users. */
+/** Never reset existing logins during startup or re-enable a disabled account. */
 export function bootstrapAccounts(): void {
-  const marker = "team-access-logins-2026-10-10";
-  if (getSecurityState(marker)) return;
-  const users = getUsers();
-  for (const name of ["marco", "wesley", "carlos"]) {
-    const candidates = users.filter(u => u.name.trim().split(/\s+/)[0].toLowerCase() === name);
-    if (candidates.length > 1 || users.some(u => u.email.toLowerCase() === `${name}@example.com` && u.id !== candidates[0]?.id))
-      throw new Error(`Ambiguous ${name} identity; account repair stopped without changes`);
+  const password=process.env.ACCOUNT_BOOTSTRAP_PASSWORD;
+  if(password && password.length<12)throw new Error("ACCOUNT_BOOTSTRAP_PASSWORD must contain at least 12 characters");
+  if(password) {
+    const unconfigured=getUsers().filter(u=>u.active && !u.passwordHash);
+    if(unconfigured.length)backupAccountIdentities();
+    for(const user of unconfigured)updateUser(user.id,{passwordHash:hashPassword(password),mustChangePassword:true});
   }
-  backupAccountIdentities();
-  for (const name of ["Marco", "Wesley", "Carlos"]) {
-    const existing = getUsers().find(u => u.name.trim().split(/\s+/)[0].toLowerCase() === name.toLowerCase());
-    if (existing) {
-      updateUser(existing.id, { email: `${name.toLowerCase()}@example.com`, passwordHash: hashPassword("1234"), mustChangePassword: false, active: true });
-      continue;
-    }
-    const role = name === "Marco" ? "admin" : "agent";
-    createUser({ name, email: `${name.toLowerCase()}@example.com`, role,
-      permissions: { ...ROLE_PERMISSIONS[role] }, active: true, avatarInitials: name.slice(0,2), avatarColor: "#0e7490",
-      passwordHash: hashPassword("1234"), mustChangePassword: false });
-  }
-  setSecurityState(marker, "done");
+  initializeWorkspaceGrants();
 }
