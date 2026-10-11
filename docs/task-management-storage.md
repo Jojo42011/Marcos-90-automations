@@ -1,293 +1,50 @@
-# Marco System — Task Management Data Storage
+# Task storage and ownership
 
-Reference for agents (Claude, Harvey, etc.) working on Marco Puga's automation dashboard (`marco-90-automation`).
+Current behavior on master. Task Center, CRM follow-ups, Marco operational tasks and automation enrollment state remain distinct.
 
-**Important:** Task management is **not one database table**. There are **four separate task stores** plus **auto-plan enrollments on leads**. They serve different UI surfaces and must not be conflated.
+## Stores
 
----
+| System | Storage | Implementation | API/UI |
+| --- | --- | --- | --- |
+| Command / Task Center tasks | shared-tasks.db when ACCOUNT_ISOLATION=true; legacy commandTasks JSON otherwise | core/sharedTasks.ts and core/db.ts | /api/tasks; /team-tasks; /tasks redirects to /team-tasks |
+| CRM follow-up tasks | Account-local tasks.json | core/tasks.ts | /api/crm-tasks; CRM follow-up views |
+| Marco operational tasks | Account-local marco-tasks.json | core/marcoTasks.ts | /api/marco-tasks |
+| Auto-plan definitions | Account-local auto-plans.json | core/autoPlans.ts | /api/auto-plans |
+| Lead auto-plan progress | Lead.autoPlanEnrollments in the CRM JSON store | core/db.ts and server.ts | Lead profile and enrollment routes |
+| Transaction auto-plan progress | Transaction store | core/transactionsStore.ts and server.ts | Transaction plan routes |
 
-## Storage overview
+The classic command board remains at /tasks-classic. Current type definitions live in src/core/types.ts; do not use older documentation shapes as a complete schema.
 
-| System | Purpose | Storage file | In-memory module | Primary UI |
-|--------|---------|--------------|------------------|------------|
-| **Command tasks** | Carlos / ops kanban board | `db.json` → `commandTasks[]` | `src/core/db.ts` | `/tasks` (`tasks.html`) |
-| **CRM follow-up tasks** | Lead-linked follow-ups | `tasks.json` (sibling of db) | `src/core/tasks.ts` | CRM dashboard → Follow-up Tasks tab |
-| **Marco tasks** | Marco operational to-dos (non-lead) | `marco-tasks.json` | `src/core/marcoTasks.ts` | CRM dashboard → Marco Tasks panel |
-| **Auto plans** | Drip campaign definitions | `auto-plans.json` | `src/core/autoPlans.ts` | CRM → Auto Plans |
-| **Auto plan enrollments** | Per-lead drip progress | `db.json` → `leadsById[id].autoPlanEnrollments` | `src/core/db.ts` | CRM lead profile |
+## Shared Task Center
 
----
+With account isolation, core/db.ts delegates command-task reads/writes to core/sharedTasks.ts. The shared SQLite database uses WAL, FULL synchronization, transactional updates, import tracking and revision history. Deletes are soft deletes.
 
-## Path resolution (local vs Fly)
+Marco and Wesley see/edit tasks assigned to them. Carlos sees/edits all three members' tasks. The server takes creator attribution from the authenticated actor, independently of assignee. Task requests use the signed-in actor even when another account owns a business record being viewed.
 
-All paths are resolved at runtime from env + filesystem:
+Recovery imports retained root/account command tasks once per source record, preserving source files. Existing edits and explicit deletions are not overwritten on subsequent recovery. Deadline automation compares the original status/date/update snapshot before changing a task.
 
-| Env var | Effect |
-|---------|--------|
-| `DB_JSON_PATH` | Explicit path to main CRM JSON |
-| `TASKS_JSON_PATH` | Explicit path to CRM follow-up tasks (overrides sibling rule) |
-| `AUTO_PLANS_JSON_PATH` | Explicit path to auto plans (default: sibling of db) |
+## Account-local paths
 
-**Fly production** (volume mounted at `/data`):
+dataPath() uses TENANT_DATA_ROOT when supplied, otherwise /data if present, otherwise ./data. The gateway gives each account a hashed directory and passes SHARED_TASK_DB_PATH explicitly.
 
-- `/data/db.json` — leads, conversations, command tasks
-- `/data/tasks.json` — CRM follow-up tasks
-- `/data/marco-tasks.json` — Marco operational tasks
-- `/data/auto-plans.json` — auto plan templates
+The CRM JSON resolver uses DB_JSON_PATH when configured, otherwise an existing dataPath("db.json"), otherwise dataPath("local-dashboard-db.json"). tasks.json and auto-plans.json follow their resolver's CRM-directory rules unless explicitly overridden. See TASKS_JSON_PATH and AUTO_PLANS_JSON_PATH in the respective modules.
 
-**Local dev** (default when `/data/db.json` missing):
+Do not assume that /data/db.json is a signed-in user's CRM or that every task is JSON-backed.
 
-- `data/local-dashboard-db.json`
-- `data/tasks.json`
-- `data/marco-tasks.json`
-- `data/auto-plans.json`
+## Auto plans and linked tasks
 
-Sibling rule: `tasks.json` and `auto-plans.json` live in the **same directory** as `db.json` unless overridden by env.
+Plan definitions and enrollment progress are separate. Due task steps create CRM follow-up tasks, not Task Center tasks. The server schedules lead and transaction auto-plan execution hourly. Email/text steps require the relevant configured sending channel and merge-field validation.
 
-Persistence model: **JSON files**, whole-file read/write. No SQLite for tasks. In-memory maps in `db.ts` are flushed to `db.json` on mutations.
+Tracker checklist links use core/trackerTasks.ts and the command-task APIs. Read the link/synchronization helpers before changing checklist behavior; do not merge task stores to make their counts agree.
 
----
+## Authentication and summaries
 
-## 1. Command tasks (`CommandTask`)
+Account isolation requires authenticated routing; shared tokens do not bypass account ownership. Route-level checks remain in src/server.ts.
 
-**Who uses it:** Carlos command center — column-based kanban (urgent / today / tomorrow / this_week / this_month).
+GET /api/dashboard/data exposes separate task summaries. Carlos's combined dashboard uses the shared command-task summary once rather than summing it across workers.
 
-**Stored in:** `db.json` under top-level key `commandTasks` (array).
+Harvey Work jobs and schedules are separate records in harvey-work/work.db. They are not CRM tasks or Task Center rows.
 
-**Types:** `src/core/types.ts` → `CommandTask`, `CommandTaskColumn`, `CommandTaskStatus`, `CommandTaskColor`.
+## Verification references
 
-**Shape:**
-
-```ts
-{
-  id: string;              // UUID
-  title: string;           // required
-  description?: string;
-  column: "urgent" | "today" | "tomorrow" | "this_week" | "this_month";
-  status: "pending" | "done";
-  color: "red" | "amber" | "green" | "blue" | "purple" | "gray";
-  recurring?: boolean;
-  recurringInterval?: "daily" | "every_3_days" | "every_5_days" | "weekly" | "monthly";
-  createdBy?: string;      // e.g. "carlos"
-  assignedTo?: string;     // default "carlos" on create
-  dueDate?: string;        // YYYY-MM-DD
-  completedAt?: string;    // ISO
-  createdAt: string;
-  updatedAt: string;
-  tags?: string[];
-}
-```
-
-**API** (no `DASHBOARD_TOKEN` required on these routes):
-
-- `GET /api/tasks` — query: `column`, `status`, `assignedTo`
-- `POST /api/tasks` — requires `title`, `column`
-- `PATCH /api/tasks/:id`
-- `DELETE /api/tasks/:id`
-
-**Code:** `createCommandTask`, `updateCommandTask`, `deleteCommandTask`, `getCommandTasks` in `src/core/db.ts`. Seeds demo tasks on first load via `seedCommandTasksIfEmpty()`.
-
-**UI:** `public/tasks.html` at route `/tasks`.
-
----
-
-## 2. CRM follow-up tasks (`Task`)
-
-**Who uses it:** CRM lead follow-up board (calls, texts, appointments tied to leads).
-
-**Stored in:** separate file `tasks.json` — **not** inside `db.json`.
-
-**Types:** `src/core/types.ts` → `Task`, `TaskPriority`, `TaskStatus`, `TaskType`, `TaskSource`.
-
-**Shape:**
-
-```ts
-{
-  id: string;              // task_<base36>_<random>
-  title: string;           // required
-  description?: string;
-  type: "call" | "text" | "email" | "appointment" | "follow_up" | "other";
-  priority: "low" | "normal" | "high" | "urgent";
-  status: "pending" | "in_progress" | "completed" | "cancelled";
-  dueDate: string;         // YYYY-MM-DD — required
-  dueTime?: string;
-  leadId?: string;         // links to lead in db.json
-  leadName?: string;
-  assignedUserId?: string;
-  assignedUserName?: string;
-  completedAt?: string;
-  completedBy?: string;
-  createdAt: string;
-  updatedAt: string;
-  source: "manual" | "auto_plan" | "dial_session" | "automation";
-  reminderMinutes?: number;
-}
-```
-
-**API** (requires `DASHBOARD_TOKEN` or `?token=` when token is set):
-
-- `GET /api/crm-tasks` — filters: `status`, `assignedUserId`, `leadId`, `dueDate`
-- `POST /api/crm-tasks`
-- `PATCH /api/crm-tasks/:id`
-- `DELETE /api/crm-tasks/:id` — gated by `canDeleteTasks` permission when `userId` provided
-- `POST /api/crm-tasks/:id/complete`
-
-**Code:** `src/core/tasks.ts` — `getTasks`, `createTask`, `updateTask`, `filterTasks`, `buildTasksSummary`.
-
-**UI:** Embedded in `public/dashboard.html` via `public/crm-followup-tasks.js`.
-
-**Auto-plan integration:** When `executeDueAutoPlanSteps()` runs a step with `type: "task"`, it calls `createTask()` with `source: "auto_plan"` and links `leadId` / `leadName`.
-
----
-
-## 3. Marco operational tasks (`MarcoTask`)
-
-**Who uses it:** Marco's personal/ops task list (buy camera, review budget, etc.) — **not** lead follow-ups.
-
-**Stored in:** `marco-tasks.json` at `/data/marco-tasks.json` or `data/marco-tasks.json`.
-
-**Types:** `src/core/types.ts` → `MarcoTask`, `MarcoTaskPriority`, `MarcoTaskStatus`.
-
-**Shape:**
-
-```ts
-{
-  id: string;              // UUID
-  title: string;           // required
-  description?: string;
-  dueDate?: string;        // YYYY-MM-DD — optional
-  priority: "high" | "medium" | "low";
-  status: "pending" | "in_progress" | "done";
-  createdBy?: string;      // e.g. "carlos"
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;    // set when status → done
-}
-```
-
-**API** (requires dashboard token):
-
-- `GET /api/marco-tasks` — returns `{ tasks, summary }`
-- `POST /api/marco-tasks`
-- `PATCH /api/marco-tasks/:id`
-- `DELETE /api/marco-tasks/:id`
-- `POST /api/marco-tasks/:id/complete`
-
-**Code:** `src/core/marcoTasks.ts`. Seeds 3 demo tasks on first empty load via `seedMarcoTasksIfEmpty()`.
-
-**UI:** Marco Tasks section inside `public/dashboard.html` (not `/tasks`).
-
----
-
-## 4. Auto plans + enrollments
-
-### Plan templates (`AutoPlan`)
-
-**Stored in:** `auto-plans.json`.
-
-**Shape:**
-
-```ts
-{
-  id: string;
-  name: string;
-  tag: string;             // e.g. "Watch", "Nurture", "Active Buyer"
-  steps: AutoPlanStep[];
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// AutoPlanStep
-{
-  id: string;
-  type: "email" | "text" | "task";
-  dayOffset: number;       // days after enrollment start
-  subject?: string;        // email only
-  content: string;
-  assignedTo?: string;     // task steps — default "Marco Puga"
-}
-```
-
-**API:** `/api/auto-plans`, `/api/auto-plans/:id`, enroll/unenroll/pause/resume/skip-step, `POST /api/auto-plans/execute-due-steps`.
-
-**Code:** `src/core/autoPlans.ts`. Seeds 4 default plans on first run.
-
-### Per-lead enrollment (`LeadAutoPlanEnrollment`)
-
-**Stored in:** each `Lead` inside `db.json` → `leadsById[leadId].autoPlanEnrollments[]`.
-
-**Shape:**
-
-```ts
-{
-  planId: string;
-  planName: string;
-  enrolledAt: string;      // ISO — anchor for dayOffset math
-  currentStepIndex: number;
-  completedSteps: string[]; // step IDs executed
-  status: "active" | "paused" | "completed";
-}
-```
-
-When a due **task** step fires, a new row is appended to **`tasks.json`** (CRM follow-up tasks), not to command or marco task files.
-
----
-
-## Main CRM blob (`db.json`)
-
-Top-level persisted shape (`src/core/db.ts`):
-
-```ts
-{
-  idCounter: number;
-  leadsById: Record<string, Lead>;
-  leadKeyToId: Record<string, string>;  // "platform:userId" → leadId
-  conversationsByLeadId: Record<string, Conversation>;
-  commandTasks?: CommandTask[];
-}
-```
-
-Leads carry `autoPlanEnrollments`, `activity`, CRM fields, etc. Lead tasks in the CRM UI are stored separately in `tasks.json` but reference `leadId`.
-
----
-
-## Auth & permissions
-
-- **Command tasks** (`/api/tasks`): open when `DASHBOARD_TOKEN` unset; no bearer required in typical local dev.
-- **CRM / Marco tasks**: `dashboardTokenOk()` — `DASHBOARD_TOKEN` env, `?token=`, or `Authorization: Bearer`.
-- **Task delete** on CRM tasks: `taskUserCanDelete()` checks CRM user `permissions.canDeleteTasks` (Marco yes, Carlos no by default in `src/core/types.ts` user presets).
-
----
-
-## Dashboard aggregates
-
-`GET /api/dashboard` (and related summary builders) expose:
-
-- `tasksSummary` — from `tasks.json` (`buildTasksSummary`)
-- `commandTasksSummary` — from `commandTasks` in db
-- `marcoTasksSummary` — from `marco-tasks.json`
-
-These are independent counts.
-
----
-
-## Harvey / OpenClaw note
-
-Harvey hull memory (`src/hull/memory/`) is **SQLite** on `/data/harvey-memory.db` — **separate** from task JSON stores. WhatsApp/OpenClaw integration does not read task files unless a tool or route is added to do so.
-
----
-
-## Quick mental model
-
-```
-db.json
-├── leadsById.*.autoPlanEnrollments   ← drip state per lead
-└── commandTasks[]                    ← /tasks kanban (Carlos)
-
-tasks.json                            ← CRM follow-up tasks (lead-linked)
-marco-tasks.json                      ← Marco ops to-dos (dashboard panel)
-auto-plans.json                       ← drip templates; task steps → tasks.json
-```
-
-When adding features, pick the correct store. Merging stores would break existing UIs and APIs.
+Use the relevant fixture scripts: verify-account-isolation.mjs, verify-team-access.mjs, verify-team-data.mjs, verify-task-owner-recovery.mjs, verify-task-attribution-repair.mjs and verify-task-checklist-persistence.mjs. Inspect migration/repair scripts before executing them; some are intended to change retained data.

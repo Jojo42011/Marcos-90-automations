@@ -2,7 +2,11 @@
 
 OpenClaw is the messaging pipe. Harvey on `marco-90-automation` is the brain.
 
-## Brain endpoints (already on marco-90-automation)
+## Current account-isolation boundary
+
+The source retains the brain routes below, but with ACCOUNT_ISOLATION=true the gateway does not route unscoped OpenClaw/machine tokens into personal accounts. Root gateway credentials are not inherited by account workers. Deploying this separate gateway alone does not make WhatsApp work with the current account-isolated app. Account-aware integration is required; these commands describe the optional gateway, not verified production connectivity.
+
+## Retained brain endpoints
 
 - `POST https://marco-90-automation.fly.dev/v1/chat/completions`
 - `POST https://marco-90-automation.fly.dev/v1/sessions/reset`

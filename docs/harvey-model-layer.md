@@ -1,194 +1,48 @@
-> Current project chats, plugins, persistent browsers and the new scheduled-agent worker are documented in [Harvey Work](harvey-work.md). The retired task endpoints below remain removed.
+# Harvey model layer
 
-# Harvey model layer — architecture and HTTP contract
+Current source: src/hull/providers, src/hull/agentLoop.ts and src/core/aiUsageStore.ts. Project/chat execution is documented in [Harvey Work](harvey-work.md).
 
-Status: implemented 2026-09-19. This is the contract the backend, the tools and the
-chat UI are all built against. If you change a shape here, change it in all three.
+## Providers and routing
 
-## Current scope (2026-09-23)
+OpenRouter and direct Anthropic adapters normalize completions, tool calls and usage. The catalog/routing modules resolve configured model IDs, job routing and fallbacks. Provider availability depends on effective configuration; this document does not identify the provider currently serving production.
 
-`/harvey` is the only Harvey chat interface. Dictation and the voice overlay remain. The old Jarvis page, detached background jobs, and recurring Harvey tasks (UI, API, tools, stores and ticker) have been retired. Stored runtime data is not deleted. Projects, chat agents and server-hosted browser workflows are future work, not current capabilities. The `/api/jarvis/voice*` transport is retained for the existing voice overlay.
+A chat can persist its own model selection. Jobs inherit that selection unless explicitly overridden. Scheduled runs use HARVEY_SCHEDULE_MODEL, defaulting in current code/config to inception/mercury-2.5. Consult the catalog and effective routing rather than assuming every listed model supports every tool or input type.
 
-## Why
+## Context and spending
 
-Harvey called the Anthropic SDK directly, with model ids hardcoded in
-`src/hull/modelRouting.ts`. Three consequences, all of which this layer removes:
+contextBudget.ts budgets system context, history, tool schemas/results and output space. Provider limits and application ceilings both matter. Work also bounds recent history and retrieves archived messages or lessons on demand.
 
-1. **Switching models was a deploy.** No picker, no per-job choice, no fallback.
-2. **Cost was invisible.** Nothing read `usage` off a response, so nobody could
-   answer "what did Harvey spend today". A runaway loop was a surprise on a bill.
-3. **Context was unbounded in principle.** History caps existed, but nothing
-   measured tokens against the model actually running, and nothing degraded
-   gracefully when a turn got large.
+Usage is recorded in aiUsageStore.ts with model/job/token/cost/error information. Budget checks, configured daily/monthly/per-call caps and circuit breakers run before provider requests. Recorded cost and preflight estimates do not guarantee a total cap on third-party plugin or infrastructure charges.
 
-## One key, many models
+## Approvals and evidence
 
-**OpenRouter is the primary provider.** One `OPENROUTER_API_KEY` reaches
-OpenAI, Anthropic, Google and ~400 other models over an OpenAI-compatible
-endpoint (`https://openrouter.ai/api/v1`). That is the whole reason it was
-chosen: the alternative is a separate key, client and billing relationship per
-vendor.
+src/hull/approval.ts classifies named business tools and crm_api by HTTP method. High-risk calls are held when the gate is enabled; strict mode also holds medium-risk calls. Pending approvals are in memory with expiry and are lost on restart. Unclassified tools default to low risk in this classifier, so it is not a universal guarantee that every external action has an approval card.
 
-Three properties of theirs are load-bearing here:
+Work has additional connector/browser permissions and user-authorization rules. Business calls retain the business approval gate; managed/custom connector behavior is defined by its runtime path. See [reliability](harvey-reliability-safeguards.md) for receipt and read-back limits.
 
-- **Real cost per request.** Every response carries `usage.cost` in credits plus
-  token counts. Spend is therefore *measured*, not estimated from a price table
-  that drifts. The catalog's per-million prices are used only for the pre-flight
-  estimate and for models whose provider returns no cost.
-- **Model fallback chains.** `models: [primary, ...fallbacks]` fails over on
-  context-length errors, rate limits, moderation and outages, and bills for the
-  model that actually ran. Provider-level failover underneath that is on by
-  default.
-- **Price-first routing.** `provider: { sort: "price" }` plus `max_price` keeps
-  "cheap" honest. Note that tool-calling requests otherwise route through
-  OpenRouter's quality-first tier, so price sorting has to be asked for.
+## HTTP surfaces
 
-**Direct Anthropic stays wired.** If `OPENROUTER_API_KEY` is unset and
-`ANTHROPIC_API_KEY` is present, the layer uses the Anthropic SDK with the old
-model ids. Harvey cannot be taken down by a missing OpenRouter key, and the
-existing production setup keeps working with no new secret.
+Routes are defined in src/server.ts and src/harvey/work/routes.ts. Treat those implementations as the exact request/response contract.
 
-Keys live **only** as server environment secrets (`fly secrets set`). No key is
-stored in the CRM, in a database, or in page source. The UI never sees a key; it
-sees model ids and dollar totals.
+| Surface | Routes |
+| --- | --- |
+| Model catalog and effective routing | GET /api/harvey/models |
+| Route overrides | POST /api/harvey/models/route; DELETE /api/harvey/models/route/:job |
+| Usage and caps | GET /api/harvey/usage; POST /api/harvey/usage/caps |
+| Approval decisions | GET /api/harvey/approvals; POST /api/harvey/approvals/:id/approve or /deny |
+| Direct chat entry | POST /api/harvey/chat |
+| Persistent chats | /api/harvey/conversations and /:id |
+| Projects | /api/harvey/projects |
+| Jobs, schedules, browser, files and plugins | /api/harvey/work/* |
 
-## Job → model routing
+The Work chat entry uses workspace:true with a conversation ID; the frontend also submits persistent background jobs and retrieves their progress/results. Direct streaming and background-job responses differ. Conversation history is server-persisted, not only browser localStorage.
 
-Model choice is per **job**, not per call site.
+Under ACCOUNT_ISOLATION=true these surfaces require account routing. A shared DASHBOARD_TOKEN alone does not select a personal account. Carlos's authorized combined access is described in [team access](team-access.md).
 
-| Job | What it is | Default intent |
-|---|---|---|
-| `chat_fast` | pleasantries, one-liners, no tools | cheapest |
-| `chat_deep` | normal operator chat with tools | mid |
-| `agent` | reserved for future agent workflows | mid |
-| `summarize` | conversation folding / compaction | cheapest |
-| `extract` | memory extraction to JSON | cheapest |
-| `classify` | short routing decisions | cheapest |
-| `vision` | anything containing an image | cheap vision-capable |
-| `schedule` | operator sentence → cron | cheapest |
+## Configuration
 
-Resolution order: **explicit pick from the UI → stored override → env default →
-built-in default**, then fallbacks appended. A model the configured keys cannot
-reach is never returned as a primary.
+Provider keys are OPENROUTER_API_KEY and ANTHROPIC_API_KEY. Model overrides, context ceilings, prompt caching and budget settings are read in src/hull/providers and src/core/aiUsageStore.ts. Approval settings are HARVEY_APPROVAL_REQUIRED and HARVEY_APPROVAL_STRICT. Effective worker values depend on the gateway environment allowlist.
 
-## Context regulation (context rot)
+## Verification
 
-The rule: **a model's advertised context window is not the budget.** Effective
-quality degrades well before the limit, and every token is billed, so the layer
-targets a *pre-rot* budget and compacts before it is reached.
-
-Applied in this order, cheapest-first, because reversible beats lossy:
-
-1. **Budget** = `min(contextTokens × PRE_ROT_RATIO, hard ceiling per job)`.
-2. **Trim** oldest turns first; the most recent turns stay raw so the model keeps
-   its rhythm and formatting.
-3. **Compact tool results** — old ones become a short pointer/summary, recent
-   ones stay verbatim. Tool output is re-fetchable, which makes it the first
-   thing that should go.
-4. **Summarize** only when trimming cannot free enough. Lossy, so it is last.
-5. **Pin governance.** System prompt, safety rules and standing orders are never
-   summarized away — a compaction pass must not quietly delete the sentence that
-   says "ask before sending".
-
-Every request records its `ContextPlan` (budget, estimate, what was dropped) so
-"why did it forget" has an answer.
-
-## Cost control
-
-Enforced **before** the network call, since an un-made request is the only free one.
-
-- Daily cap, monthly cap, and a per-call ceiling.
-- Near the cap, cheap jobs **degrade** to the cheapest model instead of failing.
-- Over the cap, the call is **refused** with an operator-readable reason.
-- A model that errors repeatedly trips a short circuit breaker and traffic moves
-  to its fallback rather than retrying into the same wall.
-- Every attempt is written to `/data/ai-usage.db` — success or failure, with
-  tokens, cost, latency, job, model and error text.
-
-## Approval gate
-
-Tool calls are classified before execution. Anything that **leaves the building
-or cannot be undone** — outbound email/SMS/WhatsApp, public posting, deletes,
-mass operations, spend — becomes a **pending approval** instead of running.
-
-The chat surfaces it as a card with Approve / Deny. The retired scheduler no longer executes tasks.
-
-## HTTP contract
-
-All routes require a session cookie or `DASHBOARD_TOKEN`, same as the rest of the app.
-
-### Models and routing
-
-```
-GET /api/harvey/models
-→ {
-    models: ModelInfo[],
-    routing: { [job]: { model, fallbacks, source } },
-    provider: { openrouter: boolean, anthropic: boolean, primary: "openrouter"|"anthropic"|null },
-    budget: { spentTodayUsd, spentMonthUsd, dailyCapUsd, monthlyCapUsd, state: "ok"|"near"|"over" }
-  }
-
-POST /api/harvey/models/route   { job, model }        → { ok, routing }
-DELETE /api/harvey/models/route/:job                  → { ok, routing }
-```
-
-### Chat
-
-```
-POST /api/harvey/chat
-body { message, sessionId?, model?, stream?: boolean, conversationId? }
-
-stream: true  → SSE:
-  event: token     data: { text }
-  event: tool      data: { name, status: "running"|"done"|"error" }
-  event: approval  data: { id, tool, summary, risk }
-  event: usage     data: { model, promptTokens, completionTokens, costUsd, contextPlan }
-  event: done      data: { sessionId, conversationId, text }
-  event: error     data: { message }
-
-stream: false → { text, sessionId, conversationId, usage, contextPlan, approvals[] }
-```
-
-### Conversations
-
-```
-GET    /api/harvey/conversations                → { conversations: [{ id, title, updatedAt, messageCount }] }
-GET    /api/harvey/conversations/:id            → { id, title, messages: [{ role, content, at, model?, costUsd? }] }
-DELETE /api/harvey/conversations/:id            → { ok }
-POST   /api/harvey/conversations/:id/title      { title } → { ok }
-```
-
-### Usage
-
-```
-GET /api/harvey/usage?days=30
-→ { today: {...}, month: {...}, byModel: [{ model, calls, costUsd, tokens }],
-    byJob: [{ job, calls, costUsd }], recentErrors: [{ at, model, job, error }],
-    daily: [{ date, costUsd, calls }] }
-
-POST /api/harvey/usage/caps  { dailyCapUsd?, monthlyCapUsd? } → { ok, caps }
-```
-
-### Approvals
-
-```
-GET  /api/harvey/approvals                 → { pending: [{ id, tool, summary, risk, args, createdAt }] }
-POST /api/harvey/approvals/:id/approve     → { ok, result }
-POST /api/harvey/approvals/:id/deny        { reason? } → { ok }
-```
-
-## Environment
-
-| Variable | Purpose |
-|---|---|
-| `OPENROUTER_API_KEY` | the one key; unlocks every model in the picker |
-| `OPENROUTER_APP_URL` / `OPENROUTER_APP_TITLE` | optional attribution headers |
-| `ANTHROPIC_API_KEY` | fallback provider, and what production runs on today |
-| `HARVEY_MODEL_<JOB>` | override one job's model, e.g. `HARVEY_MODEL_CHAT_DEEP` |
-| `HARVEY_DAILY_CAP_USD` | daily spend cap (default 10) |
-| `HARVEY_MONTHLY_CAP_USD` | monthly spend cap (default 150) |
-| `HARVEY_MAX_COST_PER_CALL_USD` | per-call ceiling (default 0.50) |
-| `HARVEY_PRE_ROT_RATIO` | fraction of the context window we allow (default 0.5) |
-| `HARVEY_CONTEXT_CEILING_TOKENS` | hard input ceiling (default 60000) |
-| `HARVEY_APPROVAL_REQUIRED` | `false` disables the approval gate (default on) |
-| `AI_USAGE_DB_PATH` | store paths (default `/data`) |
+scripts/verify-harvey-model-layer.mjs, verify-harvey-approval.mjs, verify-harvey-routes.mjs, verify-harvey-work.mjs and verify-harvey-reliability.mjs cover relevant contracts. See CI configuration for which checks run automatically. Fixture results do not establish live provider availability or task accuracy.

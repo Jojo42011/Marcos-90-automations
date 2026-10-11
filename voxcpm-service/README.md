@@ -1,34 +1,27 @@
-# VoxCPM2 Microservice
+# VoxCPM2 service
 
-Separate Python service for Marco's voice clone generation.
+Optional standalone FastAPI voice-generation service. It is not started by the repository's Node Docker image.
 
-## Requirements
+## Real generation and fixtures
 
-- Python 3.10+
-- PyTorch 2.5.0+ with CUDA 12.0+
-- ~8GB VRAM GPU (NVIDIA RTX 3080/4080/4090 recommended)
+Real VoxCPM generation requires compatible PyTorch/CUDA hardware and the model dependencies in requirements.txt. Model loading occurs lazily on the first generation request.
 
-## Setup
+server.py supports VOXCPM_MOCK=1. It also defaults to mock behavior when CUDA is unavailable unless VOXCPM_ALLOW_CPU_MOCK=0. Mock output is not real cloned speech; check the service mode before treating a response as a successful voice-generation integration.
+
+## Run from this directory
 
 ```bash
 pip install -r requirements.txt
+uvicorn server:app --host 0.0.0.0 --port 8001
 ```
 
-## Run
+Use requirements-local.txt for the local fixture dependencies where appropriate.
 
-```bash
-VOXCPM_OUTPUT_DIR=/data/voice-clone/generated uvicorn server:app --host 0.0.0.0 --port 8000
-```
+## Configuration
 
-## Environment variables
+- VOXCPM_MODEL_PATH: model ID or local path; default openbmb/VoxCPM2.
+- VOXCPM_OUTPUT_DIR: generated WAV directory. Default /data/voice-clone/generated when /data exists, otherwise the repository's data/voice-clone/generated.
+- VOXCPM_MOCK: explicitly selects fixture mode.
+- VOXCPM_ALLOW_CPU_MOCK: disable automatic CPU mock fallback with 0.
 
-- `VOXCPM_MODEL_PATH`: HuggingFace model ID or local path (default: `openbmb/VoxCPM2`)
-- `VOXCPM_OUTPUT_DIR`: where to write `.wav` outputs (default: `/data/voice-clone/generated`)
-
-## First run
-
-Model downloads ~8GB on first request. Be patient.
-
-## Deployment note
-
-This service must run on a **separate GPU machine** (RunPod, Modal, or local GPU) — not on the Marco 90 Fly.io Node container.
+The Node integration reads VOXCPM_API_URL. Under account isolation, this is not automatically inherited from the parent environment. A standalone service deployment does not by itself connect every account.

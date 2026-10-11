@@ -1,18 +1,18 @@
 # Harvey projects, plugins, browser and scheduled agents
 
-Deployed on Fly. Hosted browser has passed real navigation and model-driven reading tests. Recurring worker activation and real account workflows still require acceptance testing.
+Current implementation on master. fly.toml enables the hosted browser and recurring worker. Real account configuration and site-specific workflows require separate live verification.
 
-Managed plugins now use Composio: configure COMPOSIO_API_KEY on the server, then connect supported apps from Plugins. Composio handles OAuth credentials and refresh; the legacy provider-client setup below is optional for direct connectors. Connections are scoped by signed-in user and selected project. Real provider sign-in/consent is still required.
+Managed plugins now use Composio: configure COMPOSIO_API_KEY on the server, then connect supported apps from Plugins. Composio handles OAuth credentials and refresh; the legacy provider-client setup below is optional for direct connectors. Managed connections are owner-wide across that user's chats and projects; legacy custom connectors retain their saved scope. Real provider sign-in/consent is still required.
 
 ## User flow
 
 1. Create a project, give it shared instructions and a timezone.
-2. Open separate chats for the agents in that project. Each chat has persistent history and its own browser profile. Chat mode is conversational; Work mode can act. Its business-tool bridge retains the existing CRM capabilities and approval rules.
-3. Open Plugins and connect the services the project needs. Connections can belong to a project or all of that user's projects. Enable actions explicitly for connections that may send or modify data.
-4. In Work chat, describe the job and timing. Harvey calls `schedule_agent`, which persists the prompt, five-field cron, timezone, next run and model-spend ceiling. The task appears under Scheduled agents; it can be edited, paused, resumed, run now or removed.
+2. Open separate chats for the agents in that project. Each chat has persistent history and its own browser profile. Both Chat and Work can use connected apps, browser tools and schedules when authorized. Its business-tool bridge retains the existing CRM capabilities and approval rules.
+3. Open Plugins and connect the services needed. Managed connections are owner-wide. Legacy custom connections can be project-scoped and have an explicit Enable actions setting; managed actions use provider permissions and the user's request.
+4. In either Chat or Work, describe the job and timing. Harvey calls `schedule_agent`, which persists the prompt, five-field cron, timezone, next run and model-spend ceiling. The task appears under Scheduled agents; it can be edited, paused, resumed, run now or removed.
 5. Results appear in the originating chat and in run history. A browser/API error, missing model or budget failure must not be reported as a successful run.
 
-Plugins catalog: Google Drive, Gmail, Google Calendar, Google Sheets, OneDrive, Outlook Mail, Outlook Calendar, GitHub, Slack and Notion. These are real OAuth adapters and JSON REST transports, **not preconnected accounts**. Missing server credentials show “App setup required.” Custom connectors accept an HTTPS Streamable HTTP MCP endpoint and optional bearer token; tools are discovered live. Custom MCP interactive OAuth and legacy SSE-only transport are not implemented.
+Plugins searches the live paginated Composio catalog; it is not restricted to a fixed app allowlist. Accounts still require provider consent unless a tool needs no authentication. The legacy direct OAuth catalog includes Google, Microsoft, GitHub, Slack and Notion services; those adapters need their own server configuration. Custom connectors accept an HTTPS Streamable HTTP MCP endpoint and optional bearer token; tools are discovered live. Custom MCP interactive OAuth and legacy SSE-only transport are not implemented.
 
 ## Browser choice and research
 
@@ -24,7 +24,7 @@ OAuth implementation references: [Google offline access](https://developers.goog
 
 ## Server setup before live use
 
-Use a full image build: this adds npm dependencies and Chromium. The old source-only overlay deploy cannot install them.
+The Docker build installs npm dependencies and Chromium. Configuration instructions below describe capabilities and do not authorize deployment.
 
 - `HARVEY_WORK_DIR`: durable directory, defaults to `/data/harvey-work` on Linux with a data volume, otherwise `data/harvey-work`.
 - `HARVEY_PUBLIC_URL`: canonical HTTPS app URL, used for OAuth callbacks.
@@ -35,7 +35,7 @@ Use a full image build: this adds npm dependencies and Chromium. The old source-
 - Existing `OPENROUTER_API_KEY` (or Anthropic fallback) and global spend caps still apply. Tasks default to a $1 model budget per run; this is a preflight/recorded-usage ceiling, not a guarantee against provider billing adjustments or external-service charges.
 - FFmpeg is already installed by the Dockerfile. `FFMPEG_PATH` can override the executable for local testing.
 
-Register one OAuth application per provider family and configure:
+For optional legacy direct OAuth adapters (not Composio-managed apps), register an OAuth application per provider family and configure:
 
 | Services | Environment variables |
 | --- | --- |
@@ -51,11 +51,11 @@ All use `https://YOUR-APP/api/harvey/work/oauth/callback`. Enable each provider'
 
 `src/harvey/work/` contains the SQLite store, connector transports, browser worker, files/video actions, agent runtime and Express router. `public/harvey-work.js` extends the existing vanilla-JS interface. The new UI passes `workspace:true` to `/api/harvey/chat`; the existing voice and legacy machine clients retain their previous path. Voice dictation works in the composer; the separate voice overlay has not yet been migrated to project-scoped Work tools.
 
-Records and messages are scoped by the signed-in user. Machine-token/explicitly unlocked local access uses the shared `operator` owner. Browser directories are hashed by owner and chat. Browser > Save login keeps credentials out of model context: the model sees login IDs and URLs, and a server-side fill inserts credentials only on the saved origin. A user can instead explicitly enable Monte Carlo for direct credential use in that chat, as described below. This first version supports a two-field username/password page. Multi-stage identity-provider sign-in, MFA, CAPTCHA and renewed consent can require human help. Cookie persistence cannot prevent sites from expiring sessions.
+Records and messages retain their original owner keys. The gateway allows Carlos to access authorized chats and routes their work to the owning process while recording the initiating actor separately. Unscoped machine-token access is blocked with account isolation enabled; the `operator` fallback applies only outside that routing mode. Browser directories are hashed by owner and chat. Browser > Save login keeps credentials out of model context: the model sees login IDs and URLs, and a server-side fill inserts credentials only on the saved origin. A user can instead explicitly enable Monte Carlo for direct credential use in that chat, as described below. The saved-login helper supports a two-field username/password page. Multi-stage identity-provider sign-in, MFA, CAPTCHA and renewed consent can require human help. Cookie persistence cannot prevent sites from expiring sessions.
 
-The worker supports **one application process on one durable volume**. Claiming a scheduled run and advancing its next due time are transactional. Only one run can own a chat at a time. After downtime, a missed task runs once, not once per missed interval. At boot, interrupted runs become `needs_attention`; they are not blindly retried because an external write may already have happened. This is not an exactly-once guarantee for third-party actions. Scaling to multiple Fly machines requires a coordinated queue/lease service and per-worker browser volumes.
+The deployment uses **one host/volume with a gateway and per-account worker processes**. Workers recover and execute only their own owner-keyed records. Claiming a scheduled run and advancing its next due time are transactional. Only one run can own a chat at a time. After downtime, a missed task runs once, not once per missed interval. At boot, interrupted runs become `needs_attention`; they are not blindly retried because an external write may already have happened. This is not an exactly-once guarantee for third-party actions. Scaling to multiple Fly machines requires a coordinated queue/lease service and per-worker browser volumes.
 
-The browser is an isolated profile and process, not a complete isolated virtual desktop. On root Linux containers the fixed browser entrypoint drops to uid/gid 1001; it inherits only the minimal browser environment. Actual Fly/browser sandbox compatibility still needs staging validation. Arbitrary JavaScript execution and filesystem-wide uploads are not exposed to the model. An interactive desktop/takeover viewer is follow-up work.
+The browser is an isolated profile and process, not a complete isolated virtual desktop. On root Linux containers the fixed browser entrypoint drops to uid/gid 1001; it inherits only the minimal browser environment. Actual Fly/browser sandbox compatibility still needs staging validation. Arbitrary JavaScript execution and filesystem-wide uploads are not exposed to the model. A per-chat computer side panel exposes the hosted browser preview, including screenshots and tabs. It is not an interactive full-desktop takeover viewer.
 
 ## Files and video
 
@@ -63,12 +63,12 @@ The composer can upload a file or video (250 MB limit) to the current chat. `wor
 
 ## Verification
 
-`npm run build` compiles the server. `node scripts/verify-harvey-work.mjs` checks owner isolation, durable history, vault encryption, schedule validation and DST, overlap protection, restart behavior, connection permissions, OAuth state/PKCE, actual OpenRouter-shaped fixture tool execution and HTTP routes. The test uses temporary data and a local model fixture. Local browser UI verification also covered project creation, scheduling through a Work chat, manual runs with saved results, and actual Chromium navigation. Closing and reopening the browser restored the fixture site's persistent session cookie. Existing Harvey/CRM verification scripts remain regression checks. Live OAuth provider accounts, production Fly execution and real site-specific workflows must be tested after configuration.
+Relevant fixture checks include scripts/verify-harvey-work.mjs, verify-harvey-credential-consent.mjs, verify-harvey-reliability.mjs, verify-browser-persistence.mjs and verify-harvey-computer-ui.mjs. They cover persistence, scope, consent, scheduling and browser behavior. See CI configuration for the selected automated checks. Historical pass counts are omitted because they change with the suites; fixture results do not establish live account permissions or model accuracy.
 
 
 Connected Composio apps are shared across the signed-in user’s chats and projects. Chat and Work both expose discovery, read/write actions and the hosted browser; authorization still comes from the user’s request and provider scopes. Connection status refreshes each turn. Disconnecting removes provider authorization; it does not erase messages already read into chat history.
 
-The Fly background worker is enabled. Tasks created in either mode use IANA time zones (America/Chicago defaults), survive restarts, and open a right-side task panel showing the saved schedule and next run. The worker checks due tasks every 30 seconds; execution starts on or shortly after the scheduled minute, not with a real-time exact-second guarantee.
+The Fly configuration enables the background worker. Tasks created in either mode use IANA time zones (America/Chicago defaults), survive restarts, and open a right-side task panel showing the saved schedule and next run. The worker checks due tasks every 30 seconds; execution starts on or shortly after the scheduled minute, not with a real-time exact-second guarantee.
 
 Send `Monte Carlo` (or `Monte Carlo on`) to allow Harvey to use credentials supplied directly in that conversation for the requested website. `Monte Carlo off` disables this behavior for subsequent turns. The setting survives refreshes but is not inherited by new chats. Credentials typed in chat are stored as chat history and sent to the configured model; this is not a hidden password-manager field. The separate browser profile keeps website sessions across restarts. MFA/CAPTCHA and provider permissions still apply.
 

@@ -1,8 +1,7 @@
 # Telling the DM agent which house the lead is asking about
 
-**Status:** the code side is live. The ManyChat side is a per-flow change someone
-has to make in the ManyChat UI — nothing happens until then, and nothing breaks
-if it never happens.
+**Status:** listing-reference resolution is implemented in src/app/inboundListing.ts. The ManyChat side is a per-flow change someone
+has to make in the ManyChat UI — nothing happens until the flow supplies that field. Without a resolved link, the current DM pipeline uses its unknown-property follow-up behavior.
 
 ## The problem this solves
 

@@ -1,5 +1,10 @@
 # Harvey Browser Control
 
+## Current deployment boundary
+
+This document describes the retained local Chrome extension. It is separate from Harvey Work's per-chat hosted Playwright browser. With ACCOUNT_ISOLATION=true, unscoped extension pairing requests are not routed into personal accounts and root pairing-token configuration is not inherited by workers. The installation instructions below apply to a compatible non-isolated deployment; they do not establish that the extension works against the current Fly account gateway.
+
+
 Two things: a **side panel** where you talk to Harvey next to whatever page
 you're on, and the ability for him to **work inside sites that have no API** —
 pull a listing off a portal, fill out a third-party form, read a page in an MLS
@@ -99,7 +104,7 @@ named values by selector, scroll lazy-loading result panes, read the page's own
 structured data, take a screenshot, and report the page errors a site logged
 when something silently failed.
 
-If Harvey hasn't opened a tab yet and you ask him about a page, he acts on the
+If Harvey hasn't opened a tab yet and you ask him about a page, read-only actions can inspect the
 tab you're currently on — so *"what does this page say about the HOA?"* works
 without asking him to open it first. The Harvey shell is excluded from that:
 he'll never treat his own UI as the page in question.
@@ -184,35 +189,8 @@ things fix that, without giving up the rule:
 * **The poll reports your tab separately.** Harvey now knows a screen exists
   before he has adopted anything, so he can answer "what am I looking at?"
 
-The **"Harvey" tab group** also works again. It never had, in any release: the
-grouping code guarded on `chrome.tabGroups` and the manifest never requested
-the `tabGroups` permission, so the guard returned early every time and the
-group never appeared — which meant the documented way to hand Harvey a tab
-(drag it into his group) silently did nothing.
+The extension requests Chrome's tabGroups permission and groups its tabs under Harvey. This behavior belongs to the local extension, not the hosted browser.
 
-## Compared with Claude in Chrome
+## Scope
 
-Measured against Anthropic's published capability list for Claude in Chrome,
-so the gaps are known rather than assumed.
-
-| Capability | Harvey |
-|---|---|
-| Read page text | yes (`browser_read`, every frame + shadow roots) |
-| Click, fill forms, navigate | yes |
-| Open / close / switch tabs, multi-tab work | yes |
-| Screenshot the page | yes |
-| See the tab you are on | yes, read-only (above) |
-| Drag a tab into its group | yes (fixed here) |
-| Extract structured data | yes (`browser_extract`, JSON-LD/OpenGraph) |
-| Console output, incl. page errors | yes (`browser_console`) |
-| Report a CAPTCHA rather than solving it | yes — deliberate |
-| Per-host permission gate before changing a page | yes — stricter than Claude's |
-| **Download files and open them** | **no** — needs the `downloads` permission |
-| **Scheduled recurring browser tasks** | **no** |
-| **Record a workflow and replay it** | **no** |
-| **Site-specific knowledge (Gmail, Calendar, GitHub…)** | **no** |
-| **Network-request inspection** | **no** — console errors only |
-
-The four "no"s are real gaps, not oversights: each is a feature in its own
-right rather than a flag to flip, and none of them is what "Harvey can't see my
-screen" was about.
+This extension supports page inspection and browser actions while the user's Chrome is connected and armed. It does not implement file downloads, a workflow recorder or network-request inspection. Harvey Work's hosted browser, managed apps and scheduled agents are separate features; their existence does not add those capabilities to this extension.

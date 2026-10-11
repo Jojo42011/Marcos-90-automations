@@ -1,23 +1,37 @@
-# Account workspaces
+# Account routing and storage
 
-Historical implementation notes. The current three-account access, shared knowledge/MLS, and Carlos permissions are documented in [team-access.md](team-access.md); that document supersedes the older roster and workspace behavior below.
+Current behavior on master. [Team access](team-access.md) defines Marco, Wesley and Carlos's permissions.
 
-Fly enables `ACCOUNT_ISOLATION=true`. Authentication and admin account management remain on the public server. It starts one loopback-only application process per active account and forwards authenticated HTTP, streaming chat, uploads and WebSocket traffic to the matching process. An account cannot select its process with a query parameter, a display-name cookie or an HTTP header. Children recheck the session owner; in-process CRM requests use that child's private internal token and port.
+## Processes and authorization
 
-The older stores cache records and SQLite connections in module globals, so request filters alone would not isolate them. Their paths now resolve through `dataPath()`. Account processes use `/data/accounts/<sha256(user-id)>/` for CRM contacts, conversations, tasks, transactions, email, knowledge, memory, documents and other business stores. They start empty instead of copying the legacy database. Existing shared files are retained unchanged. Default sample tasks, imported shared SOPs and seeded personal memory are not copied into accounts.
+With ACCOUNT_ISOLATION=true, the public server authenticates users and starts one loopback-only Node process per active account. Each worker rechecks access; display cookies do not authorize a request. HTTP requests and WebSockets pass through the gateway.
 
-Harvey Work already keys projects, chats, messages, schedules, connections and browser directories by owner. Its existing storage remains in place, preserving those records. Each account worker clears only its own abandoned locks and recovers/runs only its own schedules. Workers restart with the gateway, so scheduled agents do not depend on an open browser tab. Deactivated accounts cannot start scheduled runs. There is one concurrent hosted browser slot per account to limit memory use on the current machine.
+Marco and Wesley access their own business records. Carlos can access authorized Marco/Wesley records as well as his own. Combined supported collections use owner-qualified IDs in API responses; the original stored IDs remain unchanged. Detail/edit requests route back to the owning worker. Requests mixing owners for one write are rejected. A failed component read prevents an incomplete combined response.
 
-Account passwords and sessions remain in the central identity stores. CRM user lists and team rosters show the current account; the separate admin Team page can manage accounts but does not provide access to another person's CRM. Changing accounts requires password sign-in. Display caches are cleared on a switch and other open tabs reload. Use separate browser profiles if simultaneously signed into different accounts on one computer.
+The current worker browser-session limit is three. Workers start with the gateway rather than depending on an open browser tab. Inactive account processes are stopped.
 
-## Provisioning and integration boundary
+## Storage
 
-The one-time account bootstrap ensures Marco, Wesley and Carlos exist, using `marco@example.com`, `wesley@example.com`, and `carlos@example.com` for missing accounts. Matching existing names keeps their existing email and password. Newly created accounts and active accounts without passwords receive the previously requested testing password `1234`. Subsequent boots do not reset passwords. The retired roster account is removed from the identity registry; old business files are not deleted or rewritten.
+Account-local data resolves through dataPath() under /data/accounts/<sha256(user-id)> on Fly. Separate processes also isolate singleton caches and database connections.
 
-Model infrastructure keys and the managed-integration service key remain server configuration. Owner-scoped Harvey connections continue working, and each person connects their own additional services through Plugins. The old shared Brivity, Gmail, SMS, browser-extension and other business credentials are deliberately not inherited. Unscoped machine tokens, legacy webhooks and anonymous listing/report links cannot select an account and are unavailable while isolation is enabled. Restoring those integrations requires explicit account routing and individual connection configuration. Code execution remains off in account workers.
+Explicit shared stores are:
 
-This is application-level account isolation on a shared host, not separate operating-system security sandboxes. Do not enable arbitrary local code execution for tenants.
+- Central identity and session data.
+- shared-tasks.db for Task Center.
+- shared-knowledge.db for team knowledge.
+- listings.db and the SimplyRETS feed.
+- harvey-work/work.db, with records/messages keyed by owner and chat.
 
-## Verification
+Existing owner IDs and Work records remain in place. Startup contains one-time recovery/provisioning steps; original CRM/task/knowledge source files are retained. Marco CRM recovery and additive task/knowledge imports are documented by the corresponding core modules. Do not assume every account starts empty or copy another account's files as setup.
 
-Run `npm run build`, `node scripts/verify-account-isolation.mjs`, `node scripts/verify-harvey-work.mjs`, and `node scripts/verify-harvey-credential-consent.mjs`. The isolation test launches the real server and three account processes against temporary stores, exercising actual sign-in, CRM writes and reads, cross-account ID rejection, preserved chats, schedules, account administration, worker lock ownership and restart persistence. It uses fixture passwords and no live integration credentials. The same suites run on pull requests.
+## Integrations
+
+The allowlist in src/core/tenantGateway.ts shares model infrastructure, Composio and SimplyRETS configuration. Other parent business credentials are not inherited. Workers use a private internal capability for CRM calls; Carlos's combined bridge goes through the gateway.
+
+The parent owns ManyChat POST/OPTIONS /webhook and signed Zernio POST /api/zernio/webhook independently of dashboard sessions. Shared DM/comment consoles require authorized access. Other legacy webhooks and unscoped machine integrations do not receive a personal account implicitly.
+
+Account workers force HARVEY_EXEC_MODE=off. This is application-level separation on a shared host, not independent OS sandboxes.
+
+## Verification references
+
+scripts/verify-account-isolation.mjs, scripts/verify-account-ui.mjs and scripts/verify-team-access.mjs exercise access boundaries and persistence with fixtures. See .github/workflows/account-isolation.yml for the current CI selection. No live credential or production-health status is implied by this document.

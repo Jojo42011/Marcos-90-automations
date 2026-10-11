@@ -1,9 +1,6 @@
 # Persistent learning and coordinated agents
 
-Local implementation on `codex/harvey-reliability-safeguards`. Not committed,
-merged or deployed. Production credentials, messages and volumes were not used.
-This extends the local reliability changes documented in
-[Harvey reliability safeguards](harvey-reliability-safeguards.md).
+Current implementation on master. Source: src/harvey/work/learning.ts, coordination.ts, jobs.ts, store.ts and runtime.ts. See [reliability safeguards](harvey-reliability-safeguards.md) and [team access](team-access.md).
 
 ## Architecture
 
@@ -12,9 +9,8 @@ adds retrieved knowledge and procedures; it does not update model weights.
 Agents wake for messages and scheduled work. SQLite, not an always-running model
 conversation, retains their state while idle.
 
-The existing owner/chat records table receives new kinds: `lesson`, `brief`,
-`workflow` and `agent_team`. No tables are dropped, historical messages rewritten,
-accounts merged, or existing records migrated. Existing business tools, browser
+The owner/chat records table stores kinds including: `lesson`, `brief`,
+`workflow` and `agent_team`. Existing business tools, browser
 profiles, credential consent and model switching remain available.
 
 ### Bounded context and corrections
@@ -91,24 +87,9 @@ marked delegated and cannot serve as human teaching sources. They retain their
 own browser, history and existing connection/approval boundaries. A queued job is
 not reported as a completed task. Member reports remain untrusted content.
 
-## Validation
+## Verification references
 
-All tests use disposable databases and local fixtures, including the provider.
-
-- `verify-harvey-learning.mjs`: 22 checks for long-history recall, bounded context,
-  provenance, corrections, scope isolation, revision pinning, schedule failure
-  handling, coordinator dispatch, restart recovery and an actual SQLite backup
-  restored into a separate directory.
-- `verify-harvey-reliability.mjs` with Chrome: 29 checks. The real HTTP routes,
-  provider adapter and tool loop teach/save/schedule a procedure, enforce delegated
-  restrictions, resume a running task after page refresh, cancel it, and display
-  a paused schedule's explanation.
-- Existing Work: 60 checks; credential consent: 13; account isolation/shared
-  DM/comment routing and process-restart persistence: 18; chat UI contract: 109.
-- TypeScript build and diff whitespace checks pass.
-
-These are application contract tests, not evidence of real-model task accuracy or
-live CRM/CapCut performance. Production data has not been restored or migrated.
+scripts/verify-harvey-learning.mjs covers archived recall, provenance, revisions, schedules and coordination. scripts/verify-harvey-reliability.mjs exercises HTTP/job behavior and browser UI. Work, consent, account and team checks cover related boundaries. These fixture suites do not establish live task accuracy; consult current run results rather than historical pass counts.
 
 ## Remaining work before broader autonomy
 
@@ -118,12 +99,10 @@ live CRM/CapCut performance. Production data has not been restored or migrated.
 2. Voice/phone integration with a selected head chat. The existing voice interface
    remains intact; it is not wired to this new coordinator. No telephony provider,
    phone number or call permissions were provisioned.
-3. Explicit sharing grants for departments spanning different human accounts.
-   This change deliberately keeps existing account boundaries; it does not combine
-   Marco/Wesley/Carlos histories or memories.
+3. General cross-account department grants are not implemented. The current explicit Carlos access and chat relays are implemented in account routing/chatRelay; agent_team itself remains scoped to one owner/project. Team-wide teaching goes through shared Knowledge Center; chat-private lessons remain scoped to their chat.
 4. Distributed job leases, total department/day spend controls, richer capability
    health checks and supervised recovery of uncertain actions. Current workers
-   retain the existing single-process/tenant architecture, not an exactly-once
+   retain process-local coordination per account, not an exactly-once
    distributed workflow engine. No guarantee of infinite error-free execution.
 5. Local desktop companion and live browser-editor validation. Hosted browser
    automation is not general control of the user's computer.
