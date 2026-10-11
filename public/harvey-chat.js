@@ -44,7 +44,7 @@
   async function api(path, opts) {
     var o = Object.assign({ credentials: "same-origin" }, opts || {});
     o.headers = authHeaders(o.headers);
-    if(state.accountOwnerId && /^\/api\/harvey\/work\/(plugins|managed|logins)(\/|\?|$)/.test(path))o.headers["x-account-owner"]=state.accountOwnerId;
+    if(state.accountOwnerId && /^\/api\/harvey\/(?:approvals|work\/(?:plugins|managed|logins))(\/|\?|$)/.test(path))o.headers["x-account-owner"]=state.accountOwnerId;
     if (o.body && typeof o.body !== "string" && !(o.body instanceof FormData)) {
       o.headers["Content-Type"] = "application/json";
       o.body = JSON.stringify(o.body);

@@ -14,6 +14,9 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - run: node scripts/verify-reliability-fixes.mjs
+      - run: node scripts/verify-team-data.mjs
+      - run: node scripts/verify-team-access.mjs
       - run: node scripts/verify-comment-agent.mjs
       - run: node scripts/verify-dm-reliability.mjs
       - run: node scripts/verify-task-owner-recovery.mjs

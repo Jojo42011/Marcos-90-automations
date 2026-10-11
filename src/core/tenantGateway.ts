@@ -1,3 +1,7 @@
+import { ACCOUNT_INBOUND } from "./accountInbound.js";
+import { accountIntegrationEnvironment, integrationStatus, saveIntegrationSettings } from "./accountIntegrations.js";
+import { workspaceRoles, workspaceMember } from "./workspaceGrants.js";
+import { publicResource, verifyPublicLink } from "./publicLinks.js";
 import { proxyAccount, readAccountJson } from "./accountProxy.js";
 import { accountPreferences, saveAccountPreferences } from "./accountPreferences.js";
 import { accountBridgeUser, issueAccountBridge } from "./accountBridge.js";
@@ -20,11 +24,11 @@ import { dataPath, isTenantGateway, tenantOwner } from "./tenantData.js";
 import type { CRMUser } from "./types.js";
 
 // Share model infrastructure and the requested team MLS feed; other business credentials remain isolated.
-const SHARED_ENV = /^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP|LANG|TZ|NODE_ENV|PLAYWRIGHT_BROWSERS_PATH|OPENROUTER_[A-Z_]+|ANTHROPIC_[A-Z_]+|OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|ELEVENLABS_API_KEY|DEEPGRAM_API_KEY|COMPOSIO_API_KEY|SIMPLYRETS_[A-Z_]+|HARVEY_(MODEL|PUBLIC_URL|SCHEDULE_MODEL|WORKER_ENABLED|BROWSER_ENABLED|BROWSER_EXECUTABLE|VAULT_KEY|PROMPT_CACHE|REQUEST_TIMEOUT_MS)|AETHON_(MODEL|MAX_TOKENS))$/;
+const SHARED_ENV = /^(PUBLIC_BASE_URL|PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP|LANG|TZ|NODE_ENV|PLAYWRIGHT_BROWSERS_PATH|OPENROUTER_[A-Z_]+|ANTHROPIC_[A-Z_]+|OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|ELEVENLABS_API_KEY|DEEPGRAM_API_KEY|COMPOSIO_API_KEY|SIMPLYRETS_[A-Z_]+|HARVEY_(MODEL|PUBLIC_URL|SCHEDULE_MODEL|WORKER_ENABLED|BROWSER_ENABLED|BROWSER_EXECUTABLE|VAULT_KEY|PROMPT_CACHE|REQUEST_TIMEOUT_MS)|AETHON_(MODEL|MAX_TOKENS))$/;
 export function tenantEnvironment(owner: string, parent = process.env): NodeJS.ProcessEnv {
   const root = join(dataPath(), "accounts", createHash("sha256").update(owner).digest("hex"));
   mkdirSync(root, { recursive: true });
-  const marco = getUsers().filter(u => /^marco(?:\s|$)/i.test(u.name.trim()));
+  const marco = getUsers().filter(u => u.id === workspaceRoles().marco);
   if (marco.length === 1 && marco[0].id === owner) recoverMarcoCrm(dataPath(), root, parent.DB_JSON_PATH);
   const emptyEnv = join(root, ".empty-env");
   writeFileSync(emptyEnv, "");
@@ -34,12 +38,12 @@ export function tenantEnvironment(owner: string, parent = process.env): NodeJS.P
   env.SHARED_KNOWLEDGE_DB_PATH = parent.SHARED_KNOWLEDGE_DB_PATH || dataPath("shared-knowledge.db");
   env.LISTINGS_DB_PATH = parent.LISTINGS_DB_PATH || dataPath("listings.db");
   env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db");
-  env.TENANT_MEMBER = getUsers().find(u => u.id === owner)?.name.trim().split(/\s+/)[0].toLowerCase() || owner;
+  env.TENANT_MEMBER = workspaceMember(owner);
   env.AUTH_DB_PATH = parent.AUTH_DB_PATH || dataPath("auth.db");
   env.USERS_JSON_PATH = parent.USERS_JSON_PATH || join(dirname(parent.DB_JSON_PATH || dataPath("db.json")), "users.json");
   // Work already has enforced owner keys. Keeping it preserves existing chats/connections.
   env.HARVEY_WORK_DIR = parent.HARVEY_WORK_DIR || dataPath("harvey-work");
-  return { ...env, TENANT_OWNER_ID: owner, TENANT_DATA_ROOT: root, ACCOUNT_ISOLATION: "true",
+  return { ...env, ...accountIntegrationEnvironment(owner), TENANT_OWNER_ID: owner, TENANT_DATA_ROOT: root, ACCOUNT_ISOLATION: "true",
     SITE_LOGIN_ENABLED: "1", PORT: "0", DOTENV_CONFIG_PATH: emptyEnv, HARVEY_EXEC_MODE: "off", HARVEY_BROWSER_MAX_SESSIONS: "3" };
 }
 
@@ -69,10 +73,24 @@ export function startTenantWorkers(): void {
   importSharedKnowledge(dataPath());
   listDocs();
   recoverSharedTasks();
+  require("./teamStore.js").prepareSharedTeamStore();
+  require("../harvey/work/store.js").workDb();
+  let syncing = false;
   const refresh = () => {
     const active = new Set(getUsers().filter(u => u.active).map(u => u.id));
     for (const [id, worker] of workers) if (!active.has(id)) worker.child.kill();
     for (const id of active) void ensureWorker(id).catch(err => console.error("[accounts]", err.message));
+    if (!syncing) {
+      syncing=true;
+      void (async()=>{
+        const owners=getUsers().filter(u=>u.active && u.id === workspaceRoles().marco);
+        if(owners.length!==1)return;
+        await ensureWorker(owners[0].id);
+        const {sharedSocialSnapshot}=await import("./db.js");
+        const rows=sharedSocialSnapshot();
+        for(let offset=0;offset<rows.length;offset+=100) workers.get(owners[0].id)?.child.send({type:"shared-social",rows:rows.slice(offset,offset+100)});
+      })().catch(error=>console.error("[social-handoff]",error)).finally(()=>{syncing=false;});
+    }
   };
   refresh(); setInterval(refresh, 30000).unref();
   const shutdown = () => {
@@ -87,7 +105,7 @@ export function isSharedInbound(method: string, path: string): boolean {
     || method === "OPTIONS" && path === "/webhook";
 }
 export function isSharedAutomationConsole(path: string): boolean {
-  return /^\/api\/(?:dm\/(?:inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status|llm\/health)$/.test(path);
+  return /^\/api\/(?:dm\/(?:queue|inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status|llm\/health)$/.test(path);
 }
 
 const identityPath = (p: string) => /^\/api\/auth\/(?:login|logout|me|change-password|login-history|audit-log|team(?:\/[^/]+(?:\/reset-password)?)?)$/.test(p)
@@ -99,6 +117,50 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
     if (process.env.ACCOUNT_ISOLATION !== "true") return next();
     res.setHeader("Cache-Control", "no-store");
     const user = sessionUser(req) || accountBridgeUser(req);
+    if (tenantOwner() && req.method === "POST" && Object.values(ACCOUNT_INBOUND).includes(req.path)) return next();
+    if (tenantOwner() && req.method === "GET" && req.path === "/api/email/gmail-oauth/callback") return next();
+    const inbound = req.method === "POST" && req.path.match(/^\/api\/account-inbound\/([^/]+)\/(quo|mojo|website|twilio)$/);
+    const callback = req.method === "GET" && req.path === "/api/email/gmail-oauth/callback" && typeof req.query.state === "string" && req.query.state.includes(".");
+    if (!tenantOwner() && (inbound || callback)) {
+      try {
+        const owner=inbound ? decodeURIComponent(inbound[1]) : Buffer.from(String(req.query.state).split(".")[0],"base64url").toString();
+        if(!getUsers().some(u=>u.id===owner && u.active)){res.sendStatus(404);return;}
+        const port=await ensureWorker(owner);
+        const query=new URL(req.originalUrl,"http://local").search;
+        const target=inbound ? ACCOUNT_INBOUND[inbound[2]]+query : req.originalUrl;
+        const headers={...req.headers,"x-forwarded-proto":req.protocol,"x-original-inbound-path":req.originalUrl};
+        delete headers["cookie"];delete headers["authorization"];delete headers["x-account-bridge"];delete headers["x-account-actor"];
+        const upstream=http.request({host:"127.0.0.1",port,path:target,method:req.method,headers},incoming=>{
+          res.writeHead(incoming.statusCode||502,incoming.headers);incoming.pipe(res);
+        });
+        upstream.on("error",()=>{if(!res.headersSent)res.sendStatus(502);else res.destroy();});
+        req.on("aborted",()=>upstream.destroy());res.on("close",()=>{if(!res.writableEnded)upstream.destroy();});
+        req.pipe(upstream);
+      } catch {if(!res.headersSent)res.sendStatus(503);}
+      return;
+    }
+
+    if (req.method === "GET" && /^\/l\/[^/]+$/.test(req.path)) return next();
+    if (req.method === "GET" && publicResource(req.path)) {
+      const owner = verifyPublicLink(req.originalUrl);
+      if (owner !== undefined) {
+        if (tenantOwner() || !owner) return next();
+        if (!getUsers().some(u => u.id === owner && u.active)) { res.sendStatus(404); return; }
+        try {
+          const port = await ensureWorker(owner);
+          const upstream = http.get({host:"127.0.0.1",port,path:req.originalUrl}, incoming => {
+            res.writeHead(incoming.statusCode || 502, incoming.headers); incoming.pipe(res);
+          });
+          upstream.on("error", () => { if (!res.headersSent) res.sendStatus(502); else res.destroy(); });
+          res.on("close", () => upstream.destroy());
+        } catch { res.sendStatus(503); }
+        return;
+      }
+      // Previously issued root-store links keep their original contract. Never scan tenant stores.
+      if (!tenantOwner() && !req.query.owner && !req.query.signature) return next();
+      res.sendStatus(404); return;
+    }
+
     if (tenantOwner()) {
       // The child listens only on loopback, but still validates identity on every request.
       if (!internal(req) && !canViewWorkspace(user, tenantOwner())) { res.status(403).json({ error: "Account mismatch" }); return; }
@@ -116,7 +178,7 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
     // existing public webhook contract stays unchanged.
     if (isSharedInbound(req.method, req.path)) return next();
     if (isSharedAutomationConsole(req.path)) {
-      if (user && ["marco","wesley","carlos"].includes(user.name.trim().split(/\s+/)[0].toLowerCase()) || machine(req) || internal(req)) return next();
+      if (user && Object.values(workspaceRoles()).includes(user.id) || machine(req) || internal(req)) return next();
       res.status(401).json({error:"Sign in to view the shared automation console"}); return;
     }
     if (identityPath(req.path)) return next();
@@ -126,6 +188,14 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
     if(user && req.path === "/api/account/chats" && req.method === "GET") {res.json({chats:accessibleChats(user)});return;}
     if(user && req.path === "/api/account/chat-relay" && req.method === "POST") {
       try{res.json(relayChats(user,await readAccountJson(req)));}catch(e){res.status(400).json({error:(e as Error).message});}return;
+    }
+    if(user && req.path === "/api/account/integrations") {
+      try {
+        if(req.method === "GET") res.json({configured:integrationStatus(user.id)});
+        else if(req.method === "PUT") { saveIntegrationSettings(user.id,await readAccountJson(req)); res.json({saved:true,restartRequired:true}); }
+        else res.sendStatus(405);
+      }catch(error){res.status(400).json({error:(error as Error).message});}
+      return;
     }
     if(user && req.path === "/api/account/preferences") {
       try {

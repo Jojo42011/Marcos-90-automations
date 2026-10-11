@@ -28,7 +28,11 @@ Existing owner IDs and Work records remain in place. Startup contains one-time r
 
 The allowlist in src/core/tenantGateway.ts shares model infrastructure, Composio and SimplyRETS configuration. Other parent business credentials are not inherited. Workers use a private internal capability for CRM calls; Carlos's combined bridge goes through the gateway.
 
-The parent owns ManyChat POST/OPTIONS /webhook and signed Zernio POST /api/zernio/webhook independently of dashboard sessions. Shared DM/comment consoles require authorized access. Other legacy webhooks and unscoped machine integrations do not receive a personal account implicitly.
+The parent owns ManyChat POST/OPTIONS /webhook and signed Zernio POST /api/zernio/webhook independently of dashboard sessions. Shared DM/comment consoles require authorized access. Scoped Quo, Mojo, website and Twilio ingress uses /api/account-inbound/:owner/:provider and retains provider authentication. Unscoped machine integrations do not receive a personal account implicitly. Account-specific provider settings never fall back to another account’s credentials. Gmail OAuth state includes an owner routing prefix and is validated once in that worker.
+
+Shared social CRM snapshots reach the designated Marco account over parent/child IPC every 30 seconds. Contact-field updates use a saved source baseline to preserve divergent CRM edits; conversations are merged without replaying lead automations. Explicitly deleted imported records are not resurrected. Other accounts do not receive the snapshot.
+
+New account-owned outreach/CMA links carry an HMAC capability covering the exact path, owner and query parameters. Public MLS pages remain readable. Existing unsigned links resolve only against the original root store, never by searching accounts.
 
 Account workers force HARVEY_EXEC_MODE=off. This is application-level separation on a shared host, not independent OS sandboxes.
 

@@ -1,6 +1,6 @@
 // Real HTTP requests to three separate account processes. No model/provider calls.
 import assert from 'node:assert/strict';
-import {createHmac} from 'node:crypto';
+import {createHmac,createHash} from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,6 +49,8 @@ if(url.hostname==='zernio.com'&&url.pathname==='/api/v1/inbox/conversations/fixt
 const bridgeCheck=join(root,'bridge-check.json');
 writeFileSync(transport,readFileSync(transport,'utf8')+`
 process.on('message',m=>{if(m?.type==='account-bridge' && process.env.TENANT_MEMBER==='carlos')setImmediate(async()=>{try{const result=await require(${JSON.stringify(join(process.cwd(),'dist/src/harvey/platformTools.js'))}).executePlatformTool('crm_api',{method:'GET',path:'/api/dashboard/data?includePhoneless=1',select:['totals','accountSummaries']});fs.writeFileSync(${JSON.stringify(bridgeCheck)},JSON.stringify({ok:result.ok,leads:result.response?.totals?.leads,error:result.error,status:result.status,hasLeads:Array.isArray(result.response?.leads),owners:result.response?.accountSummaries?.length}));}catch(e){fs.writeFileSync(${JSON.stringify(bridgeCheck)},JSON.stringify({error:e.message}));}});});`);
+writeFileSync(transport,readFileSync(transport,'utf8')+`
+process.on('message',m=>{if(m?.type==='account-bridge' && process.env.TENANT_MEMBER==='marco')require(${JSON.stringify(join(process.cwd(),'dist/src/hull/approval.js'))}).requestApproval({tool:'gmail_send',args:{to:'fixture@example.invalid'},sessionId:'fixture-approval'});});`);
 let server, logs='';
 function start(){
  server=spawn(process.execPath,['--require',transport,'dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_DM_API_KEY:'fixture-only',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
@@ -68,10 +70,10 @@ async function api(user,path,method='GET',body,headers={}){
 }
 try{
  start();await ready();
- for(const user of users){const r=await request('/api/auth/login','','POST',{email:user.email.toUpperCase(),password:'1234'});assert.equal(r.status,200,JSON.stringify(r.data));cookies[user.id]=r.cookie;}
+ for(const user of users){const r=await request('/api/auth/login','','POST',{email:user.email.toUpperCase(),password:'old-password'});assert.equal(r.status,200,JSON.stringify(r.data));cookies[user.id]=r.cookie;}
  const repaired=JSON.parse(readFileSync(join(root,'users.json'),'utf8'));assert.deepEqual(repaired.map(u=>u.id),users.map(u=>u.id));
- assert.equal(JSON.parse(readFileSync(join(root,'users.json.before-team-access'),'utf8'))[0].passwordHash,users[0].passwordHash);
- check('three requested logins, case normalization, preserved identity IDs and pre-repair backup');
+ assert.deepEqual(repaired.map(u=>u.passwordHash),users.map(u=>u.passwordHash));
+ check('three existing logins, case normalization, preserved identity IDs and unchanged passwords');
  let bridge;for(let i=0;i<100;i++){try{bridge=JSON.parse(readFileSync(bridgeCheck,'utf8'));break;}catch{}await new Promise(r=>setTimeout(r,100));}
  assert.equal(bridge?.ok,true,JSON.stringify(bridge));assert(bridge.leads>=1);assert.equal(bridge.hasLeads,false);assert.equal(bridge.owners,3);
  check('Carlos’s real worker-to-gateway CRM tool bridge retrieves Marco’s retained contacts');
@@ -106,6 +108,27 @@ try{
  const explicit=await api('carlos','/api/crm/lead','POST',{firstName:'For Wesley fixture',phone:'2025550188'},{'x-account-owner':'wesley'});
  assert((await api('wesley','/api/dashboard/data?includePhoneless=1')).leads.some(l=>l.name==='For Wesley fixture'));
  check('combined CRM totals, scoped record edits, explicit record ownership, cross-account denial and mixed bulk-write rejection');
+ const pending=await api('carlos','/api/harvey/approvals','GET',undefined,{'x-account-owner':'marco'});
+ const held=pending.pending.find(a=>a.args.to==='fixture@example.invalid');assert(held);
+ assert.equal((await request('/api/harvey/approvals/'+held.id+'/deny',cookies.wesley,'POST',{reason:'fixture'},{'x-account-owner':'marco'})).status,400);
+ await api('carlos','/api/harvey/approvals/'+held.id+'/deny','POST',{reason:'fixture'},{'x-account-owner':'marco'});
+ check('cross-account approval decisions reach the original worker and reject unauthorized owners');
+ const alert=(await api('marco','/api/leads/'+marco.leads.find(l=>l.name==='Marco fixture').id+'/listing-alerts','POST',{name:'Fixture alert',sendNow:false,sendEmail:false})).alert;
+ const oldRoot=process.env.TENANT_DATA_ROOT;
+ process.env.TENANT_OWNER_ID='marco';process.env.TENANT_DATA_ROOT=join(root,'accounts',createHash('sha256').update('marco').digest('hex'));process.env.ACCOUNT_ISOLATION='true';
+ const link=require('../dist/src/core/publicLinks.js').publicLink('/r/stop?k=alert&id='+alert.id);
+ delete process.env.TENANT_OWNER_ID;delete process.env.ACCOUNT_ISOLATION;process.env.TENANT_DATA_ROOT=oldRoot;
+ assert.equal((await request(link)).status,200);
+ assert.equal((await request(link.replace('owner=marco','owner=wesley'))).status,404);
+ const outreach=await api('marco','/api/leads/'+marco.leads.find(l=>l.name==='Marco fixture').id+'/outreach');assert(outreach.alerts.find(a=>a.id===alert.id).paused);
+ assert.equal((await request('/api/account-inbound/marco/mojo','','POST',{})).status,503);
+ assert.equal((await request('/api/account-inbound/marco/twilio','','POST',{})).status,403);
+ await api('marco','/api/account/integrations','PUT',{MOJO_WEBHOOK_SECRET:'fixture-inbound-only'});
+ assert.equal((await api('marco','/api/account/integrations')).configured.MOJO_WEBHOOK_SECRET,true);
+ assert.equal((await api('wesley','/api/account/integrations')).configured.MOJO_WEBHOOK_SECRET,false);
+ assert.equal((await request('/api/account/integrations',cookies.marco,'PUT',{TENANT_OWNER_ID:'wesley'})).status,400);
+ check('signed anonymous unsubscribe updates only its owner; tampering and unsigned inbound fail; provider settings stay isolated');
+
  assert.equal((await api('carlos','/api/harvey/conversations')).conversations.length,4);
  for(const id of [chats.marco,chats.wesley,preserved.id])assert.equal((await api('carlos','/api/harvey/conversations/'+id)).id,id);
  assert((await request('/api/harvey/conversations/'+chats.marco,cookies.wesley)).status>=400);

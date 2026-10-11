@@ -1,6 +1,6 @@
 # FORAI — Marcos-90-automations
 
-Last reconciled: 2026-10-11 against master at 5954ead62cd6c56fd4924a44a99918807b26d9d9 (documentation-only cleanup).
+Last reconciled: 2026-10-11. Reliability changes are based on master at 65c06316411a1a9171602154758f9c3f46999e9c; deployment status is tracked in GitHub, not asserted here.
 
 **master is the default branch.** This file describes implemented source behavior. It is not a live credential, production-data or service-health report. Detailed historical changes remain in Git.
 
@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-11: Added atomic CRM/queue persistence, recoverable DM intake, conservative scheduled-send recovery, additive social-to-Marco CRM handoff, signed customer links, owner-scoped provider settings/inbound routing, immutable workspace grants and cross-account approval routing. Existing passwords are no longer reset by bootstrap. Numbered job entry points now reuse existing follow-up/retention engines or produce explicit review/evaluation results. See docs/reliability-fixes.md for limits and verification.
+
 - 2026-10-11: Reconciled documentation with master; removed obsolete handoff/planning documents, stale production assertions and branch-mirroring instructions. Updated account/task storage, Harvey capabilities, deployment and verification references. Documentation only; no runtime, data or workflow changes.
 - 2026-10-10: Polished account settings and dark surfaces; corrected signed-in CRM identity. Added compact crm_api field selection and per-owner dashboard totals, classified CRM GET receipts correctly, and fixed verified relay acknowledgements and negative-action constraints.
 - 2026-10-10: Added Carlos combined business/chat access, shared knowledge and MLS, per-account appearance settings and permission-scoped chat relays while retaining original owner data. See docs/team-access.md.
@@ -36,8 +38,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Current implementation limits
 
-- **Integration routing:** account workers inherit a restricted environment. Model infrastructure, Composio and SimplyRETS are shared; unrelated root Gmail/Brivity/SMS/extension credentials are not inherited. Only the explicitly shared inbound routes bypass account routing. Route presence alone does not establish usability under isolation.
-- **Stubs:** integrations/amazon, integrations/newhomebuddy and integrations/brivity/index.ts throw; integrations/manychat/sendDM is a stub because ManyChat normally delivers webhook replies itself. Numbered modules 09–12 retain scaffold/no-op functions. The real Brivity lead client is integrations/brivity.ts.
+- **Integration routing:** account workers inherit a restricted environment. Model infrastructure, Composio and SimplyRETS are shared; unrelated root Gmail/Brivity/SMS/extension credentials are not inherited. Provider settings can be saved for the signed-in account via /api/account/integrations and take effect at its next worker restart. Scoped inbound URLs are /api/account-inbound/:owner/:provider; provider authentication is still mandatory. Old unscoped machine integrations remain unavailable. See docs/reliability-fixes.md.
+- **Stubs:** integrations/amazon, integrations/newhomebuddy and integrations/brivity/index.ts throw; integrations/manychat/sendDM is a stub because ManyChat normally delivers webhook replies itself. Modules 09–12 now provide phone-based cold-call repair, an adapter to existing email follow-ups, deduplicated weekly/gift review tasks plus existing quarterly email, and descriptive variant evaluation. They do not introduce automatic gift purchases, a new next-day SMS campaign, or randomized DM variants. The real Brivity lead client is integrations/brivity.ts.
 - **Transactions:** CSV and configured sheet synchronization exist. No native Brivity transaction API client is implemented. Standard deadline offsets are labeled placeholders in transactionsStore.ts.
 - **Harvey execution:** hosted browser control is not a local desktop. Account workers force HARVEY_EXEC_MODE=off. codeExec.ts's optional local mode is hardening, not an OS sandbox.
 - **Reliability:** receipts/read-backs are not independent proof of semantic correctness or complete pagination. Jobs use local process coordination and SQLite, not distributed exactly-once execution. Running actions can finish after cancellation; interrupted jobs require inspection.

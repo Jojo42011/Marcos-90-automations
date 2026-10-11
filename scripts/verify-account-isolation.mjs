@@ -179,6 +179,18 @@ try {
  assert((await request('/api/dm/conversations',cookies.marco)).data.conversations.some(c=>c.id===dmThread.id&&c.agentMessages>=1));
  assert.equal(readFileSync(sends,'utf8').trim().split('\n').length,1);
  check('Marco DM completes signed intake, fast ACK, real pipeline, correct-account send, duplicate protection and persistent history without dashboard login',()=>assert.ok(true));
+ let mirrored;
+ for(let i=0;i<400;i++){
+   mirrored=(await request('/api/dashboard/data?includePhoneless=1',cookies.marco)).data.leads.find(l=>l.userId==='fixture-marco-lead');
+   if(mirrored)break;await new Promise(r=>setTimeout(r,100));
+ }
+ assert(mirrored,'Shared social lead must reach Marco CRM');
+ assert(!(await request('/api/dashboard/data?includePhoneless=1',cookies.wesley)).data.leads.some(l=>l.userId==='fixture-marco-lead'));
+ await stop();start();await ready();
+ assert.equal((await request('/api/zernio/webhook','','POST',dmHook,dmHeaders)).data.duplicate,true);
+ assert.equal(readFileSync(sends,'utf8').trim().split('\n').length,1);
+ check('social handoff reaches only its designated CRM and DM deduplication survives restart',()=>assert.ok(true));
+
  if(process.env.TASK_UI_BROWSER==='true') {
    const {chromium}=await import('playwright');
    const browser=await chromium.launch({headless:true,...(process.env.HARVEY_BROWSER_EXECUTABLE?{executablePath:process.env.HARVEY_BROWSER_EXECUTABLE}:{})});

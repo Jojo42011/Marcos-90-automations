@@ -1,3 +1,4 @@
+import { publicLink } from "./publicLinks.js";
 /**
  * The two client-facing emails: a Listing Alert digest and a Market Report.
  *
@@ -35,11 +36,11 @@ const MUTED = "#6B7280";
 const LINE = "#E5E7EB";
 
 function trackedListingUrl(sendId: string, listingKey: string): string {
-  return `${publicBaseUrl()}/r/click?s=${encodeURIComponent(sendId)}&l=${encodeURIComponent(listingKey)}`;
+  return `${publicBaseUrl()}${publicLink(`/r/click?s=${encodeURIComponent(sendId)}&l=${encodeURIComponent(listingKey)}`)}`;
 }
 
 function pixel(sendId: string): string {
-  return `<img src="${publicBaseUrl()}/r/open?s=${encodeURIComponent(sendId)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
+  return `<img src="${publicBaseUrl()}${publicLink(`/r/open?s=${encodeURIComponent(sendId)}`)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
 }
 
 function shell(inner: string, sendId: string, footerNote: string): string {

@@ -2347,7 +2347,7 @@ function schedWhenLabel(iso){
   const d=new Date(iso); if(isNaN(d)) return iso;
   return d.toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
 }
-var SCHED_STATUS={pending:{l:"Scheduled",c:"#2563eb"},sent:{l:"Sent",c:"#10b981"},
+var SCHED_STATUS={sending:{l:"Sending",c:"#2563eb"},uncertain:{l:"Verify delivery",c:"#b45309"},pending:{l:"Scheduled",c:"#2563eb"},sent:{l:"Sent",c:"#10b981"},
                   failed:{l:"Failed",c:"#c0616a"},canceled:{l:"Canceled",c:"#94a3b8"}};
 
 function renderScheduled(){

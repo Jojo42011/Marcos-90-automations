@@ -4,6 +4,7 @@ exports.publicBaseUrl = publicBaseUrl;
 exports.esc = esc;
 exports.renderAlertEmail = renderAlertEmail;
 exports.renderReportEmail = renderReportEmail;
+const publicLinks_js_1 = require("./publicLinks.js");
 function publicBaseUrl() {
     return (process.env.PUBLIC_BASE_URL || "https://marco-90-automation.fly.dev").trim().replace(/\/+$/, "");
 }
@@ -18,10 +19,10 @@ const INK = "#1F2933";
 const MUTED = "#6B7280";
 const LINE = "#E5E7EB";
 function trackedListingUrl(sendId, listingKey) {
-    return `${publicBaseUrl()}/r/click?s=${encodeURIComponent(sendId)}&l=${encodeURIComponent(listingKey)}`;
+    return `${publicBaseUrl()}${(0, publicLinks_js_1.publicLink)(`/r/click?s=${encodeURIComponent(sendId)}&l=${encodeURIComponent(listingKey)}`)}`;
 }
 function pixel(sendId) {
-    return `<img src="${publicBaseUrl()}/r/open?s=${encodeURIComponent(sendId)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
+    return `<img src="${publicBaseUrl()}${(0, publicLinks_js_1.publicLink)(`/r/open?s=${encodeURIComponent(sendId)}`)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
 }
 function shell(inner, sendId, footerNote) {
     return `<div style="margin:0;padding:0;background:#F3F4F6">

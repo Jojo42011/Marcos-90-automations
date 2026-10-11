@@ -1,7 +1,5 @@
-/**
- * Module 10: Follow-Up Sequence & Feedback Call Flag — next-day text; narrow search or flag Marco.
- */
-export async function runScheduledFollowUp(): Promise<void> {
-  // Stub: find leads due for follow-up, send text, update state or flag_for_call
+import {checkNoReplyFollowups} from "../../agents/emailMarketing/noReplyFollowup.js";
+/** Use the existing reply-aware follow-up engine; do not start a second campaign. */
+export async function runScheduledFollowUp(): Promise<{sent:number; movedToCold:number}> {
+  return checkNoReplyFollowups();
 }
-

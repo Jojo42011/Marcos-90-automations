@@ -66,6 +66,9 @@ const CHANGE_PASSWORD_ALLOWED = new Set([
     "/api/auth/logout",
 ]);
 function isPublicPath(pathname) {
+    // Routing only: each provider handler still requires its own signature or secret.
+    if (/^\/api\/account-inbound\/[^/]+\/(quo|mojo|website|twilio)$/.test(pathname))
+        return true;
     if (PUBLIC_EXACT.has(pathname))
         return true;
     if (PUBLIC_FILES.has(pathname))

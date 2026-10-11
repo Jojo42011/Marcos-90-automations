@@ -1,3 +1,4 @@
+import { publicLink } from "./publicLinks.js";
 /**
  * The send loop for Listing Alerts and Market Reports.
  *
@@ -119,7 +120,7 @@ export interface SendOutcome {
 }
 
 function unsubUrl(kind: "alert" | "report", id: string): string {
-  return `${publicBaseUrl()}/r/stop?k=${kind}&id=${encodeURIComponent(id)}`;
+  return `${publicBaseUrl()}${publicLink(`/r/stop?k=${kind}&id=${encodeURIComponent(id)}`)}`;
 }
 
 /**
@@ -215,7 +216,7 @@ export async function sendReportNow(reportId: string): Promise<SendOutcome> {
     customMessage: isFirst ? report.emailMessage : null,
     frequencyLabel: REPORT_FREQUENCY_LABELS[report.frequency],
     unsubscribeUrl: unsubUrl("report", report.id),
-    viewUrl: `${publicBaseUrl()}/r/report?id=${encodeURIComponent(report.id)}&s=${encodeURIComponent(sendId)}`,
+    viewUrl: `${publicBaseUrl()}${publicLink(`/r/report?id=${encodeURIComponent(report.id)}&s=${encodeURIComponent(sendId)}`)}`,
   });
 
   try {

@@ -4,21 +4,7 @@ exports.canSendOn = canSendOn;
 exports.processDueMessages = processDueMessages;
 exports.startScheduledSender = startScheduledSender;
 exports.stopScheduledSender = stopScheduledSender;
-/**
- * The worker behind scheduled sending: wakes on an interval, takes whatever
- * is due, and actually tries to deliver it.
- *
- * Runs in-process on a timer rather than as a cron, matching how every other
- * scheduled agent in this app works. The queue lives on the /data volume, so
- * a deploy mid-flight loses nothing — anything still pending is simply picked
- * up by the next tick after boot.
- *
- * Delivery honesty is the whole point here. Twilio is currently unconfigured
- * and the Gmail refresh token is dead (2026-07-28), so real sends fail. When
- * they do, the message records the provider's actual error and retries a
- * couple of times before sticking as `failed`. Nothing is silently dropped,
- * and nothing is ever marked sent that wasn't.
- */
+/** Durable scheduled delivery. Ambiguous outcomes require review instead of an unsafe retry. */
 const scheduledMessages_js_1 = require("./scheduledMessages.js");
 const index_js_1 = require("../integrations/twilio/index.js");
 const index_js_2 = require("../integrations/email/index.js");
@@ -52,13 +38,19 @@ async function canSendOn(channel) {
         ? { ok: true }
         : { ok: false, reason: `Gmail rejected its token (${auth.error}) — relink at /api/email/gmail-oauth/start.` };
 }
+class NotConfigured extends Error {
+}
 async function deliver(msg) {
     if (msg.channel === "sms") {
+        if (!(0, index_js_1.isTwilioConfigured)())
+            throw new NotConfigured("SMS is not configured");
         const res = await (0, index_js_1.sendTwilioMessage)(msg.to, msg.body);
         if (!res.success)
             throw new Error(res.error || "Twilio send failed");
         return;
     }
+    if (!(0, index_js_2.isEmailConfigured)())
+        throw new NotConfigured("Email is not configured");
     const res = await (0, index_js_2.sendEmail)(msg.to, msg.subject || "Message from Marco Puga Realty", msg.body);
     if (!res.success)
         throw new Error(res.error || "Email send failed");
@@ -68,7 +60,10 @@ async function processDueMessages(at = new Date()) {
     const due = (0, scheduledMessages_js_1.dueMessages)(at);
     let sent = 0;
     let failed = 0;
-    for (const msg of due) {
+    for (const candidate of due) {
+        const msg = (0, scheduledMessages_js_1.claimScheduled)(candidate.id);
+        if (!msg)
+            continue;
         try {
             await deliver(msg);
             (0, scheduledMessages_js_1.markSent)(msg.id);
@@ -77,7 +72,10 @@ async function processDueMessages(at = new Date()) {
         }
         catch (err) {
             const reason = err instanceof Error ? err.message : String(err);
-            (0, scheduledMessages_js_1.markAttemptFailed)(msg.id, reason);
+            if (err instanceof NotConfigured)
+                (0, scheduledMessages_js_1.markAttemptFailed)(msg.id, reason);
+            else
+                (0, scheduledMessages_js_1.markUncertain)(msg.id, "Delivery outcome requires review: " + reason);
             failed++;
             console.error(`[scheduled] ${msg.channel} to ${msg.to} failed: ${reason}`);
         }

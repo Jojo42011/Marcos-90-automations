@@ -10,7 +10,8 @@ Task Center keeps its shared transactional store. Marco and Wesley see tasks ass
 
 ## Data retention and shared services
 
-- `users.json.before-team-access` is created before the one-time requested login repair. The marker `team-access-logins-2026-10-10` prevents resetting passwords on later starts. Existing user IDs, permissions and business files are retained; ambiguous identities stop the repair.
+- Existing passwords, account status, IDs and permissions are preserved on startup. No shared testing password is installed. Optional ACCOUNT_BOOTSTRAP_PASSWORD (minimum 12 characters) only initializes active accounts without a password and requires a password change. Previously provisioned live passwords still need operator review/rotation. Historical backup files and migration markers remain intact.
+- `workspace-owner-ids-v1` binds the three historical identities to immutable IDs once; subsequent display-name changes cannot grant cross-account access. Ambiguous initial identities stop provisioning. Harvey approval decisions carry the selected chat owner.
 - `shared-knowledge.db` imports the root and retained account knowledge files additively. Original JSON files are untouched. Conflicting documents are retained under separate deterministic IDs. Identical built-in documents have aliases, preserving old links. Edits preserve prior revisions; stale concurrent edits fail with HTTP 409. All accounts and Harvey tools use this database.
 - Explicit team business teaching is saved in the shared Knowledge Center with direct source-quote verification and author attribution. Chat-private preferences and history remain private. This is retrieval-based training, not changes to model weights.
 - Only SimplyRETS feed credentials and the shared listings cache are newly shared; unrelated Gmail, Brivity and other business credentials remain isolated. Marco's worker owns scheduled MLS synchronization.
@@ -22,6 +23,6 @@ Typing `@` searches authorized conversations by title and owner. Selected recipi
 
 ## Verification
 
-`npm run build`, `node scripts/verify-team-data.mjs`, `node scripts/verify-team-access.mjs`, and `node scripts/verify-account-isolation.mjs` cover ID collisions, permission denial, original-file preservation, additive migration, login repair, shared assignments, restart persistence, simultaneous knowledge/task writes, and relay idempotency. The integration fixtures block external provider traffic. `KEEP_TEAM_FIXTURE=1` retains a local fixture server for UI inspection; send a line to its stdin to stop it.
+`npm run build`, `node scripts/verify-team-data.mjs`, `node scripts/verify-team-access.mjs`, and `node scripts/verify-account-isolation.mjs` cover ID collisions, permission denial, original-file preservation, additive migration, login preservation, signed public links, scoped provider settings, approval ownership, shared assignments, restart persistence, simultaneous knowledge/task writes, and relay idempotency. The integration fixtures block external provider traffic. `KEEP_TEAM_FIXTURE=1` retains a local fixture server for UI inspection; send a line to its stdin to stop it.
 
 The existing credential-consent, Work runtime, memory, reliability, active-context and account UI regressions remain applicable. Live verification should compare retained IDs against a pre-deployment baseline, create only clearly labeled test records, and avoid client sends, existing-record changes or deletion of retained data.

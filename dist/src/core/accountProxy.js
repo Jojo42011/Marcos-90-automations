@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.readAccountJson = readAccountJson;
 exports.proxyAccount = proxyAccount;
+const workspaceGrants_js_1 = require("./workspaceGrants.js");
 const node_http_1 = __importDefault(require("node:http"));
 const users_js_1 = require("./users.js");
 const workspaceAccess_js_1 = require("./workspaceAccess.js");
@@ -81,7 +82,7 @@ function workOwner(path, body, actor) {
     return allowed[0].owner;
 }
 async function proxyAccount(req, res, actor, ensureWorker) {
-    const combined = (0, workspaceAccess_js_1.memberName)(actor) === "carlos";
+    const combined = (0, workspaceGrants_js_1.combinedWorkspaceUser)(actor.id);
     const originalBody = await readAccountJson(req), owners = new Set();
     const bodyValue = (0, accountFederation_js_1.decodeReferences)(originalBody, actor, owners);
     const url = new URL(req.originalUrl, "http://account.local");

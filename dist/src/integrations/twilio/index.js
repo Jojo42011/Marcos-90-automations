@@ -116,8 +116,8 @@ async function sendTwilioMessage(toOrParams, content) {
 function validateTwilioSignature(signature, url, params) {
     const token = process.env.TWILIO_WEBHOOK_AUTH_TOKEN?.trim() || authToken;
     if (!token) {
-        console.warn("[Twilio] No webhook auth token configured — skipping signature validation (INSECURE)");
-        return true;
+        console.warn("[Twilio] No webhook auth token configured — refusing inbound request");
+        return false;
     }
     return twilio_1.default.validateRequest(token, signature, url, params);
 }
