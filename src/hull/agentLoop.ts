@@ -603,14 +603,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     if (opts.workRuntime && !out.toolUses.length && (!out.text.trim() || /<\|tool_call_start\|>|<function=[^>]+>|<tool_call>/.test(out.text))) {
       // Treat pseudo-tool markup as a provider formatting error, never execute it.
       // Retrying the model response keeps completed tool calls in context.
+      if(!opts.modelOverride && !formatFallbackUsed && malformedRepairs >= 1 && !lastRound){
+        const alternate=resolveModel(effectiveJob,{exclude:[lastModelUsed]}).model;
+        if(alternate!==lastModelUsed){recoveryModel=alternate;formatFallbackUsed=true;malformedRepairs=0;continue;}
+      }
       if (!lastRound && malformedRepairs < 2) {
         malformedRepairs++;
         system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
         continue;
-      }
-      if(!opts.modelOverride && !formatFallbackUsed && !lastRound){
-        const alternate=resolveModel(effectiveJob,{exclude:[lastModelUsed]}).model;
-        if(alternate!==lastModelUsed){recoveryModel=alternate;formatFallbackUsed=true;malformedRepairs=0;continue;}
       }
       return {speech:"I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }

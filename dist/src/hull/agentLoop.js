@@ -465,12 +465,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if (opts.workRuntime && !out.toolUses.length && (!out.text.trim() || /<\|tool_call_start\|>|<function=[^>]+>|<tool_call>/.test(out.text))) {
             // Treat pseudo-tool markup as a provider formatting error, never execute it.
             // Retrying the model response keeps completed tool calls in context.
-            if (!lastRound && malformedRepairs < 2) {
-                malformedRepairs++;
-                system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
-                continue;
-            }
-            if (!opts.modelOverride && !formatFallbackUsed && !lastRound) {
+            if (!opts.modelOverride && !formatFallbackUsed && malformedRepairs >= 1 && !lastRound) {
                 const alternate = (0, index_js_1.resolveModel)(effectiveJob, { exclude: [lastModelUsed] }).model;
                 if (alternate !== lastModelUsed) {
                     recoveryModel = alternate;
@@ -478,6 +473,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                     malformedRepairs = 0;
                     continue;
                 }
+            }
+            if (!lastRound && malformedRepairs < 2) {
+                malformedRepairs++;
+                system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
+                continue;
             }
             return { speech: "I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.", modelError: "Empty or malformed model response after bounded repair; finish reason: " + String(out.stopReason || "unknown"), verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
         }

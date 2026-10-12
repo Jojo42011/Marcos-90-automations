@@ -62,6 +62,9 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  else if(user.includes('AUTO_FORMAT_RECOVERY_FIXTURE')){
    response=b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'Recovered without replaying the task.'};
  }
+ else if(user.includes('SUMMARY_RECOVERY_FIXTURE')){
+   response=b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'The files are ready. The last step is still pending.'};
+ }
  else if(user.includes('LOGIN_EMAIL_RECOVERY_FIXTURE')){
    response=n?{role:'assistant',content:'I checked the available mail connection.'}:JSON.stringify(b.messages).includes('Before asking the user to supply this sign-in code')?tc('COMPOSIO_SEARCH_TOOLS',{queries:[{use_case:'Find the current sign-in email'}]}):{role:'assistant',content:'Please share the verification code from your inbox.'};
  }
@@ -154,6 +157,9 @@ try{
  ok('Auto hands actual screenshot pixels to a vision model before coordinate action',()=>{assert.equal(autoVisualExecutions,2);assert.notEqual(autoVisual.modelUsed,'inception/mercury-2.5');});
  const autoFormat=await runAgentLoop({message:'AUTO_FORMAT_RECOVERY_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[],execute:async()=>{throw Error('No action expected');}}});
  ok('Auto changes model once after malformed replies without replaying any action',()=>{assert.match(autoFormat.speech,/Recovered/);assert(!autoFormat.modelError);});
+ let longActions=0;
+ const summary=await runAgentLoop({message:'SUMMARY_RECOVERY_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{longActions++;return {content:[{type:'text',text:'Existing work observed'}]};}}});
+ ok('long tool run reserves enough room to recover its final answer without restarting work',()=>{assert.equal(longActions,29);assert.match(summary.speech,/last step is still pending/);assert(!summary.modelError);});
  if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
  for(const available of [true,false]){
    let mailDiscovery=0;
