@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createHash, randomUUID } from "crypto";
-import { mkdirSync, chownSync, existsSync, renameSync, chmodSync, writeFileSync } from "fs";
+import { mkdirSync, chownSync, existsSync, renameSync, chmodSync, writeFileSync, readFileSync, realpathSync, statSync } from "fs";
 import { join, resolve, sep } from "path";
 import { get, list, put, seal, unseal, workDir, text } from "./store.js";
 import {browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
@@ -27,7 +27,18 @@ function registerShutdown(){
 export function browserEnabled() { return process.env.HARVEY_BROWSER_ENABLED === "true"; }
 export function browserDirectory(owner: string, chat: string) { const key = createHash("sha256").update(owner + ":" + chat).digest("hex"); const dir = join(workDir(), "browsers", key); mkdirSync(dir, { recursive: true }); return dir; }
 function tabsPath(owner:string,chat:string){return join(browserDirectory(owner,chat),"tabs.json");}
-async function call(s:Session,name:string,args:any={},timeout=15000,signal?:AbortSignal):Promise<any>{s.metrics.calls++;return s.client.callTool({name,arguments:args},undefined,{timeout,signal});}
+async function call(s:Session,name:string,args:any={},timeout=15000,signal?:AbortSignal):Promise<any>{
+  s.metrics.calls++;
+  const result:any=await s.client.callTool({name,arguments:args},undefined,{timeout,signal});
+  // This MCP version puts implicit action snapshots in local files. Return their
+  // actual observations to the model without paying for another browser call.
+  const dir=browserDirectory(s.owner,s.chat),files=realpathSync(join(dir,"files"));
+  for(const content of result.content||[])if(content.type==="text")content.text=content.text.replace(/(### Snapshot\r?\n)- \[Snapshot\]\((files\/page-[\w.-]+\.yml)\)/g,(_match:string,header:string,file:string)=>{
+    try{const path=realpathSync(resolve(dir,file));if(!path.startsWith(files+sep)||statSync(path).size>2*1024*1024)throw new Error("Snapshot outside bounded workspace");return header+"```yaml\n"+readFileSync(path,"utf8")+"\n```";}
+    catch{return header+"Snapshot content unavailable. Request a focused browser_snapshot before acting or claiming page contents.";}
+  });
+  return result;
+}
 function checked(r:any){if(r.isError)throw new Error(resultText(r).slice(0,2000));return r;}
 function remember(s:Session,r:any,full=false){
   const raw=resultText(r);

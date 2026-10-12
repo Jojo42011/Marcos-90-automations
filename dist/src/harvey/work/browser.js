@@ -43,7 +43,27 @@ function registerShutdown() {
 function browserEnabled() { return process.env.HARVEY_BROWSER_ENABLED === "true"; }
 function browserDirectory(owner, chat) { const key = (0, crypto_1.createHash)("sha256").update(owner + ":" + chat).digest("hex"); const dir = (0, path_1.join)((0, store_js_1.workDir)(), "browsers", key); (0, fs_1.mkdirSync)(dir, { recursive: true }); return dir; }
 function tabsPath(owner, chat) { return (0, path_1.join)(browserDirectory(owner, chat), "tabs.json"); }
-async function call(s, name, args = {}, timeout = 15000, signal) { s.metrics.calls++; return s.client.callTool({ name, arguments: args }, undefined, { timeout, signal }); }
+async function call(s, name, args = {}, timeout = 15000, signal) {
+    s.metrics.calls++;
+    const result = await s.client.callTool({ name, arguments: args }, undefined, { timeout, signal });
+    // This MCP version puts implicit action snapshots in local files. Return their
+    // actual observations to the model without paying for another browser call.
+    const dir = browserDirectory(s.owner, s.chat), files = (0, fs_1.realpathSync)((0, path_1.join)(dir, "files"));
+    for (const content of result.content || [])
+        if (content.type === "text")
+            content.text = content.text.replace(/(### Snapshot\r?\n)- \[Snapshot\]\((files\/page-[\w.-]+\.yml)\)/g, (_match, header, file) => {
+                try {
+                    const path = (0, fs_1.realpathSync)((0, path_1.resolve)(dir, file));
+                    if (!path.startsWith(files + path_1.sep) || (0, fs_1.statSync)(path).size > 2 * 1024 * 1024)
+                        throw new Error("Snapshot outside bounded workspace");
+                    return header + "```yaml\n" + (0, fs_1.readFileSync)(path, "utf8") + "\n```";
+                }
+                catch {
+                    return header + "Snapshot content unavailable. Request a focused browser_snapshot before acting or claiming page contents.";
+                }
+            });
+    return result;
+}
 function checked(r) { if (r.isError)
     throw new Error((0, browserState_js_1.resultText)(r).slice(0, 2000)); return r; }
 function remember(s, r, full = false) {
