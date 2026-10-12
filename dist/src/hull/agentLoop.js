@@ -278,6 +278,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if (opts.workRuntime) {
             if (!opts.workRuntime.tools.some(t => t.name === name))
                 return { error: "Tool is not available in this mode" };
+            if (name === "computer" && /^browser_mouse_(click|drag)_xy$/.test(String(input.tool)) && (0, index_js_1.getModelInfo)(lastModelUsed)?.supportsVision === false)
+                return { error: "This selected model cannot see screenshots. Use observed semantic browser targets, or choose a vision-capable model for visual controls. No coordinate action was executed." };
             opts.onEvent?.({ type: "tool", name, status: "running" });
             try {
                 const result = await opts.workRuntime.execute(name, input);
@@ -337,9 +339,13 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 return { error: e.message };
             }
         }
-        const result = await executeTool(name, input);
+        let result = await executeTool(name, input);
         if (!opts.workRuntime)
             return result;
+        if (result && typeof result === "object" && result._image && (0, index_js_1.getModelInfo)(lastModelUsed)?.supportsVision === false) {
+            const { _image, ...rest } = result;
+            result = { ...rest, imageWarning: "Screenshot captured for the browser preview, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model." };
+        }
         const receipt = verification.record(name, input, result);
         if (!receipt.observation)
             observationRevision++;
