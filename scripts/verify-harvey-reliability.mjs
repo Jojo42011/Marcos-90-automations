@@ -40,6 +40,7 @@ ok('CRM GET receipts are observations and writes still require read-back',()=>{
  const w=new rel.TurnVerification();w.record('business_call',{tool:'crm_api',arguments:{method:'PATCH'}},{ok:true});assert.throws(()=>w.review(review),/Read back/);
 });
 
+const repairAttempts=new Map();
 const calls=[];let releaseSlow,slowStarted,transientCalls=0;
 const slowReady=new Promise(r=>slowStarted=r),slowHold=new Promise(r=>releaseSlow=r);
 const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{
@@ -48,7 +49,19 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  const toolMessages=b.messages.filter(m=>m.role==='tool');const n=toolMessages.length;
  let response={role:'assistant',content:'A conversational fixture answer.'};
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
- if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
+ if(user.includes('MALFORMED_REPLY_FIXTURE')){
+   const attempt=(repairAttempts.get(user)||0)+1;repairAttempts.set(user,attempt);
+   response=attempt<=2?{role:'assistant',content:attempt===1?'':'<|tool_call_start|><function=computer>bad call</function><|tool_call_end|>'}:{role:'assistant',content:'Recovered into a usable answer.'};
+ }
+ else if(user.includes('ALWAYS_EMPTY_FIXTURE'))response={role:'assistant',content:''};
+ else if(user.includes('ORDERED_TOOLS_FIXTURE')){
+   response=n===0?{role:'assistant',content:'',tool_calls:[
+    {id:'write',type:'function',function:{name:'schedule_agent',arguments:JSON.stringify({action:'create'})}},
+    {id:'read',type:'function',function:{name:'schedule_agent',arguments:JSON.stringify({action:'list'})}},
+    {id:'verify',type:'function',function:{name:'report_verification',arguments:JSON.stringify({status:'completed',evidenceIds:['e2'],checks:['Read after write'],limitations:[]})}}
+   ]}:{role:'assistant',content:'Saved and verified.'};
+ }
+ else if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
  else if(user.includes('TRANSIENT_FIXTURE')){if(++transientCalls===1){res.statusCode=504;res.end(JSON.stringify({error:{message:'Upstream idle timeout exceeded'}}));return;}response={role:'assistant',content:'Transient provider recovered.'};}
  else if(user.includes('BROWSER_VISION_FIXTURE')){
   if(n===1)assert(!JSON.stringify(b.messages).includes('image_url'),'Text-only model must not receive image input');
@@ -86,7 +99,9 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
    ['projects',{action:'list_chats'}],
    ['schedule_agent',{action:'create',title:'Fixture weekly review',prompt:'Review fixture information',cron:'0 9 * * 1',timezone:'America/Chicago'}],
    ['schedule_agent',{action:'list'}],
-   ['report_verification',{status:'completed',evidenceIds:['e2','e4','e6'],checks:['Read back created agent and weekly schedule'],limitations:[]}]
+   ['task_plan',{action:'checkpoint',completedSteps:[0,1,2],nextStep:3}],
+   ['task_plan',{action:'get'}],
+   ['report_verification',{status:'completed',evidenceIds:['e8','e4','e6'],checks:['Read back created agent and weekly schedule'],limitations:[]}]
   ];response=n<sequence.length?tc(...sequence[n]):{role:'assistant',content:'Fixture agent created and schedule saved. Worker is disabled in this test.'};
  }
  else if(user.includes('REPEAT_FIXTURE')){
@@ -113,6 +128,14 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ const repairRuntime={tools:[],context:'Fixture',execute:async()=>{throw new Error('No tool should run');}};
+ const formatRepaired=await runAgentLoop({message:'MALFORMED_REPLY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
+ ok('empty and pseudo-tool output repairs into a usable answer without executing text',()=>{assert.match(formatRepaired.speech,/Recovered/);assert(!formatRepaired.modelError);});
+ const empty=await runAgentLoop({message:'ALWAYS_EMPTY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
+ ok('persistent empty replies return an honest nonempty failure after bounded repair',()=>{assert(empty.modelError);assert(empty.speech.length>20);});
+ let written=false,writeCount=0;
+ const ordered=await runAgentLoop({message:'ORDERED_TOOLS_FIXTURE',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'schedule_agent',description:'Fixture',input_schema:{type:'object',properties:{action:{type:'string'}}}}],context:'Fixture',execute:async(_n,i)=>{if(i.action==='create'){await new Promise(r=>setTimeout(r,30));written=true;writeCount++;return {id:'one'};}assert(written);return [{id:'one'}];}}});
+ ok('dependent tool batch executes write then read then verification without racing or replay',()=>{assert.equal(writeCount,1);assert.equal(ordered.verification.status,'completed');});
  let visualExecutions=0;
  const visualResult=await runAgentLoop({message:'BROWSER_VISION_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Local browser visual capability fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{visualExecutions++;return {_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]};}}});
  ok('text-only model keeps working after screenshots and cannot issue unseen coordinate clicks',()=>assert.equal(visualExecutions,1));
@@ -140,7 +163,7 @@ try{
  assert.equal((await api('/chat','POST',{...input,message:'different input'})).status,400);checks++;
  assert.equal((await api('/work/jobs/'+jobId,'GET',undefined,'bob')).status,404);assert.equal((await api('/work/jobs/'+jobId+'/cancel','POST',{},'bob')).status,404);checks++;
  const checkpoints=(await api('/work/chats/'+c.id+'/verification')).data.checkpoints;
- ok('owner-scoped task plan and evidence checkpoints persist',()=>{assert.equal(checkpoints[0].status,'completed');assert(checkpoints[0].receipts.length>=6);assert.equal(store.list('task_plan','alice')[0].objective,'Fixture agent and schedule');assert.equal(store.list('task_plan','bob').length,0);});
+ ok('owner-scoped task plan and evidence checkpoints persist',()=>{assert.equal(checkpoints[0].status,'completed');assert(checkpoints[0].receipts.length>=6);assert.equal(store.list('task_plan','alice')[0].objective,'Fixture agent and schedule');assert.equal(store.list('task_plan','bob').length,0);assert.deepEqual(store.list('task_plan','alice')[0].completedSteps,[0,1,2]);assert.equal(store.list('task_plan','alice')[0].nextStep,3);});
  const originalHistory=JSON.stringify(store.messages('alice',c.id));store.closeStore();
  ok('store reopen retains jobs, conversations, agents, schedules and verification',()=>{assert.equal(store.get('job','alice',jobId).status,'completed');assert.equal(JSON.stringify(store.messages('alice',c.id)),originalHistory);assert.equal(store.list('schedule','alice').length,1);assert(store.list('verification','alice').length);});
  const delegated=await chat('chat');await runtime.runChat('alice',delegated,'Monte Carlo',{workDelegated:true,modelOverride:'openai/fixture'});

@@ -19,6 +19,7 @@ const fs_1 = require("fs");
 const path_1 = require("path");
 const store_js_1 = require("./store.js");
 const browserState_js_1 = require("./browserState.js");
+const uploadFiles_js_1 = require("./uploadFiles.js");
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close", "browser_mouse_click_xy", "browser_mouse_drag_xy", "browser_mouse_wheel"]);
 const TARGETED = new Set(["browser_click", "browser_type", "browser_fill_form", "browser_select_option", "browser_hover", "browser_drag"]);
 const EXTRA_TOOLS = [
@@ -278,7 +279,7 @@ const maintenance = setInterval(() => { for (const pending of sessions.values())
         void observedAction(s, "session checkpoint", () => checkpoint(s)).catch(() => { });
     } }).catch(() => { }); }, 30000);
 maintenance.unref();
-async function browserTools(owner, chat, name) { const tools = (await session(owner, chat)).tools; if (name) {
+async function browserTools(owner, chat, name) { const tools = (await session(owner, chat)).tools.map(t => t.name !== "browser_file_upload" ? t : { ...t, description: "Upload local workspace files into the currently opened file chooser. Click Choose files first, then use paths from workspace_files. Native OS interaction is unnecessary. Missing paths do not cancel; cancel:true explicitly cancels.", inputSchema: { type: "object", properties: { paths: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 20 }, cancel: { type: "boolean" } } } }); if (name) {
     const t = tools.find(t => t.name === name);
     if (!t)
         throw new Error("Unsupported browser tool");
@@ -395,9 +396,7 @@ async function browserCall(owner, chat, name, args, signal) {
     }
     const filesDir = (0, path_1.join)(browserDirectory(owner, chat), "files");
     if (name === "browser_file_upload")
-        for (const file of args.paths || [])
-            if (!(0, path_1.resolve)(file).startsWith((0, path_1.resolve)(filesDir) + path_1.sep))
-                throw new Error("Upload files must belong to this chat's browser workspace");
+        args = (0, uploadFiles_js_1.uploadArguments)(filesDir, args);
     if (name === "browser_take_screenshot" || name === "browser_snapshot")
         delete args.filename;
     if (name === "browser_take_screenshot") {
@@ -433,7 +432,7 @@ async function browserCall(owner, chat, name, args, signal) {
                 if (!s.visionAt || Date.now() - s.visionAt > 30000)
                     throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
             preflight = false;
-            const result = checked(await call(s, name, args, name === "browser_navigate" || name === "browser_wait_for" || name === "browser_tabs" && args.action === "new" ? 35000 : 15000, signal));
+            const result = checked(await call(s, name, args, name === "browser_navigate" || name === "browser_wait_for" || name === "browser_tabs" && args.action === "new" ? 35000 : name === "browser_file_upload" ? 120000 : 15000, signal));
             if (!(0, browserState_js_1.browserRead)(name, args)) {
                 s.visionAt = undefined;
                 s.snapshot = undefined;
@@ -464,6 +463,8 @@ async function browserCall(owner, chat, name, args, signal) {
             // A batch may have changed earlier fields before a later target failed.
             if (!preflight && name === "browser_fill_form" && recovery.safeToRetry)
                 recovery = { kind: "partial_form", actionOutcome: "unknown", safeToRetry: false, guidance: "Some fields may already be filled. Inspect the fresh form and fill only the remaining fields; do not blindly replay the batch or submit." };
+            if (name === "browser_file_upload")
+                recovery = { ...recovery, guidance: "Inspect the page for selected files or progress before repeating an upload. If no chooser is visible and no file was selected, click the observed Choose files control, then use browser_file_upload with paths from workspace_files. A native chooser is supported. " + recovery.guidance };
             let observation;
             // A crashed browser can respawn as a blank page. Do not replace retained
             // tabs with that diagnostic page before browser_recover can restore them.

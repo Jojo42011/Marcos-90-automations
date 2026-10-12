@@ -4,8 +4,10 @@ exports.filesDir = filesDir;
 exports.filePath = filePath;
 exports.files = files;
 exports.editVideo = editVideo;
+exports.workspaceFiles = workspaceFiles;
 const fs_1 = require("fs");
 const path_1 = require("path");
+const uploadFiles_js_1 = require("./uploadFiles.js");
 const crypto_1 = require("crypto");
 const child_process_1 = require("child_process");
 const browser_js_1 = require("./browser.js");
@@ -33,4 +35,13 @@ async function editVideo(owner, chat, input) {
     args.push("-movflags", "+faststart", output);
     await new Promise((resolve, reject) => { const child = (0, child_process_1.spawn)(process.env.FFMPEG_PATH || "ffmpeg", args, { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] }); let stderr = ""; const timer = setTimeout(() => { child.kill(); reject(new Error("Video edit timed out after ten minutes")); }, 600000); child.stderr.on("data", b => { stderr = (stderr + b).slice(-2000); }); child.on("error", () => { clearTimeout(timer); reject(new Error("FFmpeg is not installed on this worker")); }); child.on("close", code => { clearTimeout(timer); code === 0 ? resolve() : reject(new Error("Video edit failed: " + stderr)); }); });
     return { file: name, path: output, download: `/api/harvey/work/files/${chat}/${name}`, note: "Trim/transcode completed. Review the output before publishing." };
+}
+function workspaceFiles(owner, chat, input = {}) {
+    if (input.file)
+        return (0, uploadFiles_js_1.uploadFile)(filesDir(owner, chat), input.file, input.filename);
+    const diagnostics = /^(?:page-.*\.(?:yml|jpeg|png)|console-.*\.log)$/;
+    const all = files(owner, chat).filter(f => input.includeDiagnostics === true || !diagnostics.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
+    const offset = Number.isSafeInteger(input.offset) && input.offset >= 0 ? input.offset : 0;
+    const limit = 20;
+    return { files: all.slice(offset, offset + limit), total: all.length, nextOffset: offset + limit < all.length ? offset + limit : null, note: "Only real local files are listed. Diagnostic screenshots/logs are hidden by default. Use file to inspect or filename to prepare a non-destructive upload alias." };
 }
