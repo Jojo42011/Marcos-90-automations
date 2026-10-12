@@ -17,7 +17,7 @@ export function stableCallKey(name: string, input: unknown): string {
   return createHash("sha256").update(name + ":" + JSON.stringify(canonical(input))).digest("hex");
 }
 export type VerificationStatus = "completed" | "blocked" | "needs_verification";
-export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean }
+export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; limitation?: string }
 export interface Verification { status: VerificationStatus; evidenceIds: string[]; checks: string[]; limitations: string[]; receipts: Receipt[]; basis: "agent_review_with_receipt_checks" }
 export const VERIFICATION_TOOL: Tool = {
   name: "report_verification", description: "Record task verification before final response. Receipt references are checked by the runtime. This records your review; it does not independently prove factual truth. No passwords or sensitive record contents. After a possible write, include a subsequent read-back observation. Mark partial/truncated results needs_verification.",
@@ -78,6 +78,7 @@ export class TurnVerification {
     const receipt: Receipt = { id: `e${this.receipts.length + 1}`, tool: name, at: new Date().toISOString(),
       outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
       observation: isObservation(name, input), discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated===true };
+    if(result?.imageUnavailableToModel===true)receipt.limitation="The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
     this.receipts.push(receipt);
     if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,source);
     return receipt;
@@ -107,6 +108,7 @@ export class TurnVerification {
     if (input.status === "completed") {
       if (!cited.length || !input.checks.some((s: string) => s.trim()) || input.limitations.length) throw new Error("Completion requires evidence, concrete checks and no unresolved limitations");
       if (cited.some((r: Receipt) => r.truncated)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
+      if (cited.some((r: Receipt) => r.limitation)) throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
       for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery)) {
         if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error("Read back each affected service after its action before claiming completion");
       }

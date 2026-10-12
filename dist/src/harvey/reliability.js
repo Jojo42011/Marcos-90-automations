@@ -102,6 +102,8 @@ class TurnVerification {
         const receipt = { id: `e${this.receipts.length + 1}`, tool: name, at: new Date().toISOString(),
             outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
             observation: isObservation(name, input), discovery: isDiscovery(name, input), scope: resourceScope(name, input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated === true };
+        if (result?.imageUnavailableToModel === true)
+            receipt.limitation = "The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
         this.receipts.push(receipt);
         if (receipt.outcome === "returned" && size <= 60000)
             this.sources.set(receipt.id, source);
@@ -149,6 +151,8 @@ class TurnVerification {
                 throw new Error("Completion requires evidence, concrete checks and no unresolved limitations");
             if (cited.some((r) => r.truncated))
                 throw new Error("Retrieve smaller complete results before citing them as completion evidence");
+            if (cited.some((r) => r.limitation))
+                throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
             for (const action of this.receipts.filter(r => !r.observation && !r.discovery)) {
                 if (!cited.some((r) => r.observation && r.scope === action.scope && this.receipts.indexOf(r) > this.receipts.indexOf(action)))
                     throw new Error("Read back each affected service after its action before claiming completion");

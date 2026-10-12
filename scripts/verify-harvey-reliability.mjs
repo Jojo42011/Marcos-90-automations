@@ -32,6 +32,8 @@ const failed=new rel.TurnVerification();failed.record('plugin_call',{}, {data:{r
 ok('nested connector failures cannot serve as evidence',()=>assert.equal(failed.result().receipts[0].outcome,'failed'));
 const large=new rel.TurnVerification();large.record('workspace_files',{}, {text:'x'.repeat(13000)});
 ok('truncated results cannot support complete claims',()=>assert.throws(()=>large.review(review),/smaller/));
+const unseen=new rel.TurnVerification();unseen.record('computer',{action:'call',tool:'browser_take_screenshot'},{imageUnavailableToModel:true,content:[{type:'text',text:'Screenshot captured'}]});
+ok('unseen screenshot cannot verify visual completion',()=>assert.throws(()=>unseen.review(review),/Unavailable image/));
 
 ok('CRM GET receipts are observations and writes still require read-back',()=>{
  const v=new rel.TurnVerification();v.record('business_call',{tool:'crm_api',arguments:{method:'GET'}},{ok:true,response:{totals:{leads:2417}}});v.review({...review,checks:['Read complete live totals']});assert.equal(v.result().status,'completed');
@@ -112,8 +114,9 @@ async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
  let visualExecutions=0;
- await runAgentLoop({message:'BROWSER_VISION_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Local browser visual capability fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{visualExecutions++;return {_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]};}}});
+ const visualResult=await runAgentLoop({message:'BROWSER_VISION_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Local browser visual capability fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{visualExecutions++;return {_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]};}}});
  ok('text-only model keeps working after screenshots and cannot issue unseen coordinate clicks',()=>assert.equal(visualExecutions,1));
+ ok('visual-only response honestly states missing image capability',()=>assert.match(visualResult.speech,/cannot inspect image pixels/));
  for(const safe of [true,false]){
   let executions=0;
   await runAgentLoop({message:'BROWSER_GUARD_FIXTURE',modelOverride:'openai/fixture',workRuntime:{context:'Local browser recovery fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{
