@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-12: Live follow-up now completed with two successful read-only calls and no repeated media work, but status prose remained too technical. Added a bounded tool-free rewrite for overlong/heading-heavy simple status answers; it retains unresolved work and cannot execute provider-emitted tool calls. Detailed requests retain their format.
+
 - 2026-10-12: Live resume testing reused existing media and recovered its response, but exposed repeated invalid browser observations before schema discovery. Validate installed argument types/enums/ranges before execution and attach the installed schema to browser failures, with a full-page observation recovery path. Existing action-outcome and replay safeguards remain in place.
 
 - 2026-10-12: Added automatic owner/chat-scoped media and browser action progress records for resume context, without page contents, mailbox data, passwords or signed URLs. Auto switches to vision routing when a screenshot is returned and makes one bounded model fallback after repeated malformed replies; explicit model choices remain pinned. Reserved final-response repair rounds and removed unsupported assistant-prefill during verification repair. Connected-mailbox code recovery receives a bounded follow-through reminder, ordinary replies use plain language, and saved jobs distinguish provider credit failures from invalid model replies. No existing history, media, profiles or jobs are removed. Live workflow completion remains separate from fixture coverage.

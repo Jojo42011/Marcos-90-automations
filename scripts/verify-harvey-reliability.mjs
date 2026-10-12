@@ -62,6 +62,10 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  else if(user.includes('AUTO_FORMAT_RECOVERY_FIXTURE')){
    response=b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'Recovered without replaying the task.'};
  }
+ else if(user.includes('PLAIN_STATUS_FIXTURE')||user.includes('PLAIN_STATUS_CALL_FIXTURE')){
+   const rewrite=JSON.stringify(b.messages).includes('FINAL PRESENTATION REWRITE');
+   response=n===0?tc('workspace_files',{}):rewrite?(user.includes('PLAIN_STATUS_CALL_FIXTURE')?tc('workspace_files',{}):{role:'assistant',content:'Both videos are ready. They still need to be combined, and I have not started that step.'}):{role:'assistant',content:'## Technical status\n'+('The source files are prepared; combining them is still pending. '.repeat(14))};
+ }
  else if(user.includes('SUMMARY_RECOVERY_FIXTURE')){
    response=b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'The files are ready. The last step is still pending.'};
  }
@@ -150,6 +154,11 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ for(const invalidCall of [false,true]){
+   let reads=0;
+   const simple=await runAgentLoop({message:"What's left? "+(invalidCall?'PLAIN_STATUS_CALL_FIXTURE':'PLAIN_STATUS_FIXTURE'),modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[{name:'workspace_files',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{reads++;return {files:[{name:'ready.mp4'}]};}}});
+   ok('plain status rewrite cannot execute additional tools '+invalidCall,()=>{assert.equal(reads,1);if(!invalidCall){assert(simple.speech.length<200);assert(!simple.speech.includes('##'));assert.match(simple.speech,/still need/);}else assert(simple.modelError);});
+ }
  const oldAgent=process.env.HARVEY_MODEL_AGENT;
  process.env.HARVEY_MODEL_AGENT='inception/mercury-2.5';
  let autoVisualExecutions=0;

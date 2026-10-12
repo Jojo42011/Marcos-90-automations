@@ -412,6 +412,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let recoveryModel: string | undefined;
   let formatFallbackUsed = false;
   let emailRecoveryPrompted = false;
+  let plainStatusRewrite = false;
   let substituted: { asked: string; ran: string } | undefined;
 
   const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
@@ -519,7 +520,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
        "hit the tool loop limit" that discarded the whole turn's work. */
     const lastRound = step === stepBudget - 1;
     const summaryRound = opts.workRuntime ? step >= stepBudget - 3 : lastRound;
-    const stepTools = summaryRound ? undefined : activeTools;
+    const stepTools = summaryRound || plainStatusRewrite ? undefined : activeTools;
     const stepSystem = summaryRound && toolRounds > 0
       ? system +
         "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
@@ -600,6 +601,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       costUsd: out.usage.costUsd,
     });
 
+    // Withheld tools are an execution boundary, including the presentation-only
+    // rewrite. A provider returning an unsolicited call cannot reopen execution.
+    if(!stepTools && out.toolUses.length){out={...out,text:"",toolUses:[]};}
     if (opts.workRuntime && !out.toolUses.length && (!out.text.trim() || /<\|tool_call_start\|>|<function=[^>]+>|<tool_call>/.test(out.text))) {
       // Treat pseudo-tool markup as a provider formatting error, never execute it.
       // Retrying the model response keeps completed tool calls in context.
@@ -627,7 +631,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       // Negative instructions are constraints, not evidence that an action was requested.
       const affirmativeMessage = opts.message.replace(/\b(?:do not|don['’]t|never|without)\b[^.!?\n]*(?:[.!?]|$)/gi, "");
       const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
-      if (opts.workRuntime && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
+      if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
         // Do not append an unanswered assistant turn: some providers interpret
         // that as unsupported prefill. The last real user/tool-result stays last.
@@ -635,6 +639,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         system += "\n\n" + (evidence.receipts.length
           ? "Runtime verification reminder: inspect the actual receipts returned this turn. For a read, report_verification may cite its complete observation directly; no extra read-back is required. Retrieve smaller results when truncated (crm_api supports select for top-level fields). For writes, perform the necessary read-back without repeating the write. Then report the verified outcome or explain the observed blocker."
           : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
+        continue;
+      }
+      const statusQuestion=opts.message.length<300 && /\b(?:where\b.{0,30}\b(?:stop|are we)|what(?:'s| is) left|what happened|did it work|status)\b/i.test(opts.message) && !/\b(?:detailed|technical report|table|breakdown)\b/i.test(opts.message);
+      if(opts.workRuntime && statusQuestion && !plainStatusRewrite && !lastRound && (out.text.length>600 || /^\s*#{1,6}\s/m.test(out.text))){
+        plainStatusRewrite=true;
+        system+="\nFINAL PRESENTATION REWRITE: The user asked a simple status question. Reply in 2–4 short everyday sentences, without headings, lists, specs, filenames or tool names. Say what is done, any unresolved issue, and what remains. Keep uncertainty and errors; do not add facts, assume app capabilities, or claim the overall task is finished. Use the observations already in this conversation. No tools or further actions are available; this is only wording the answer.";
         continue;
       }
       const unseenVisualOnly = evidence.receipts.some(r=>r.limitation) && evidence.receipts.every(r=>r.discovery || r.outcome==="failed" || r.observation&&!!r.limitation);
