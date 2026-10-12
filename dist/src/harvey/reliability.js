@@ -41,7 +41,7 @@ function resourceScope(name, input) {
         return stableCallKey("managed", [input.harvey_connection_scope, (input.tools || []).map((t) => String(t.tool_slug).split("_")[0]).sort()]);
     if (name === "business_call")
         return "business:" + String(input.tool || "").replace(/^(create|update|delete|get|list|search|find|read)_/, "").replace(/s$/, "");
-    if (name === "edit_video" || name === "workspace_files" || name === "workspace_download")
+    if (name === "inspect_video" || name === "edit_video" || name === "workspace_files" || name === "workspace_download")
         return "files";
     return name;
 }
@@ -61,7 +61,7 @@ function isObservation(name, input) {
         return true;
     if (name === "business_call")
         return /^(get_|list_|search_|find_|read_)/.test(input.tool || "");
-    if (name === "history_search")
+    if (name === "history_search" || name === "inspect_video")
         return true;
     if (name === "agent_memory")
         return input.action === "search";
@@ -104,6 +104,8 @@ class TurnVerification {
             observation: isObservation(name, input), discovery: isDiscovery(name, input), scope: resourceScope(name, input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated === true };
         if (result?.imageUnavailableToModel === true)
             receipt.limitation = "The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
+        if (["edit_video", "inspect_video"].includes(name) && result?.diagnostic)
+            receipt.diagnostic = { code: String(result.diagnostic.code || "").slice(0, 80), message: String(result.diagnostic.message || "").slice(0, 500), detail: String(result.diagnostic.detail || "").slice(0, 1800) };
         this.receipts.push(receipt);
         if (receipt.outcome === "returned" && size <= 60000)
             this.sources.set(receipt.id, source);

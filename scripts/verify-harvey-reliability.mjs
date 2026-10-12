@@ -49,7 +49,10 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  const toolMessages=b.messages.filter(m=>m.role==='tool');const n=toolMessages.length;
  let response={role:'assistant',content:'A conversational fixture answer.'};
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
- if(user.includes('MALFORMED_REPLY_FIXTURE')){
+ if(user.includes('VIDEO_RECOVERY_BUDGET')){
+   response=n<5?tc('edit_video',{file:'original.mov',durationSeconds:15-n}):{role:'assistant',content:'The diagnostic is retained; no more export attempts were made.'};
+ }
+ else if(user.includes('MALFORMED_REPLY_FIXTURE')){
    const attempt=(repairAttempts.get(user)||0)+1;repairAttempts.set(user,attempt);
    response=attempt<=2?{role:'assistant',content:attempt===1?'':'<|tool_call_start|><function=computer>bad call</function><|tool_call_end|>'}:{role:'assistant',content:'Recovered into a usable answer.'};
  }
@@ -128,6 +131,9 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ let editCalls=0;
+ const videoResult=await runAgentLoop({message:'VIDEO_RECOVERY_BUDGET',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'edit_video',description:'Fixture',input_schema:{type:'object',properties:{}}}],context:'Fixture',execute:async()=>{editCalls++;return {error:'Fixture failure',diagnostic:{code:'unsupported_track',message:'Unsupported alternate audio',detail:'apple_apac'}};}}});
+ ok('varying edit arguments cannot bypass per-source recovery budget and diagnostics survive',()=>{assert.equal(editCalls,2);assert(videoResult.verification.receipts.some(r=>r.diagnostic?.detail==='apple_apac'));});
  const repairRuntime={tools:[],context:'Fixture',execute:async()=>{throw new Error('No tool should run');}};
  const formatRepaired=await runAgentLoop({message:'MALFORMED_REPLY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
  ok('empty and pseudo-tool output repairs into a usable answer without executing text',()=>{assert.match(formatRepaired.speech,/Recovered/);assert(!formatRepaired.modelError);});
