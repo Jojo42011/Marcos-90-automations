@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-12: Added an account-specific Carlos’s tasks toggle to Marco and Wesley’s Task Center. Opt-in reads include Carlos assignments without expanding mutation, reminder or other-owner access. Reconciled master’s merged, default-disabled video property knowledge pipeline (see docs/video-knowledge.md); Harvey browser changes remain intact.
+
 - 2026-10-12: Deployed browser testing exposed text-only models treating captured screenshots as visible evidence. Such screenshots now carry an explicit evidence limitation, cannot verify visual completion, and visual-only replies explain the model capability limit.
 - 2026-10-12: Browser actions reuse recent observations, return focused/paginated evidence and model-visible screenshots, and report targeted recovery without replaying uncertain actions. Hosted tabs no longer expire on idle; tab selection and cookies checkpoint for restart restoration. Browser recovery and persistence fixtures cover these paths.
 - 2026-10-11: Reconciled documentation with master; removed obsolete handoff/planning documents, stale production assertions and branch-mirroring instructions. Updated account/task storage, Harvey capabilities, deployment and verification references. Documentation only; no runtime, data or workflow changes.

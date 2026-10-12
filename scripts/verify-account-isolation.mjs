@@ -71,6 +71,17 @@ try {
  const assigned=await request('/api/tasks',cookies.marco,'POST',{title:'Marco assigns Wesley',column:'today',assignedTo:'wesley',createdBy:'marco'});assert.equal(assigned.status,200);assert.equal(assigned.data.task.createdBy,'marco');
  assert((await request('/api/tasks',cookies.wesley)).data.tasks.some(t=>t.id===assigned.data.task.id));
  assert.equal((await request('/api/tasks/retained-wesley',cookies.marco,'PATCH',{title:'Unauthorized edit'})).status,404);
+ for(const who of ['marco','wesley']) {
+   const own=(await request('/api/tasks',cookies[who])).data.tasks;
+   const combined=(await request('/api/tasks?includeCarlos=true',cookies[who])).data.tasks;
+   assert(combined.some(t=>t.id==='retained-carlos'));
+   assert(combined.every(t=>[who,'carlos'].includes(t.assignedTo)));
+   assert(own.every(t=>t.assignedTo===who));
+   assert.deepEqual((await request('/api/tasks?includeCarlos=false',cookies[who])).data.tasks,own);
+   assert.equal((await request('/api/tasks/retained-carlos?includeCarlos=true',cookies[who],'PATCH',{title:'Must not edit Carlos'})).status,404);
+   assert.equal((await request('/api/tasks/retained-carlos?includeCarlos=true',cookies[who],'DELETE')).status,404);
+ }
+ check('Carlos task opt-in is read-only, preserves default scope and never exposes the other owner',()=>assert.ok(true));
  const parallel=await Promise.all(users.map(u=>request('/api/tasks',cookies[u.id],'POST',{title:u.name+' simultaneous',column:'today',assignedTo:u.id,createdBy:u.id,expectedActorId:u.id})));assert(parallel.every(r=>r.status===200));
  check('each signed-in account is recorded as creator',()=>{for(let i=0;i<users.length;i++)assert.equal(parallel[i].data.task.createdBy,users[i].id);});
  assert.equal((await request('/api/tasks',cookies.carlos)).data.tasks.length,7);
@@ -219,6 +230,21 @@ try {
        await accountPage.locator('#email').fill(user.email);await accountPage.locator('#password').fill('fixture-only-password');
        await accountPage.locator('#submitBtn').click();await accountPage.waitForURL(base+'/team-tasks');
        await accountPage.waitForFunction(name=>document.querySelector('#meName')?.textContent===name,user.name);
+       if(user.id!=='carlos') {
+         const toggle=accountPage.locator('#showCarlosTasks');
+         await toggle.waitFor();assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+         await toggle.click();await accountPage.waitForFunction(()=>document.querySelector('#showCarlosTasks')?.getAttribute('aria-pressed')==='true');
+         await accountPage.locator('#allTaskDates').check();
+         assert(await accountPage.locator('[data-col-member="carlos"] .task').count()>0);
+         assert.equal(await accountPage.locator('[data-col-member="carlos"] [data-edit]').count(),0);
+         assert.equal(await accountPage.locator('[data-col-member="carlos"] [draggable="true"]').count(),0);
+         const other=user.id==='marco'?'wesley':'marco';
+         assert.equal(await accountPage.locator('[data-col-member="'+other+'"]').count(),0);
+         await accountPage.reload();await accountPage.waitForFunction(()=>document.querySelector('#showCarlosTasks')?.getAttribute('aria-pressed')==='true');
+         await accountPage.locator('#showCarlosTasks').click();
+         await accountPage.waitForFunction(()=>document.querySelector('#showCarlosTasks')?.getAttribute('aria-pressed')==='false');
+         assert.equal(await accountPage.locator('[data-col-member="carlos"]').count(),0);
+       } else assert.equal(await accountPage.locator('#showCarlosTasks').count(),0);
        await accountPage.locator('#quickTitle').fill(user.name+' UI assignment');await accountPage.locator('#openAdd').click();
        const recipient=users.find(u=>u.id!==user.id).id;await accountPage.locator('#tWho').selectOption(recipient);
        const response=accountPage.waitForResponse(r=>r.url().endsWith('/api/tasks')&&r.request().method()==='POST');

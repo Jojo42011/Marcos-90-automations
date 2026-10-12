@@ -347,8 +347,8 @@ function resetMemoryStore() {
     idCounter = 1;
     persistToFile();
 }
-function getCommandTasks() {
-    return (0, sharedTasks_js_1.sharedTasksEnabled)() ? (0, sharedTasks_js_1.sharedTaskList)() : [...commandTasksStore];
+function getCommandTasks(includeCarlos = false) {
+    return (0, sharedTasks_js_1.sharedTasksEnabled)() ? (0, sharedTasks_js_1.sharedTaskList)(includeCarlos) : [...commandTasksStore];
 }
 /** Background reminders run only in the assignee's process, not every viewer's. */
 function getAssignedCommandTasks() {

@@ -43,8 +43,8 @@ function editable(task: CommandTask) {
   const actor=taskActor();
   return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo)===actor;
 }
-export function sharedTaskList(): CommandTask[] {
-  return (db().prepare("SELECT body FROM tasks WHERE deleted=0").all() as {body:string}[]).map(r => JSON.parse(r.body)).filter(visible);
+export function sharedTaskList(includeCarlos = false): CommandTask[] {
+  return (db().prepare("SELECT body FROM tasks WHERE deleted=0").all() as {body:string}[]).map(r => JSON.parse(r.body)).filter(task => visible(task) || (includeCarlos && ["marco", "wesley"].includes(taskActor()) && member(task.assignedTo) === "carlos"));
 }
 function history(task: CommandTask, action: string) {
   db().prepare("INSERT INTO history(task_id,body,action,at) VALUES(?,?,?,?)").run(task.id, JSON.stringify(task), action, new Date().toISOString());

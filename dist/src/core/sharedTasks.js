@@ -55,8 +55,8 @@ function editable(task) {
     const actor = (0, exports.taskActor)();
     return !process.env.TENANT_OWNER_ID || actor === "carlos" || member(task.assignedTo) === actor;
 }
-function sharedTaskList() {
-    return db().prepare("SELECT body FROM tasks WHERE deleted=0").all().map(r => JSON.parse(r.body)).filter(visible);
+function sharedTaskList(includeCarlos = false) {
+    return db().prepare("SELECT body FROM tasks WHERE deleted=0").all().map(r => JSON.parse(r.body)).filter(task => visible(task) || (includeCarlos && ["marco", "wesley"].includes((0, exports.taskActor)()) && member(task.assignedTo) === "carlos"));
 }
 function history(task, action) {
     db().prepare("INSERT INTO history(task_id,body,action,at) VALUES(?,?,?,?)").run(task.id, JSON.stringify(task), action, new Date().toISOString());

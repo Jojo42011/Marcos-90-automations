@@ -564,6 +564,16 @@ html{scroll-behavior:smooth}
 .subtabs button.on,.fchip.on{border-color:transparent;background:var(--soft)}
 .tabs button{letter-spacing:.025em;font-weight:600}
 .me-chip,.tbtn{box-shadow:none}
+.carlos-toggle{display:inline-flex;align-items:center;gap:9px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,color .15s}
+.carlos-toggle:hover{background:var(--soft)}
+.carlos-toggle[aria-pressed="true"]{color:var(--teal);border-color:var(--teal)}
+.carlos-toggle:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+.carlos-toggle:disabled{opacity:.6;cursor:wait}
+.toggle-track{width:26px;height:15px;border-radius:20px;background:var(--muted);position:relative;flex:none;opacity:.7}
+.toggle-track:after{content:"";position:absolute;left:3px;top:3px;width:9px;height:9px;border-radius:50%;background:white;transition:transform .15s}
+.carlos-toggle[aria-pressed="true"] .toggle-track{background:var(--teal);opacity:1}
+.carlos-toggle[aria-pressed="true"] .toggle-track:after{transform:translateX(11px)}
+@media(prefers-reduced-motion:reduce){.carlos-toggle,.toggle-track:after{transition:none}}
 </style>
 </head>
 <body>
@@ -853,6 +863,7 @@ var AUTH_ACTOR_ID="", AUTH_READY=false;
 // Browser storage is a display preference, never proof of the signed-in actor.
 var identityReady=api("/api/auth/me").then(function(d){
   AUTH_ACTOR_ID=d.user.id;ME=d.user.name.trim().split(/\s+/)[0].toLowerCase();AUTH_READY=true;
+  try{showCarlos=canShowCarlos()&&localStorage.getItem("taskShowCarlos:"+AUTH_ACTOR_ID)==="1";}catch(_){}
   localStorage.setItem(USER_KEY,ME);paintMe();
 }).catch(function(){toast("Sign in to your account before creating a task.");});
 var TASKS=[];
@@ -860,6 +871,9 @@ var selDate=tzToday();
 var calY,calM;             // compact calendar month
 var bigY,bigM;             // expanded month
 var mainTab="active", doneSub="all", allTaskDates=true;
+var showCarlos=false, taskLoadVersion=0;
+function canShowCarlos(){return ME==="marco"||ME==="wesley";}
+function taskListUrl(){return "/api/tasks"+(canShowCarlos()&&showCarlos?"?includeCarlos=true":"");}
 var memberFilter="all";    // "all"=every bar (wireframe default), ""=just mine, or a member id
 var viewingPage="";        // member id whose dedicated page we're viewing (read-only)
 var noteTab="all", NOTES=[], UNREAD_CHAT={}, PRESENCE={};
@@ -1330,7 +1344,16 @@ document.addEventListener("keydown",function(e){ if(e.key==="Escape")closeTeamPo
 
 /* ================= data ================= */
 document.getElementById("allTaskDates").onchange=function(){allTaskDates=this.checked;renderAll();};
-function loadTasks(){return api("/api/tasks").then(function(d){TASKS=d.tasks||[];renderAll();});}
+function loadTasks(){
+  var version=++taskLoadVersion;
+  return api(taskListUrl()).then(function(d){if(version!==taskLoadVersion)return;TASKS=d.tasks||[];renderAll();});
+}
+async function toggleCarlos(){
+  var button=document.getElementById("showCarlosTasks"), previous=showCarlos;
+  button.disabled=true;showCarlos=!showCarlos;
+  try{await loadTasks();try{localStorage.setItem("taskShowCarlos:"+AUTH_ACTOR_ID,showCarlos?"1":"0");}catch(_){}}
+  catch(_){showCarlos=previous;renderMemberChips();toast("Could not update the task view. Please try again.");}
+}
 function sortTasks(a){
   return a.slice().sort(function(x,y){
     var sx=(x.sortOrder==null?1e9:x.sortOrder), sy=(y.sortOrder==null?1e9:y.sortOrder);
@@ -1341,7 +1364,7 @@ function sortTasks(a){
   });
 }
 function whoseBar(){ // Carlos can filter the combined view; owners only see their own bars.
-  if(ME!=="carlos")return ME;
+  if(ME!=="carlos")return canShowCarlos()&&showCarlos?"all":ME;
   return memberFilter || ME;
 }
 function visibleFor(t,who){
@@ -1350,6 +1373,7 @@ function visibleFor(t,who){
   return owner===who;
 }
 function canEdit(t){
+  if(ME!=="carlos"&&(t.assignedTo||"").toLowerCase()!==ME)return false;
   if(ME==="carlos")return true; // assigner rights; legacy tasks w/o createdBy fall back to assignee
   if(viewingPage && viewingPage!==ME){ return (t.createdBy||"").toLowerCase()===ME; }
   var creator=(t.createdBy||"").toLowerCase();
@@ -1381,7 +1405,7 @@ function taskCard(t){
   var m=member(t.assignedTo);
   var st=statusMeta((t.status==="due_soon"||t.status==="overdue")?(t.previousStatus||"pending"):t.status);
   var editable=canEdit(t)&&!readOnlyView()||(canEdit(t)&&readOnlyView());
-  var ro=readOnlyView()&&!canEdit(t);
+  var ro=!canEdit(t);
   var urgent=t.column==="urgent";
   var when=taskDate(t);
   var dstate=deadlineState(t);
@@ -1475,7 +1499,7 @@ function renderBars(){
   } else if(who==="all"){
     cols.push(colHTML({key:"today",title:(allTaskDates?"Tasks - ":"Today’s Tasks - ")+((member(ME)||{}).name||"Me"),member:ME,tint:(member(ME)||{}).color,list:todaysOf(ME),empty:"No tasks for this day.",canAdd:true,addWho:ME}));
     cols.push(colHTML({key:"recurring",title:"Recurring Tasks",list:recsOf(ME),empty:"No recurring tasks.",canAdd:true,addWho:ME,addRec:true}));
-    TEAM.forEach(function(m){ if(m.id===ME)return;
+    TEAM.forEach(function(m){ if(m.id===ME||(ME!=="carlos"&&m.id!=="carlos"))return;
       cols.push(colHTML({key:"today",title:m.name+"’s Tasks",tint:m.color,member:m.id,list:todaysOf(m.id),empty:"Nothing for this day.",canAdd:true,addWho:m.id}));
       cols.push(colHTML({key:"recurring",title:m.name+"'s Recurring",tint:m.color,member:m.id,list:recsOf(m.id),empty:"No recurring tasks.",canAdd:true,addWho:m.id,addRec:true}));
     });
@@ -1627,7 +1651,11 @@ function renderMemberChips(){
   var w=document.getElementById("memberChips");
   var label=w.parentElement.querySelector("span");
   if(label)label.style.display=ME==="carlos"?"":"none";
-  if(ME!=="carlos"){w.innerHTML="";document.getElementById("clearFilter").style.display="none";return;}
+  if(ME!=="carlos"){
+    w.innerHTML=canShowCarlos()?'<button type="button" id="showCarlosTasks" class="carlos-toggle" aria-pressed="'+showCarlos+'" title="Include Carlos’s tasks as a read-only view"><span class="toggle-track" aria-hidden="true"></span>Carlos’s tasks</button>':'';
+    var toggle=document.getElementById("showCarlosTasks");if(toggle)toggle.onclick=toggleCarlos;
+    document.getElementById("clearFilter").style.display="none";return;
+  }
   var chips='<button class="fchip'+(memberFilter==="all"?' on':'')+'" data-mf="all">All Members</button>'+
     '<button class="fchip'+((!memberFilter)?' on':'')+'" data-mf="">Just Me</button>'+
     TEAM.map(function(m){return '<button class="fchip'+(memberFilter===m.id?' on':'')+'" data-mf="'+m.id+'"><span class="dot" style="background:'+m.color+'"></span>'+m.name+'</button>';}).join("");
@@ -2052,7 +2080,8 @@ identityReady.then(function(){
   paintMe();loadLayout();bootGrid();
   loadCmdSettings().then(function(){return loadTasks();}).catch(function(){toast("Failed to load tasks");});
   pollNotes();
-  setInterval(function(){api("/api/tasks").then(function(d){
+  setInterval(function(){var version=taskLoadVersion;api(taskListUrl()).then(function(d){
+    if(version!==taskLoadVersion)return;
     var sig=JSON.stringify((d.tasks||[]).map(function(t){return t.id+t.status+(t.updatedAt||"");}));
     if(sig!==setInterval._s){setInterval._s=sig;TASKS=d.tasks||[];renderAll();}
   }).catch(function(){});},30000);

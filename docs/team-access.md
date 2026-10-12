@@ -6,7 +6,7 @@ The gateway combines supported business collections and qualifies record referen
 
 Harvey chat/project/job IDs are resolved against the existing owner-keyed Work store. Carlos sees all authorized conversations automatically. The chat owner's process runs its jobs and integrations, while the initiating user is recorded separately. Carlos's own Harvey CRM bridge uses a per-process, loopback-only capability delivered over IPC to retrieve combined CRM data. Tokens are neither stored in browser state nor returned to model tools.
 
-Task Center keeps its shared transactional store. Marco and Wesley see tasks assigned to them; Carlos sees and edits all three members' tasks. Creation uses the authenticated actor, independently of the assignee. The old Team/workspace/layout switching UI is replaced by per-account appearance settings and one logout action. Legacy browser drafts remain archived by account.
+Task Center keeps its shared transactional store. Marco and Wesley see tasks assigned to them by default. Their Task Center includes an account-specific Carlos’s tasks toggle: `GET /api/tasks?includeCarlos=true` adds read-only Carlos assignments, including recurring and completed tasks. Mutation and background-worker scopes remain unchanged; neither owner can see the other owner’s assignments. Carlos sees and edits all three members' tasks. Creation uses the authenticated actor, independently of the assignee. The old Team/workspace/layout switching UI is replaced by per-account appearance settings and one logout action. Legacy browser drafts remain archived by account.
 
 ## Data retention and shared services
 

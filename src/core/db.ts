@@ -315,8 +315,8 @@ export function resetMemoryStore(): void {
   persistToFile();
 }
 
-export function getCommandTasks(): CommandTask[] {
-  return sharedTasksEnabled() ? sharedTaskList() : [...commandTasksStore];
+export function getCommandTasks(includeCarlos = false): CommandTask[] {
+  return sharedTasksEnabled() ? sharedTaskList(includeCarlos) : [...commandTasksStore];
 }
 
 /** Background reminders run only in the assignee's process, not every viewer's. */
