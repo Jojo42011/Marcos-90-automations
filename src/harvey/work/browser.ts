@@ -6,6 +6,7 @@ import { join, resolve, sep } from "path";
 import { get, list, put, seal, unseal, workDir, text } from "./store.js";
 import {browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
 
+import { browserArguments } from "./browserArguments.js";
 import { uploadArguments } from "./uploadFiles.js";
 
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close", "browser_mouse_click_xy", "browser_mouse_drag_xy", "browser_mouse_wheel"]);
@@ -180,6 +181,8 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
   if(name==="browser_take_screenshot"){args.type="jpeg";args.fullPage=false;}
   if(name==="browser_close"){await closeBrowser(owner,chat);return {content:[{type:"text",text:"Browser closed; saved login retained. Tabs will not reopen until requested."}]};}
   const s=await session(owner,chat);
+  const schema=s.tools.find(t=>t.name===name)?.inputSchema;
+  try{args=browserArguments(schema,args);}catch(error){return {error:(error as Error).message,recovery:{kind:"arguments",actionOutcome:"not_executed",safeToRetry:true,guidance:"No page action ran. Correct the arguments using this installed schema; do not retry guessed shapes or ask the user to perform the action."},inputSchema:schema};}
   return observedAction(s,name,async()=>{
     signal?.throwIfAborted();let preflight=true;
     try{

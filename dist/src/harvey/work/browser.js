@@ -19,6 +19,7 @@ const fs_1 = require("fs");
 const path_1 = require("path");
 const store_js_1 = require("./store.js");
 const browserState_js_1 = require("./browserState.js");
+const browserArguments_js_1 = require("./browserArguments.js");
 const uploadFiles_js_1 = require("./uploadFiles.js");
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close", "browser_mouse_click_xy", "browser_mouse_drag_xy", "browser_mouse_wheel"]);
 const TARGETED = new Set(["browser_click", "browser_type", "browser_fill_form", "browser_select_option", "browser_hover", "browser_drag"]);
@@ -408,6 +409,13 @@ async function browserCall(owner, chat, name, args, signal) {
         return { content: [{ type: "text", text: "Browser closed; saved login retained. Tabs will not reopen until requested." }] };
     }
     const s = await session(owner, chat);
+    const schema = s.tools.find(t => t.name === name)?.inputSchema;
+    try {
+        args = (0, browserArguments_js_1.browserArguments)(schema, args);
+    }
+    catch (error) {
+        return { error: error.message, recovery: { kind: "arguments", actionOutcome: "not_executed", safeToRetry: true, guidance: "No page action ran. Correct the arguments using this installed schema; do not retry guessed shapes or ask the user to perform the action." }, inputSchema: schema };
+    }
     return observedAction(s, name, async () => {
         signal?.throwIfAborted();
         let preflight = true;

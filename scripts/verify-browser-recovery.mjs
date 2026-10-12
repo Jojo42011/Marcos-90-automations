@@ -31,7 +31,7 @@ try{
  r=await call('browser_snapshot',{target:'#one'});assert(!r.error,txt(r));
  const before=await B.browserMetrics('alice','recovery');
  assert.equal(before.checkpoints,baseline.checkpoints,'Read-only snapshot must not save browser storage');
- r=await call('browser_click',{target:'#one'});assert(!r.error,txt(r));
+ r=await call('browser_click',{selector:'#one'});assert(!r.error,txt(r));
  const after=await B.browserMetrics('alice','recovery');
  assert.equal(after.preflights,before.preflights,'Fresh observation avoids duplicate preflight');
  assert.equal(after.calls-before.calls,1,'One MCP call for an observed click');

@@ -22,7 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
-- 2026-10-12: Production video testing exposed invented filesystem download links. Restored edit_video download URLs, included them in workspace listings, and normalize generated links only when they match existing files in the current chat. No stored conversation history is rewritten.
+- 2026-10-12: Production testing exposed invented filesystem download links and browser calls using legacy locator argument names. Browser calls now adapt ref/selector to the installed target schema and return missing-argument schemas before attempting an action. Restored edit_video download URLs, included them in workspace listings, and normalize generated links only when they match existing files in the current chat. No stored conversation history is rewritten.
 
 - 2026-10-12: Harvey video edits now probe source streams/timing, select one decodable audio track (prefer AAC), normalize derived H.264/AAC exports, tone-map HDR, match clip durations by measured whole frames, bound decoding memory and retry resource failures once. Verified exports are reused; originals and pre-existing failed files remain untouched. Added inspect_video, retained media diagnostics and a two-edit-call per-source budget. Job polling reconnects after transient failures and the UI preserves specific errors through final rendering.
 
