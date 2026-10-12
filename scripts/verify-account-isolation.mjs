@@ -132,6 +132,10 @@ try {
  const sharedStatus=await request('/api/comment-agent/status',cookies.marco);assert.equal(sharedStatus.data.enabled,false);assert.equal(sharedStatus.data.recent.length,1);
  for(const u of users){const status=await request('/api/comment-agent/status',cookies[u.id]);assert.deepEqual(status.data.recent,sharedStatus.data.recent);assert.equal((await request('/api/dm/stats',cookies[u.id])).status,200);}
  assert.equal((await request('/api/comment-agent/status')).status,401);
+ assert.equal((await request('/api/video-knowledge')).status,401);
+ assert.equal((await request('/api/video-knowledge','','POST',{action:'approve'})).status,401);
+ for(const u of users){const status=await request('/api/video-knowledge',cookies[u.id]);assert.equal(status.status,200);assert.equal(status.data.enabled,false);assert.equal(status.data.accountConfigured,false);}
+ check('video review stays on the authenticated shared automation service and remains disabled',()=>assert.ok(true));
  assert.equal((await request('/api/zernio/webhook','','POST',hook,{'x-zernio-signature':signature})).data.duplicate,true);
  check('signed comments reach one shared durable service without login; all team consoles agree; invalid signatures and anonymous console reads remain blocked',()=>assert.ok(true));
  check('anonymous dashboard requests remain blocked; ManyChat reaches its payload validation',()=>assert.ok(true));

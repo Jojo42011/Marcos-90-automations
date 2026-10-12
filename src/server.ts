@@ -6367,6 +6367,8 @@ app.post(
     if (commentEvt) {
       const accountId = commentEvt.accountId || zernioTikTokAccountId();
       if (!accountId) { res.status(503).json({ error: "Comment account is not configured" }); return; }
+      const { rememberVideoComment } = await import("./videoKnowledge/index.js");
+      rememberVideoComment(commentEvt);
       const queued = enqueueComment(commentEvt, accountId);
       res.status(200).json({ ok: true, ...(!queued ? { duplicate: true } : {}) });
       void (async () => {
@@ -6500,6 +6502,17 @@ app.get("/api/zernio/status", async (req, res) => {
     tiktokAccountId: zernioTikTokAccountId() || null,
     accounts,
   });
+});
+
+app.all("/api/video-knowledge", async (req, res) => {
+  // Review can authorize public-facing facts: fail closed even in an unlocked dashboard.
+  if (!(sessionUserSync(req) || machineTokenOk(req) || isInternalCall(req) || (process.env.DASHBOARD_TOKEN?.trim() && dashboardTokenOkIncoming(req)))) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!["GET", "POST"].includes(req.method)) { res.status(405).end(); return; }
+  try {
+    const { videoAdmin } = await import("./videoKnowledge/index.js");
+    const offset = Math.max(0, Math.min(100000, Number(req.query.offset) || 0));
+    res.json(await videoAdmin(req.method, req.body, offset));
+  } catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "Video operation failed" }); }
 });
 
 /**
@@ -15195,10 +15208,12 @@ httpServer.listen(PORT, tenantOwner() ? "127.0.0.1" : "0.0.0.0", () => {
   if (isTenantGateway()) {
     setCrmApiCatalogue([], `http://127.0.0.1:${PORT}`);
     require("./core/accountBootstrap.js").bootstrapAccounts();
+    void import("./videoKnowledge/index.js").then(({ startVideoKnowledge }) => startVideoKnowledge()).catch(() => console.error("[videoKnowledge] Startup failed"));
     startTenantWorkers(); console.log(`[accounts] Sign-in gateway listening on ${PORT}`); return;
   }
   process.send?.({ type: "tenant-ready", port: PORT });
   startWorker();
+  void import("./videoKnowledge/index.js").then(({ startVideoKnowledge }) => startVideoKnowledge()).catch(() => console.error("[videoKnowledge] Startup failed"));
   console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
   /* Publish the real routing table to Harvey's CRM bridge. Read from Express
      itself rather than hand-listed, so the catalogue Harvey is shown cannot

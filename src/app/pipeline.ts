@@ -2,6 +2,7 @@
  * Run modules in order by lead state. Single entry for webhook-driven flow.
  */
 import { respondsToDmInvitation } from "../integrations/zernio/history.js";
+import { hasVideoKeyword, videoReply } from "../videoKnowledge/index.js";
 import { asksForListingFacts, unverifiedListingReply, requestsPhoneNumber, requestsUnsupportedPropertyMedia } from "./propertyKnowledge.js";
 import * as db from "../core/db.js";
 import { getListing } from "../core/listingsStore.js";
@@ -426,7 +427,7 @@ export async function run(
         reason: "tiktok_marco_previous_outbound",
         message_preview: previewText(payload.message),
       });
-    } else if (isWaveOnlyMessage(payload.message.trim()) || respondsToDmInvitation(payload.message)) {
+    } else if (isWaveOnlyMessage(payload.message.trim()) || respondsToDmInvitation(payload.message) || (payload.platform === "tiktok" && hasVideoKeyword(payload.message))) {
       interested = true;
       noteGate("skipped_wave", true);
       marcoLog("intent_gate", {
@@ -793,6 +794,15 @@ export async function run(
       });
       return { lead, reply: notReceivedReply };
     }
+  }
+
+  // Preserve linked MLS behavior. Video evidence applies only to TikTok without a linked listing.
+  const propertyReply = payload.platform === "tiktok" && !(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn
+    ? videoReply(payload.userId, latestLeadText) : null;
+  if (propertyReply) {
+    await db.appendMessage(lead.id, "assistant", propertyReply);
+    await db.updateLead(lead);
+    return { lead, reply: propertyReply };
   }
 
   if (respondsToDmInvitation(latestLeadText) && !phoneCapturedThisTurn) {
