@@ -81,6 +81,7 @@ export class TurnVerification {
     if(result?.imageUnavailableToModel===true)receipt.limitation="The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
     if(["edit_video","inspect_video"].includes(name) && result?.diagnostic)receipt.diagnostic={code:String(result.diagnostic.code||"").slice(0,80),message:String(result.diagnostic.message||"").slice(0,500),detail:String(result.diagnostic.detail||"").slice(0,1800)};
     if(name==="computer"&&result?.recovery?.kind==="arguments")receipt.diagnostic={code:"browser_arguments",message:String(result.error||"Invalid browser arguments").slice(0,500),detail:"No page action ran. Use the installed browser schema or a supported legacy locator alias."};
+    else if(name==="computer"&&result?.recovery)receipt.diagnostic={code:"browser_"+String(result.recovery.kind||"unknown").slice(0,60),message:"Browser action needs recovery",detail:JSON.stringify({action:input.tool,actionOutcome:result.recovery.actionOutcome,safeToRetry:result.recovery.safeToRetry===true})};
     this.receipts.push(receipt);
     if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,source);
     return receipt;

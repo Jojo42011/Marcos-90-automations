@@ -165,6 +165,7 @@ function resolveModel(job, opts = {}) {
     const unusable = !candidate ||
         exclude.includes(candidate) ||
         !(0, catalog_js_1.getModelInfo)(candidate) ||
+        (source !== "explicit" && shape.needsVision && !(0, catalog_js_1.getModelInfo)(candidate)?.supportsVision) ||
         !(0, catalog_js_1.modelIsReachable)(candidate);
     if (unusable) {
         const alt = fallbackFor(job, exclude);

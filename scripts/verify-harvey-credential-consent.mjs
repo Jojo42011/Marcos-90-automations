@@ -61,6 +61,7 @@ const runtime = load("harvey/work/runtime.js", {
   "./chatRelay.js":{},
   "./learning.js":{learningContext:()=>({}),boundedHistory:history=>({messages:history,diagnostics:{}})},
   "./coordination.js":{},
+  "./progress.js":{readProgress:()=>({events:[]}),recordProgress:()=>{}},
   "./composio.js":{managedConnections:async()=>[],managedTools:async()=>[],composioReady:()=>false},
   "./fileDownload.js":{}, "./files.js":{publicFileLinks:(_o,_c,t)=>t}, crypto:{randomUUID}, "./store.js":store,
   "./browser.js":{browserEnabled:()=>true,browserCall:async(...args)=>{browserCalls.push(args);return {filled:true};}},

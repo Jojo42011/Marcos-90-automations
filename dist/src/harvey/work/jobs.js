@@ -97,6 +97,7 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
         const attention = result.toolFailed || !!result.modelError || !!result.budgetRefused || ("needsVerification" in result && result.needsVerification);
         job.status = controller.signal.aborted ? "needs_attention" : result.modelError || result.budgetRefused ? "failed" : attention ? "needs_attention" : "completed";
         job.result = { text: result.speech, conversationId: job.chatId, verification: result.verification, contextPlan: result.contextPlan, memoryContext: result.memoryContext, needsAttention: attention || controller.signal.aborted, approvals, schedules,
+            ...(result.modelError ? { failure: { kind: /402|credits|afford/i.test(result.modelError) ? "provider_credit_limit" : /Empty or malformed/i.test(result.modelError) ? "invalid_model_response" : "provider_error", model: result.modelUsed || result.model } } : {}),
             usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 } };
     }
     catch {
