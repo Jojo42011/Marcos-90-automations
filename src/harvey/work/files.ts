@@ -1,5 +1,6 @@
 import { readdirSync, statSync, mkdirSync, realpathSync } from "fs";
 import { join, basename, sep } from "path";
+import { uploadFile } from "./uploadFiles.js";
 import { randomUUID } from "crypto";
 import { spawn } from "child_process";
 import { browserDirectory } from "./browser.js";
@@ -19,4 +20,13 @@ export async function editVideo(owner: string, chat: string, input: any) {
   args.push("-movflags","+faststart",output);
   await new Promise<void>((resolve,reject)=>{const child=spawn(process.env.FFMPEG_PATH||"ffmpeg",args,{windowsHide:true,stdio:["ignore","ignore","pipe"]});let stderr="";const timer=setTimeout(()=>{child.kill();reject(new Error("Video edit timed out after ten minutes"));},600000);child.stderr.on("data",b=>{stderr=(stderr+b).slice(-2000);});child.on("error",()=>{clearTimeout(timer);reject(new Error("FFmpeg is not installed on this worker"));});child.on("close",code=>{clearTimeout(timer);code===0?resolve():reject(new Error("Video edit failed: "+stderr));});});
   return {file:name,path:output,download:`/api/harvey/work/files/${chat}/${name}`,note:"Trim/transcode completed. Review the output before publishing."};
+}
+
+export function workspaceFiles(owner:string,chat:string,input:any={}) {
+  if(input.file)return uploadFile(filesDir(owner,chat),input.file,input.filename);
+  const diagnostics=/^(?:page-.*\.(?:yml|jpeg|png)|console-.*\.log)$/;
+  const all=files(owner,chat).filter(f=>input.includeDiagnostics===true||!diagnostics.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name));
+  const offset=Number.isSafeInteger(input.offset)&&input.offset>=0?input.offset:0;
+  const limit=20;
+  return {files:all.slice(offset,offset+limit),total:all.length,nextOffset:offset+limit<all.length?offset+limit:null,note:"Only real local files are listed. Diagnostic screenshots/logs are hidden by default. Use file to inspect or filename to prepare a non-destructive upload alias."};
 }

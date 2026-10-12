@@ -41,7 +41,7 @@ function resourceScope(name, input) {
         return stableCallKey("managed", [input.harvey_connection_scope, (input.tools || []).map((t) => String(t.tool_slug).split("_")[0]).sort()]);
     if (name === "business_call")
         return "business:" + String(input.tool || "").replace(/^(create|update|delete|get|list|search|find|read)_/, "").replace(/s$/, "");
-    if (name === "edit_video" || name === "workspace_files")
+    if (name === "edit_video" || name === "workspace_files" || name === "workspace_download")
         return "files";
     return name;
 }

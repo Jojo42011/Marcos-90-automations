@@ -766,7 +766,7 @@
       setText: function (t) { text = t || ""; paint(false); },
       finish: function () {
         if (frame) { cancelAnimationFrame(frame); frame = null; }
-        if (!text) { body.innerHTML = '<span class="err-line">Harvey returned nothing.</span>'; return; }
+        if (!text) { body.innerHTML = '<span class="err-line">The model did not return a usable reply. Completed work remains saved; continue the chat to check the unfinished step.</span>'; return; }
         paint(false);
       },
       error: function (msg) {

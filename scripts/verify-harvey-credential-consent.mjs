@@ -62,7 +62,7 @@ const runtime = load("harvey/work/runtime.js", {
   "./learning.js":{learningContext:()=>({}),boundedHistory:history=>({messages:history,diagnostics:{}})},
   "./coordination.js":{},
   "./composio.js":{managedConnections:async()=>[],managedTools:async()=>[],composioReady:()=>false},
-  "./files.js":{}, crypto:{randomUUID}, "./store.js":store,
+  "./fileDownload.js":{}, "./files.js":{}, crypto:{randomUUID}, "./store.js":store,
   "./browser.js":{browserEnabled:()=>true,browserCall:async(...args)=>{browserCalls.push(args);return {filled:true};}},
   "./connectors.js":{connections:()=>[],publicConnection:c=>c},
   "../tools.js":{HARVEY_TOOL_DEFINITIONS:[]}, "../../hull/approval.js":{},

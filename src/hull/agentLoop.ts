@@ -390,6 +390,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
   let toolRounds = 0;
   let completionRepairs = 0;
+  let malformedRepairs = 0;
   let hadToolOnly = false;
   /* How many times each identical call has been made this turn. */
   const callCounts = new Map<string, number>();
@@ -423,7 +424,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const sig = signature(name, input) + (opts.workRuntime && read ? `:${observationRevision}` : "");
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
-    const limit = opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
+    const polling = opts.workRuntime && name==="computer" && input.action==="call" && input.tool==="browser_wait_for";
+    const limit = polling ? 6 : opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
     const knownNotExecuted = opts.workRuntime && name === "computer" && seen === 2 && safeBrowserRetry.has(sig);
     if (seen > limit && !knownNotExecuted) {
       console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
@@ -582,6 +584,16 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       costUsd: out.usage.costUsd,
     });
 
+    if (opts.workRuntime && !out.toolUses.length && (!out.text.trim() || /<\|tool_call_start\|>|<function=[^>]+>|<tool_call>/.test(out.text))) {
+      // Treat pseudo-tool markup as a provider formatting error, never execute it.
+      // Retrying the model response keeps completed tool calls in context.
+      if (!lastRound && malformedRepairs < 2) {
+        malformedRepairs++;
+        system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
+        continue;
+      }
+      return {speech:"The model could not produce a usable next step. Completed actions and files remain saved. Continue this chat to inspect the current state before retrying the unfinished step.",modelError:"Empty or malformed model response after bounded repair",verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+    }
     if (!out.toolUses.length) {
       // A missing review is our bookkeeping problem, never a request for the
       // user to re-authorize a login. Give the agent a bounded chance to act or
@@ -618,13 +630,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
     hadToolOnly = !out.text.trim();
 
-    const toolResults = await Promise.all(
-      out.toolUses.map(async (tu) => ({
-        type: "tool_result" as const,
-        tool_use_id: tu.id,
-        content: toolResultContent(await runTool(tu.name, tu.input || {})),
-      })),
-    );
+    const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+    if (opts.workRuntime) {
+      // Preserve dependency and evidence order, including verification tools that
+      // bypass the runtime queue. Never verify while a preceding write is in flight.
+      for (const tu of out.toolUses) toolResults.push({type:"tool_result",tool_use_id:tu.id,content:toolResultContent(await runTool(tu.name,tu.input||{}))});
+    } else {
+      toolResults.push(...await Promise.all(out.toolUses.map(async tu=>({type:"tool_result" as const,tool_use_id:tu.id,content:toolResultContent(await runTool(tu.name,tu.input||{}))}))));
+    }
 
     /* Rebuild the assistant turn in Anthropic's block shape. The tool loop
        requires the tool_use blocks to be echoed back verbatim alongside their
