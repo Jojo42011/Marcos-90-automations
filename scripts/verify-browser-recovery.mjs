@@ -13,12 +13,12 @@ const {TurnVerification}=require('../dist/src/harvey/reliability.js');
 let writes=0;
 const server=http.createServer((req,res)=>{
  res.setHeader('Content-Type','text/html');
- if(req.url==='/write'){writes++;res.end('<h1>Saved exactly once</h1>');return;}
+ if(req.url==='/write'){if(req.method==='POST')writes++;res.end('<h1>Saved exactly once</h1>');return;}
  if(req.url==='/login')res.setHeader('Set-Cookie','fixture_session=valid; HttpOnly; SameSite=Lax; Path=/');
  if(req.url==='/second'){res.end('<h1>Second tab '+(req.headers.cookie?.includes('fixture_session=valid')?'authenticated':'signed out')+'</h1>');return;}
  if(req.url==='/frame'){res.end('<button onclick="this.textContent=\'Frame done\'">Frame action</button>');return;}
  res.end(`<h1>Recovery fixture</h1><button id="one" onclick="this.textContent='Clicked once'">Unique action</button><button>Duplicate</button><button>Duplicate</button>
- <form action="/write"><input id="first" aria-label="First"><input id="second" aria-label="Second"><button>Save record</button></form>
+ <form action="/write" method="POST"><input id="first" aria-label="First"><input id="second" aria-label="Second"><button>Save record</button></form>
  <iframe src="/frame" title="Fixture frame"></iframe><canvas width="150" height="60" style="display:block" onclick="document.querySelector('#visual-status').textContent='Visual action done'"></canvas><p id="visual-status">Visual control ready</p>
  <section id="results">${Array.from({length:500},(_,i)=>'<p id="row'+i+'">Record '+i+' descriptive fixture text</p>').join('')}</section>`);
 });server.listen(0,'127.0.0.1');await once(server,'listening');
@@ -41,6 +41,9 @@ try{
  console.log('ok stale and ambiguous targets return fresh recovery evidence without submitting');
  r=await call('browser_fill_form',{fields:[{name:'First',type:'textbox',target:'#first',value:'alpha'},{name:'Second',type:'textbox',target:'#second',value:'beta'}]});assert(!r.error,txt(r));
  r=await call('browser_snapshot',{target:'form'});assert.match(txt(r),/alpha/);assert.match(txt(r),/beta/);
+ r=await call('browser_fill_form',{fields:[{name:'First',type:'textbox',target:'#first',value:'partly changed'},{name:'Missing',type:'textbox',target:'#absent',value:'never'}]});
+ assert.equal(r.recovery.actionOutcome,'unknown');assert.equal(r.recovery.safeToRetry,false);
+ r=await call('browser_snapshot',{target:'form'});assert.match(txt(r),/partly changed/);assert.match(txt(r),/beta/);
  r=await call('browser_snapshot',{});assert(r.truncated);let all=txt(r);let pages=1;
  while(r.nextOffset!==null){r=await call('browser_read_snapshot',{snapshotId:r.snapshotId,offset:r.nextOffset});all+=txt(r);pages++;assert(pages<20);}
  assert.match(all,/Record 499/);r=await call('browser_snapshot',{target:'#row499'});assert(!r.truncated);assert.match(txt(r),/Record 499/);
@@ -52,6 +55,8 @@ try{
  const ledger=new TurnVerification();const receipt=ledger.record('computer',{action:'call',tool:'browser_take_screenshot'},r);assert(!receipt.truncated,'Image bytes are not text truncation');
  assert((await B.browserTools('alice','recovery')).some(t=>t.name==='browser_mouse_click_xy'));
  assert(!(await B.browserTools('alice','recovery')).some(t=>t.name==='browser_run_code_unsafe'));
+ assert(JSON.stringify(await B.browserTools('alice','recovery')).length<10000,'Tool catalog must fit model result budget');
+ assert((await B.browserTools('alice','recovery','browser_click'))[0].inputSchema);
  console.log('ok iframe targets, model-visible pixels and restricted visual tools');
  await call('browser_tabs',{action:'new',url:base+'/second'});
  await call('browser_tabs',{action:'select',index:0});
@@ -61,11 +66,16 @@ try{
  await call('browser_tabs',{action:'select',index:1});r=await call('browser_snapshot',{target:'h1'});assert.match(txt(r),/authenticated/);
  const other=await B.browserCall('bob','recovery','browser_navigate',{url:base+'/second'});assert.match(txt(other),/signed out/);
  console.log('ok two tabs, selected tab and session-only cookie restored; another owner stays signed out');
+ await call('browser_tabs',{action:'select',index:0});
+ r=await call('browser_click',{target:'button:has-text("Save record")'});assert(!r.error,txt(r));assert.equal(writes,1);
+ await B.closeBrowsers();r=await call('browser_recover');assert(!r.error,txt(r));assert.equal(writes,1,'Recovery must not replay form submission');
+ assert.match(txt(r),/Saved exactly once/);
+ console.log('ok recovery reloads saved tabs without repeating a completed submission');
  await B.closeBrowser('alice','recovery');assert.equal((await B.browserPreview('alice','recovery')).state,'closed');
  // Force a checkpoint publication failure after a successful navigation. It must not become an action failure.
  const dir=B.browserDirectory('alice','save-warning');mkdirSync(join(dir,'auth-state.json.pending'));
  r=await B.browserCall('alice','save-warning','browser_navigate',{url:base+'/second'});assert(!r.error,txt(r));assert(r.persistenceWarning);
  rmdirSync(join(dir,'auth-state.json.pending'));
  console.log('ok checkpoint failure is separate from action outcome; explicit Close remains closed');
- assert.equal(writes,0);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,externalWrites:writes}));
+ assert.equal(writes,1);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,fixtureWrites:writes}));
 }finally{await B.closeBrowsers();server.closeAllConnections();await new Promise(r=>server.close(r));}

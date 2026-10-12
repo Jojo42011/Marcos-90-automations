@@ -1,4 +1,4 @@
-/* A read-only view of the selected chat's existing hosted browser. */
+/* View the selected chat's hosted browser, restoring retained tabs after restart. */
 (function(){
   'use strict';
   var h, key='', generation=0, controller, timer, open=false, dismissed=false, lastPoll=0;
@@ -42,6 +42,7 @@
       var actions={browser_navigate:'Opening a page',browser_navigate_back:'Going back',browser_snapshot:'Inspecting the page',browser_click:'Clicking a control',browser_type:'Typing',browser_fill_form:'Filling a form',browser_press_key:'Using the keyboard',browser_select_option:'Selecting an option',browser_hover:'Inspecting a control',browser_drag:'Dragging',browser_tabs:'Switching tabs',browser_wait_for:'Waiting for the page',browser_handle_dialog:'Handling a dialog',browser_file_upload:'Uploading a file',browser_take_screenshot:'Capturing the page'};
       var action=actions[data.action];
       $('computerActivity').textContent=(data.phase==='running'?'Harvey is working':data.phase==='queued'?'Task queued':data.phase==='cancelling'?'Stopping task':'No task running')+(action?' · '+(data.state==='working'?'':'Last browser action: ')+action:'');
+      if(data.persistenceWarning||data.restoreWarning)$('computerActivity').textContent+=' · '+(data.persistenceWarning||data.restoreWarning);
       if(data.frame && /^data:image\/jpeg;base64,/.test(data.frame.image)){
         $('computerImage').src=data.frame.image;$('computerImage').hidden=false;$('computerEmpty').hidden=true;
         $('computerPage').textContent=data.frame.url||data.frame.title||'Browser';
@@ -50,7 +51,7 @@
       }else{
         $('computerImage').removeAttribute('src');$('computerImage').hidden=true;$('computerEmpty').hidden=false;
         $('computerPage').textContent='No page open';$('computerCaptured').textContent='';
-        $('computerEmpty').textContent=data.state==='disabled'?'The hosted browser is not enabled on this server.':data.state==='unavailable'?'The browser could not provide a preview. Retrying automatically.':data.state==='working'?'Harvey is using the browser. The preview will update when this action finishes.':'Ask Harvey to open a website in this chat. Viewing this panel does not launch a browser.';
+        $('computerEmpty').textContent=data.state==='disabled'?'The hosted browser is not enabled on this server.':data.state==='unavailable'?'The browser could not provide a preview. Retrying automatically.':data.state==='working'?'Harvey is using the browser. The preview will update when this action finishes.':data.state==='ready'||data.state==='needs_attention'?'Preparing the browser preview…':'Ask Harvey to open a website in this chat. Saved open tabs return here after a server restart.';
       }
     }catch(e){if(e.name!=='AbortError'&&version===generation){$('computerStatus').textContent='Disconnected · retrying';$('computerCaptured').textContent=$('computerImage').hidden?'':'Last captured image · connection lost';}}
     finally{if(controller===abort)controller=null;}
