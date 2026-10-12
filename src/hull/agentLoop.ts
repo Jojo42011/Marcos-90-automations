@@ -483,7 +483,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     if (!opts.workRuntime) return result;
     if(result && typeof result==="object" && (result as any)._image && getModelInfo(lastModelUsed)?.supportsVision===false){
       const {_image,...rest}=result as any;
-      result={...rest,imageWarning:"Screenshot captured for the browser preview, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model."};
+      result={...rest,imageUnavailableToModel:true,imageWarning:"Screenshot captured, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model."};
     }
     const receipt = verification.record(name, input, result);
     if (!receipt.observation) observationRevision++;
@@ -599,8 +599,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
         continue;
       }
+      const unseenVisualOnly = evidence.receipts.some(r=>r.limitation) && evidence.receipts.every(r=>r.discovery || r.outcome==="failed" || r.observation&&!!r.limitation);
       return {
-        speech: finalizeSpeech(out.text, opts, hadToolOnly),
+        speech: unseenVisualOnly ? "The screenshot was captured, but this model cannot inspect image pixels. Choose a vision-capable model for visual analysis; I can still work with page text and controls." : finalizeSpeech(out.text, opts, hadToolOnly),
         ...(opts.workRuntime ? { verification: verification.result() } : {}),
         toolRounds,
         model,
