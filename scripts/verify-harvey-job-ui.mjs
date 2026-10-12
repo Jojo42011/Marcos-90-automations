@@ -20,3 +20,11 @@ Object.assign(context,{ensureWorkChat:async()=>{},apiUrl:p=>p,authHeaders:h=>h,D
 vm.runInContext(chat,context);context.api=async p=>({ok:true,data:p.endsWith('/job')?{job:null}:{messages:[{role:'assistant',at:'2099-01-01T00:00:00Z',content:'Recovered saved final reply'}]}});
 await context.harveyChat('Fixture',ui,{chatId:'saved',abort:new AbortController()});assert.equal(ui.text,'Recovered saved final reply');
 console.log('ok ended response stream retrieves the saved final answer without resubmitting the task');
+
+const inline=source.slice(source.indexOf('  function mdInline('),source.indexOf('  function isTableSep('));vm.runInContext(inline,context);
+assert(context.mdInline('[clip](/api/harvey/work/files/chat/edited.mp4)').includes('href="/api/harvey/work/files/chat/edited.mp4"'));
+assert(!context.mdInline('[bad](javascript:alert(1))').includes('<a '));assert(!context.mdInline('[bad](//evil.example/file)').includes('<a '));
+const linkSource=readFileSync('dist/src/harvey/work/files.js','utf8');const linkContext={Map,files:()=>[{path:'/data/harvey-work/browsers/own/files/clip.mp4',download:'/api/harvey/work/files/chat/clip.mp4'}]};vm.createContext(linkContext);vm.runInContext(linkSource.slice(linkSource.indexOf('function publicFileLinks(')),linkContext);
+assert.equal(linkContext.publicFileLinks('owner','chat','[clip](/workspace/harvey-work/browsers/own/files/clip.mp4)'),'[clip](/api/harvey/work/files/chat/clip.mp4)');
+assert.equal(linkContext.publicFileLinks('owner','chat','[clip](/workspace/harvey-work/browsers/other/files/clip.mp4)'),'[clip](/workspace/harvey-work/browsers/other/files/clip.mp4)');
+console.log('ok existing-file download links are normalized and rendered, while foreign paths and unsafe schemes are not promoted');

@@ -6,6 +6,7 @@ exports.files = files;
 exports.inspectVideo = inspectVideo;
 exports.editVideo = editVideo;
 exports.workspaceFiles = workspaceFiles;
+exports.publicFileLinks = publicFileLinks;
 const fs_1 = require("fs");
 const path_1 = require("path");
 const uploadFiles_js_1 = require("./uploadFiles.js");
@@ -20,7 +21,7 @@ function filePath(owner, chat, name) {
         throw new Error("File is outside this chat");
     return p;
 }
-function files(owner, chat) { const dir = filesDir(owner, chat); return (0, fs_1.readdirSync)(dir).filter(n => !n.startsWith(".") && (0, fs_1.statSync)((0, path_1.join)(dir, n)).isFile()).map(name => ({ name, size: (0, fs_1.statSync)((0, path_1.join)(dir, name)).size, path: (0, path_1.join)(dir, name) })); }
+function files(owner, chat) { const dir = filesDir(owner, chat); return (0, fs_1.readdirSync)(dir).filter(n => !n.startsWith(".") && (0, fs_1.statSync)((0, path_1.join)(dir, n)).isFile()).map(name => ({ name, size: (0, fs_1.statSync)((0, path_1.join)(dir, name)).size, path: (0, path_1.join)(dir, name), download: `/api/harvey/work/files/${chat}/${encodeURIComponent(name)}` })); }
 function mediaPath(owner, chat, raw) {
     const root = (0, fs_1.realpathSync)(filesDir(owner, chat)), p = (0, fs_1.realpathSync)((0, path_1.resolve)(root, raw));
     if (!p.startsWith(root + path_1.sep) || !(0, fs_1.statSync)(p).isFile())
@@ -38,7 +39,8 @@ async function inspectVideo(owner, chat, input, signal) {
 }
 async function editVideo(owner, chat, input, signal) {
     try {
-        return await (0, video_js_1.exportVideo)(filesDir(owner, chat), mediaPath(owner, chat, String(input.file || "")), input.matchFile ? mediaPath(owner, chat, String(input.matchFile)) : undefined, input, signal);
+        const result = await (0, video_js_1.exportVideo)(filesDir(owner, chat), mediaPath(owner, chat, String(input.file || "")), input.matchFile ? mediaPath(owner, chat, String(input.matchFile)) : undefined, input, signal);
+        return "file" in result ? { ...result, download: `/api/harvey/work/files/${chat}/${result.file}` } : result;
     }
     catch (error) {
         signal?.throwIfAborted();
@@ -53,4 +55,15 @@ function workspaceFiles(owner, chat, input = {}) {
     const offset = Number.isSafeInteger(input.offset) && input.offset >= 0 ? input.offset : 0;
     const limit = 20;
     return { files: all.slice(offset, offset + limit), total: all.length, nextOffset: offset + limit < all.length ? offset + limit : null, note: "Only real local files are listed. Diagnostic screenshots/logs are hidden by default. Use file to inspect or filename to prepare a non-destructive upload alias." };
+}
+/** Correct only links to files actually present in this chat; never publish disk paths. */
+function publicFileLinks(owner, chat, speech) {
+    if (!/\]\(\/(?:workspace|data)\/harvey-work\//.test(speech))
+        return speech;
+    const links = new Map();
+    for (const file of files(owner, chat)) {
+        links.set(file.path, file.download);
+        links.set(file.path.replace(/^\/data\//, "/workspace/"), file.download);
+    }
+    return speech.replace(/\]\(([^)\s]+)\)/g, (whole, path) => links.has(path) ? `](${links.get(path)})` : whole);
 }

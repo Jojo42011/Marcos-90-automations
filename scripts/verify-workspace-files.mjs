@@ -33,3 +33,14 @@ const controller=new AbortController();controller.abort();await assert.rejects(D
 assert(!readdirSync(dir).some(n=>n.startsWith('.download-')));
 for(const url of ['http://example.com','https://user:pass@example.com','https://127.0.0.1/x','https://169.254.169.254/x'])await assert.rejects(D.publicDownload(url,AbortSignal.timeout(2000)));
 console.log('ok streamed bytes/hash, size mismatch, oversized files, cancellation cleanup and private-network rejection');
+
+const {browserArguments}=require('../dist/src/harvey/work/browserArguments.js');
+const schema={properties:{target:{type:'string'}},required:['target']};
+assert.deepEqual(browserArguments(schema,{ref:'e12'}),{target:'e12'});
+assert.deepEqual(browserArguments(schema,{selector:'#observed'}),{target:'#observed'});
+assert.throws(()=>browserArguments(schema,{target:'e1',ref:'e2'}),/Conflicting/);
+assert.throws(()=>browserArguments(schema,{}),/Missing/);
+assert.deepEqual(browserArguments({properties:{fields:{items:schema}}},{fields:[{ref:'e12'}]}),{fields:[{target:'e12'}]});
+console.log('ok installed browser schema adapts legacy keys, rejects conflicts/missing targets and preserves form-field ordering');
+
+assert.deepEqual(browserArguments({properties:{scale:{default:"css"}},required:["scale"]},{}),{scale:"css"});
