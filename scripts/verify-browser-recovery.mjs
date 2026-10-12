@@ -36,6 +36,8 @@ try{
  assert.equal(after.preflights,before.preflights,'Fresh observation avoids duplicate preflight');
  assert.equal(after.calls-before.calls,1,'One MCP call for an observed click');
  console.log('ok fresh click uses one MCP call; reads skip storage export');
+ r=await call('browser_snapshot',{target:'#absent-snapshot-target'});assert(!r.error,txt(r));assert(r.recovered);assert.match(txt(r),/Recovery fixture/);assert.equal(writes,0);
+ console.log('ok failed targeted snapshot recovers with whole-page evidence without writes');
  r=await call('browser_click',{target:'missing999'});assert.equal(r.recovery.actionOutcome,'not_executed');assert(r.observation);
  r=await call('browser_click',{target:'button:has-text("Duplicate")'});assert.equal(r.recovery.actionOutcome,'not_executed');assert.equal(writes,0);
  console.log('ok stale and ambiguous targets return fresh recovery evidence without submitting');

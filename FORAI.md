@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-12: Final live check exposed a failed focused browser observation and ignored system-only wording guidance. A failed snapshot now returns a successful whole-page fallback when available (never retries writes), and the tool-free status pass receives an explicit draft-rewrite message. Regression tests cover the missing snapshot target and wording-only execution boundary.
+
 - 2026-10-12: Live follow-up now completed with two successful read-only calls and no repeated media work, but status prose remained too technical. Added a bounded tool-free rewrite for overlong/heading-heavy simple status answers; it retains unresolved work and cannot execute provider-emitted tool calls. Detailed requests retain their format.
 
 - 2026-10-12: Live resume testing reused existing media and recovered its response, but exposed repeated invalid browser observations before schema discovery. Validate installed argument types/enums/ranges before execution and attach the installed schema to browser failures, with a full-page observation recovery path. Existing action-outcome and replay safeguards remain in place.
