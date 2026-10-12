@@ -44,3 +44,9 @@ assert.deepEqual(browserArguments({properties:{fields:{items:schema}}},{fields:[
 console.log('ok installed browser schema adapts legacy keys, rejects conflicts/missing targets and preserves form-field ordering');
 
 assert.deepEqual(browserArguments({properties:{scale:{default:"css"}},required:["scale"]},{}),{scale:"css"});
+assert.throws(()=>browserArguments({properties:{depth:{type:"number"}}},{depth:"full"}),/Invalid type/);
+assert.throws(()=>browserArguments({properties:{target:{type:"string"}}},{target:{ref:"e12"}}),/Invalid type/);
+assert.throws(()=>browserArguments({properties:{button:{type:"string",enum:["left","right"]}}},{button:"primary"}),/Invalid choice/);
+assert.throws(()=>browserArguments({properties:{depth:{type:"integer",minimum:1}}},{depth:0}),/Out-of-range/);
+assert.deepEqual(browserArguments({properties:{depth:{type:"number"},boxes:{type:"boolean"}}},{depth:3,boxes:true}),{depth:3,boxes:true});
+console.log('ok invalid browser argument types, choices and ranges fail before browser execution');

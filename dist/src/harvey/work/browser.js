@@ -485,7 +485,7 @@ async function browserCall(owner, chat, name, args, signal) {
                 catch { }
             if (!preflight)
                 s.dirty = true;
-            return { error: message, recovery, observation };
+            return { error: message, recovery, observation, inputSchema: schema, note: "Use this installed schema to correct the next call. For a failed targeted snapshot, read the whole page with browser_snapshot arguments {} before choosing a fresh target; do not guess more references." };
         }
     });
 }

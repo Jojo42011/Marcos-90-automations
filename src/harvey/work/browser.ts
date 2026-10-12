@@ -214,7 +214,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       // tabs with that diagnostic page before browser_recover can restore them.
       if(!signal?.aborted)try{const fresh=checked(await call(s,"browser_snapshot",{depth:6},8000));remember(s,fresh,true,false);observation=pageSlice(s);}catch{}
       if(!preflight)s.dirty=true;
-      return {error:message,recovery,observation};
+      return {error:message,recovery,observation,inputSchema:schema,note:"Use this installed schema to correct the next call. For a failed targeted snapshot, read the whole page with browser_snapshot arguments {} before choosing a fresh target; do not guess more references."};
     }
   });
 }

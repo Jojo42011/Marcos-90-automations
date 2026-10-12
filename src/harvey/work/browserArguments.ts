@@ -17,5 +17,13 @@ export function browserArguments(schema:any,input:any){
     if(props[required]?.default!==undefined)args[required]=props[required].default;
     else throw new Error("Missing browser argument: "+required+". Use the attached installed schema.");
   }
+  for(const [key,value] of Object.entries(args)){
+    const p=props[key];if(!p)continue;
+    const types=Array.isArray(p.type)?p.type:p.type?[p.type]:[];
+    const matches=(t:string)=>t==="null"?value===null:t==="array"?Array.isArray(value):t==="integer"?Number.isInteger(value):t==="number"?typeof value==="number"&&Number.isFinite(value):t==="object"?!!value&&typeof value==="object"&&!Array.isArray(value):typeof value===t;
+    if(types.length&&!types.some(matches))throw new Error("Invalid type for browser argument: "+key+". Use the attached installed schema.");
+    if(p.enum&&!p.enum.includes(value))throw new Error("Invalid choice for browser argument: "+key+". Use the attached installed schema.");
+    if(typeof value==="number"&&(p.minimum!==undefined&&value<p.minimum||p.maximum!==undefined&&value>p.maximum))throw new Error("Out-of-range browser argument: "+key+". Use the attached installed schema.");
+  }
   return args;
 }
