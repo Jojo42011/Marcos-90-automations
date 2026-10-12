@@ -239,6 +239,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
     let observationRevision = 0;
+    const safeBrowserRetry = new Set();
     /* Calls held by the gate. The turn still finishes; these did not run. */
     const heldApprovals = [];
     /* Spend accumulates across every step, because one turn can be sixteen calls
@@ -266,7 +267,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         const seen = (callCounts.get(sig) || 0) + 1;
         callCounts.set(sig, seen);
         const limit = opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
-        if (seen > limit) {
+        const knownNotExecuted = opts.workRuntime && name === "computer" && seen === 2 && safeBrowserRetry.has(sig);
+        if (seen > limit && !knownNotExecuted) {
             console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
             return {
                 error: "REPEATED CALL REFUSED",
@@ -276,9 +278,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if (opts.workRuntime) {
             if (!opts.workRuntime.tools.some(t => t.name === name))
                 return { error: "Tool is not available in this mode" };
+            if (name === "computer" && /^browser_mouse_(click|drag)_xy$/.test(String(input.tool)) && (0, index_js_1.getModelInfo)(lastModelUsed)?.supportsVision === false)
+                return { error: "This selected model cannot see screenshots. Use observed semantic browser targets, or choose a vision-capable model for visual controls. No coordinate action was executed." };
             opts.onEvent?.({ type: "tool", name, status: "running" });
             try {
                 const result = await opts.workRuntime.execute(name, input);
+                safeBrowserRetry.delete(sig);
+                if (name === "computer" && result?.recovery?.actionOutcome === "not_executed" && result?.recovery?.safeToRetry === true)
+                    safeBrowserRetry.add(sig);
                 opts.onEvent?.({ type: "tool", name, status: "done" });
                 return result;
             }
@@ -332,9 +339,13 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 return { error: e.message };
             }
         }
-        const result = await executeTool(name, input);
+        let result = await executeTool(name, input);
         if (!opts.workRuntime)
             return result;
+        if (result && typeof result === "object" && result._image && (0, index_js_1.getModelInfo)(lastModelUsed)?.supportsVision === false) {
+            const { _image, ...rest } = result;
+            result = { ...rest, imageWarning: "Screenshot captured for the browser preview, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model." };
+        }
         const receipt = verification.record(name, input, result);
         if (!receipt.observation)
             observationRevision++;

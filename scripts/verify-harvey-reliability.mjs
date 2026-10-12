@@ -48,6 +48,13 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
  if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
  else if(user.includes('TRANSIENT_FIXTURE')){if(++transientCalls===1){res.statusCode=504;res.end(JSON.stringify({error:{message:'Upstream idle timeout exceeded'}}));return;}response={role:'assistant',content:'Transient provider recovered.'};}
+ else if(user.includes('BROWSER_VISION_FIXTURE')){
+  if(n===1)assert(!JSON.stringify(b.messages).includes('image_url'),'Text-only model must not receive image input');
+  response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):n===2?tc('report_verification',{status:'needs_verification',evidenceIds:[],checks:['Model capability checked'],limitations:['Visual input unsupported']}):{role:'assistant',content:'Use semantic controls.'};
+ }
+ else if(user.includes('BROWSER_GUARD_FIXTURE')){
+  response=n<3?tc('computer',{action:'call',tool:'browser_click',arguments:{target:'#save'}}):n===3?tc('report_verification',{status:'needs_verification',evidenceIds:[],checks:['Inspect before another action'],limitations:['Fixture action needs read-back']}):{role:'assistant',content:'Stopped for inspection.'};
+ }
  else if(user.includes('RECOVERY_FIXTURE')){
   const steps=[['schedule_agent',{action:'create',title:'Recovered task',prompt:'Fixture',cron:'* * * * *',timezone:'UTC'}],['schedule_agent',{action:'create',title:'Recovered task',prompt:'Fixture',cron:'0 9 * * *',timezone:'UTC'}],['schedule_agent',{action:'list'}],['report_verification',{status:'completed',evidenceIds:['e3'],checks:['Read back the corrected schedule'],limitations:[]}]];
   response=n<steps.length?tc(...steps[n]):{role:'assistant',content:'The corrected schedule is saved.'};
@@ -103,6 +110,17 @@ async function api(path,method='GET',body,who='alice'){
 async function chat(mode='work'){return (await api('/conversations','POST',{mode})).data;}
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
+ const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ let visualExecutions=0;
+ await runAgentLoop({message:'BROWSER_VISION_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Local browser visual capability fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{visualExecutions++;return {_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]};}}});
+ ok('text-only model keeps working after screenshots and cannot issue unseen coordinate clicks',()=>assert.equal(visualExecutions,1));
+ for(const safe of [true,false]){
+  let executions=0;
+  await runAgentLoop({message:'BROWSER_GUARD_FIXTURE',modelOverride:'openai/fixture',workRuntime:{context:'Local browser recovery fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{
+   executions++;return executions===1?{error:'Fixture target failure',recovery:{actionOutcome:safe?'not_executed':'unknown',safeToRetry:safe}}:{content:[{type:'text',text:'Clicked'}]};
+  }}});
+  ok(safe?'confirmed unexecuted browser action gets one retry, then successful replay is refused':'uncertain browser action is never automatically replayed',()=>assert.equal(executions,safe?2:1));
+ }
  assert.equal((await api("/chat","POST",{background:true,message:"Unbound",requestId:randomUUID()})).status,400);checks++;
  const taught=await chat();
  const taughtResult=await api('/chat','POST',{conversationId:taught.id,message:'TEACH_FIXTURE: Use active listings only. Save this workflow and schedule it daily at 9 am.',model:'openai/fixture'});

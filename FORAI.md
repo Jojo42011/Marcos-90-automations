@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-12: Browser actions reuse recent observations, return focused/paginated evidence and model-visible screenshots, and report targeted recovery without replaying uncertain actions. Hosted tabs no longer expire on idle; tab selection and cookies checkpoint for restart restoration. Browser recovery and persistence fixtures cover these paths.
 - 2026-10-11: Reconciled documentation with master; removed obsolete handoff/planning documents, stale production assertions and branch-mirroring instructions. Updated account/task storage, Harvey capabilities, deployment and verification references. Documentation only; no runtime, data or workflow changes.
 - 2026-10-10: Polished account settings and dark surfaces; corrected signed-in CRM identity. Added compact crm_api field selection and per-owner dashboard totals, classified CRM GET receipts correctly, and fixed verified relay acknowledgements and negative-action constraints.
 - 2026-10-10: Added Carlos combined business/chat access, shared knowledge and MLS, per-account appearance settings and permission-scoped chat relays while retaining original owner data. See docs/team-access.md.
@@ -40,6 +41,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 - **Stubs:** integrations/amazon, integrations/newhomebuddy and integrations/brivity/index.ts throw; integrations/manychat/sendDM is a stub because ManyChat normally delivers webhook replies itself. Numbered modules 09–12 retain scaffold/no-op functions. The real Brivity lead client is integrations/brivity.ts.
 - **Transactions:** CSV and configured sheet synchronization exist. No native Brivity transaction API client is implemented. Standard deadline offsets are labeled placeholders in transactionsStore.ts.
 - **Harvey execution:** hosted browser control is not a local desktop. Account workers force HARVEY_EXEC_MODE=off. codeExec.ts's optional local mode is hardening, not an OS sandbox.
+- **Browser continuity:** laptop disconnect leaves the hosted session running. Explicit Close ends it; up to three live chat browsers per account remain supported. Fly/process restarts reload checkpointed URLs and selected tabs using retained profiles/cookies. Unsaved page memory, form state and expired website authentication cannot be guaranteed. Checkpoint warnings do not mean an action failed; uncertain actions are never automatically replayed. Visual coordinates require a recent screenshot, and arbitrary page code stays unavailable.
 - **Reliability:** receipts/read-backs are not independent proof of semantic correctness or complete pagination. Jobs use local process coordination and SQLite, not distributed exactly-once execution. Running actions can finish after cancellation; interrupted jobs require inspection.
 - **Ads:** local planning/reporting and an upstream proxy exist; do not imply real campaign creation or spend control.
 - **Voice:** VoxCPM requires a separate compatible GPU service; it is not started by the Node Docker image.

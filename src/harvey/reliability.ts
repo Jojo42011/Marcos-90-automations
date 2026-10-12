@@ -47,7 +47,7 @@ export function isObservation(name: string, input: any): boolean {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
   }
-  if (name === "computer") return input.action === "call" && /^(browser_snapshot|browser_take_screenshot|browser_tabs)$/.test(input.tool);
+  if (name === "computer") return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
   if (name === "plugin_request") return String(input.method || "GET").toUpperCase() === "GET";
   if (name === "business_call" && input.tool === "crm_api") return String(input.arguments?.method||"GET").toUpperCase()==="GET";
   if (name === "business_call" && input.tool === "crm_api_index") return true;
@@ -72,12 +72,14 @@ export class TurnVerification {
   private report?: Omit<Verification, "receipts" | "basis">;
   record(name: string, input: any, result: any): Receipt {
     this.report = undefined; // A new action invalidates the earlier completion claim.
-    let size = 0; try { size = JSON.stringify(result)?.length || 0; } catch { size = 12001; }
+    // Pixels are evidence payload, not text truncation. Never retain base64 in the receipt/source ledger.
+    const source = result && typeof result === "object" && result._image ? Object.fromEntries(Object.entries(result).filter(([key])=>key!=="_image")) : result;
+    let size = 0; try { size = JSON.stringify(source)?.length || 0; } catch { size = 12001; }
     const receipt: Receipt = { id: `e${this.receipts.length + 1}`, tool: name, at: new Date().toISOString(),
       outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
       observation: isObservation(name, input), discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated===true };
     this.receipts.push(receipt);
-    if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,result);
+    if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,source);
     return receipt;
   }
   verifyValues(input:any) {
