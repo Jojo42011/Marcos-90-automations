@@ -236,6 +236,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let toolRounds = 0;
     let completionRepairs = 0;
     let malformedRepairs = 0;
+    const videoAttempts = new Map();
     let hadToolOnly = false;
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
@@ -263,6 +264,13 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
      */
     const executeTool = async (name, input) => {
         opts.signal?.throwIfAborted();
+        if (opts.workRuntime && name === "edit_video") {
+            const file = String(input.file || "").replace(/\\/g, "/").split("/").pop() || "";
+            const count = (videoAttempts.get(file) || 0) + 1;
+            videoAttempts.set(file, count);
+            if (count > 2)
+                return { error: "VIDEO RECOVERY BUDGET REACHED", diagnostic: { code: "recovery_exhausted", message: "Two edit calls for this source already ran; automatic recovery is inside the tool.", detail: "Use inspect_video and the retained error. Do not vary arguments to retry the same failing source or claim an unverified codec limitation." } };
+        }
         const read = (0, reliability_js_1.isObservation)(name, input) || (0, reliability_js_1.isDiscovery)(name, input);
         const sig = signature(name, input) + (opts.workRuntime && read ? `:${observationRevision}` : "");
         const seen = (callCounts.get(sig) || 0) + 1;
@@ -288,7 +296,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 safeBrowserRetry.delete(sig);
                 if (name === "computer" && result?.recovery?.actionOutcome === "not_executed" && result?.recovery?.safeToRetry === true)
                     safeBrowserRetry.add(sig);
-                opts.onEvent?.({ type: "tool", name, status: "done" });
+                opts.onEvent?.({ type: "tool", name, status: result?.error ? "error" : "done" });
                 return result;
             }
             catch (error) {

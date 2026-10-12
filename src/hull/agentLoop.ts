@@ -391,6 +391,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let toolRounds = 0;
   let completionRepairs = 0;
   let malformedRepairs = 0;
+  const videoAttempts = new Map<string,number>();
   let hadToolOnly = false;
   /* How many times each identical call has been made this turn. */
   const callCounts = new Map<string, number>();
@@ -420,6 +421,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
    */
   const executeTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
     opts.signal?.throwIfAborted();
+    if(opts.workRuntime && name==="edit_video"){
+      const file=String(input.file||"").replace(/\\/g,"/").split("/").pop()||"";
+      const count=(videoAttempts.get(file)||0)+1;videoAttempts.set(file,count);
+      if(count>2)return {error:"VIDEO RECOVERY BUDGET REACHED",diagnostic:{code:"recovery_exhausted",message:"Two edit calls for this source already ran; automatic recovery is inside the tool.",detail:"Use inspect_video and the retained error. Do not vary arguments to retry the same failing source or claim an unverified codec limitation."}};
+    }
     const read = isObservation(name, input) || isDiscovery(name,input);
     const sig = signature(name, input) + (opts.workRuntime && read ? `:${observationRevision}` : "");
     const seen = (callCounts.get(sig) || 0) + 1;
@@ -442,7 +448,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       try { const result = await opts.workRuntime.execute(name, input);
         safeBrowserRetry.delete(sig);
         if(name === "computer" && (result as any)?.recovery?.actionOutcome === "not_executed" && (result as any)?.recovery?.safeToRetry === true)safeBrowserRetry.add(sig);
-        opts.onEvent?.({ type: "tool", name, status: "done" }); return result; }
+        opts.onEvent?.({ type: "tool", name, status: (result as any)?.error ? "error" : "done" }); return result; }
       catch (error) { const detail = error instanceof Error ? error.message : String(error); opts.onEvent?.({ type: "tool", name, status: "error", detail }); return { error: detail }; }
     }
 

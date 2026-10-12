@@ -17,7 +17,7 @@ export function stableCallKey(name: string, input: unknown): string {
   return createHash("sha256").update(name + ":" + JSON.stringify(canonical(input))).digest("hex");
 }
 export type VerificationStatus = "completed" | "blocked" | "needs_verification";
-export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; limitation?: string }
+export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; limitation?: string; diagnostic?: {code:string;message:string;detail:string} }
 export interface Verification { status: VerificationStatus; evidenceIds: string[]; checks: string[]; limitations: string[]; receipts: Receipt[]; basis: "agent_review_with_receipt_checks" }
 export const VERIFICATION_TOOL: Tool = {
   name: "report_verification", description: "Record task verification before final response. Receipt references are checked by the runtime. This records your review; it does not independently prove factual truth. No passwords or sensitive record contents. After a possible write, include a subsequent read-back observation. Mark partial/truncated results needs_verification.",
@@ -37,7 +37,7 @@ function resourceScope(name:string,input:any):string {
   if(name.startsWith("plugin_"))return stableCallKey("connection",input.connectionId);
   if(name==="COMPOSIO_MULTI_EXECUTE_TOOL")return stableCallKey("managed",[input.harvey_connection_scope,(input.tools||[]).map((t:any)=>String(t.tool_slug).split("_")[0]).sort()]);
   if(name==="business_call")return "business:"+String(input.tool||"").replace(/^(create|update|delete|get|list|search|find|read)_/,"").replace(/s$/,"");
-  if(name==="edit_video"||name==="workspace_files"||name==="workspace_download")return "files";
+  if(name==="inspect_video"||name==="edit_video"||name==="workspace_files"||name==="workspace_download")return "files";
   return name;
 }
 
@@ -52,7 +52,7 @@ export function isObservation(name: string, input: any): boolean {
   if (name === "business_call" && input.tool === "crm_api") return String(input.arguments?.method||"GET").toUpperCase()==="GET";
   if (name === "business_call" && input.tool === "crm_api_index") return true;
   if (name === "business_call") return /^(get_|list_|search_|find_|read_)/.test(input.tool || "");
-  if(name==="history_search")return true;
+  if(name==="history_search"||name==="inspect_video")return true;
   if(name==="agent_memory")return input.action==="search";
   if(name==="workflow")return ["list","get"].includes(input.action);
   if(name==="agent_team")return input.action==="status";
@@ -79,6 +79,7 @@ export class TurnVerification {
       outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
       observation: isObservation(name, input), discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated===true };
     if(result?.imageUnavailableToModel===true)receipt.limitation="The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
+    if(["edit_video","inspect_video"].includes(name) && result?.diagnostic)receipt.diagnostic={code:String(result.diagnostic.code||"").slice(0,80),message:String(result.diagnostic.message||"").slice(0,500),detail:String(result.diagnostic.detail||"").slice(0,1800)};
     this.receipts.push(receipt);
     if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,source);
     return receipt;
