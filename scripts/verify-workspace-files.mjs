@@ -42,3 +42,5 @@ assert.throws(()=>browserArguments(schema,{target:'e1',ref:'e2'}),/Conflicting/)
 assert.throws(()=>browserArguments(schema,{}),/Missing/);
 assert.deepEqual(browserArguments({properties:{fields:{items:schema}}},{fields:[{ref:'e12'}]}),{fields:[{target:'e12'}]});
 console.log('ok installed browser schema adapts legacy keys, rejects conflicts/missing targets and preserves form-field ordering');
+
+assert.deepEqual(browserArguments({properties:{scale:{default:"css"}},required:["scale"]},{}),{scale:"css"});

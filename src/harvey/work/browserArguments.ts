@@ -11,6 +11,11 @@ export function browserArguments(schema:any,input:any){
     }
   }
   if(Array.isArray(args.fields)&&props.fields?.items)args.fields=args.fields.map((f:any)=>browserArguments(props.fields.items,f));
-  for(const required of schema?.required||[])if(args[required]===undefined)throw new Error("Missing browser argument: "+required+". Use the attached installed schema.");
+  for(const required of schema?.required||[])if(args[required]===undefined){
+    // Zod's JSON schema can mark defaulted inputs required; honor the installed
+    // default instead of rejecting valid calls such as viewport screenshots.
+    if(props[required]?.default!==undefined)args[required]=props[required].default;
+    else throw new Error("Missing browser argument: "+required+". Use the attached installed schema.");
+  }
   return args;
 }
