@@ -71,6 +71,10 @@ try{
  r=await call('browser_click',{target:'button:has-text("Save record")'});assert(!r.error,txt(r));assert.equal(writes,1);
  await B.closeBrowsers();r=await call('browser_recover');assert(!r.error,txt(r));assert.equal(writes,1,'Recovery must not replay form submission');
  assert.match(txt(r),/Saved exactly once/);
+ const retainedPath=join(B.browserDirectory('alice','recovery'),'tabs.json'),retained=readFileSync(retainedPath,'utf8');
+ r=await call('browser_navigate',{url:'http://127.0.0.1:1/unreachable'});assert(r.error);
+ await B.closeBrowsers();assert.equal(readFileSync(retainedPath,'utf8'),retained,'Failed-page diagnostics must not overwrite the last retained tabs');
+ r=await call('browser_recover');assert(!r.error,txt(r));assert.match(txt(r),/Saved exactly once/);assert.equal(writes,1);
  console.log('ok recovery reloads saved tabs without repeating a completed submission');
  await B.closeBrowser('alice','recovery');assert.equal((await B.browserPreview('alice','recovery')).state,'closed');
  // Force a checkpoint publication failure after a successful navigation. It must not become an action failure.

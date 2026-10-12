@@ -40,9 +40,10 @@ async function call(s:Session,name:string,args:any={},timeout=15000,signal?:Abor
   return result;
 }
 function checked(r:any){if(r.isError)throw new Error(resultText(r).slice(0,2000));return r;}
-function remember(s:Session,r:any,full=false){
+function remember(s:Session,r:any,full=false,persistTabs=true){
   const raw=resultText(r);
   if(full || /### Snapshot/.test(raw))s.snapshot={id:randomUUID(),raw,at:Date.now()};
+  if(!persistTabs)return;
   const tabs=parseTabs(raw);
   if(tabs)s.tabs=tabs;
   else {const url=raw.match(/^- Page URL: (.+)$/m)?.[1];if(url && restorableUrl(url)){s.tabs ||= {urls:[],active:0,open:true,updatedAt:""};s.tabs.urls[s.tabs.active]=url;}}
@@ -117,7 +118,7 @@ async function checkpoint(s:Session,force=false){
 }
 function deferCheckpoint(s:Session){
   if(s.saveTimer||s.closing)return;
-  s.saveTimer=setTimeout(()=>{s.saveTimer=undefined;void observedAction(s,"session checkpoint",()=>checkpoint(s));},1500);s.saveTimer.unref();
+  s.saveTimer=setTimeout(()=>{s.saveTimer=undefined;if(!s.failed&&!s.closing)void observedAction(s,"session checkpoint",()=>checkpoint(s)).catch(()=>{});},1500);s.saveTimer.unref();
 }
 async function observedAction<T>(s:Session,name:string,fn:()=>Promise<T>):Promise<T>{
   if(s.closing)throw new Error("Browser is closing");
@@ -128,13 +129,13 @@ async function observedAction<T>(s:Session,name:string,fn:()=>Promise<T>):Promis
 async function closeSession(s:Session,explicit=false){
   s.closing=true;s.previewAbort?.abort();if(s.saveTimer)clearTimeout(s.saveTimer);
   await s.chain.catch(()=>{});await s.preview?.catch(()=>{});
-  try{await checkpoint(s,true);if(explicit)writeTabs(s.tabsPath,{urls:s.tabs?.urls||[],active:s.tabs?.active||0,open:false,updatedAt:new Date().toISOString()});}finally{await s.client.close();}
+  try{if(!s.failed)await checkpoint(s,true);if(explicit)writeTabs(s.tabsPath,{urls:s.tabs?.urls||[],active:s.tabs?.active||0,open:false,updatedAt:new Date().toISOString()});}finally{await s.client.close();}
 }
 export async function closeBrowser(owner:string,chat:string){const key=owner+":"+chat,pending=sessions.get(key);if(pending){const s=await pending.catch(()=>null);if(s)await closeSession(s,true);sessions.delete(key);}else{const path=tabsPath(owner,chat),saved=readTabs(path);if(saved)writeTabs(path,{...saved,open:false});}}
 export async function closeBrowsers(){await Promise.all([...sessions].map(async([key,pending])=>{try{const s=await pending.catch(()=>null);if(s)await closeSession(s);}finally{sessions.delete(key);}}));}
 // Closing a laptop only disconnects the UI. There is deliberately no idle tab eviction.
 // Periodically capture cookie changes and client-side tab navigation while the model is idle.
-const maintenance=setInterval(()=>{for(const pending of sessions.values())void pending.then(s=>{if(!s.busy&&!s.closing){s.dirty=true;void observedAction(s,"session checkpoint",()=>checkpoint(s));}}).catch(()=>{});},30000);maintenance.unref();
+const maintenance=setInterval(()=>{for(const pending of sessions.values())void pending.then(s=>{if(!s.busy&&!s.closing&&!s.failed){s.dirty=true;void observedAction(s,"session checkpoint",()=>checkpoint(s)).catch(()=>{});}}).catch(()=>{});},30000);maintenance.unref();
 export async function browserTools(owner:string,chat:string,name?:string){const tools=(await session(owner,chat)).tools;if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
 export async function browserMetrics(owner:string,chat:string){const s=await sessions.get(owner+":"+chat);return s?{...s.metrics}:undefined;}
 export async function browserPreview(owner:string,chat:string){
@@ -203,8 +204,10 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       // A batch may have changed earlier fields before a later target failed.
       if(!preflight&&name==="browser_fill_form"&&recovery.safeToRetry)recovery={kind:"partial_form",actionOutcome:"unknown",safeToRetry:false,guidance:"Some fields may already be filled. Inspect the fresh form and fill only the remaining fields; do not blindly replay the batch or submit."};
       let observation:any;
-      if(!signal?.aborted)try{const fresh=checked(await call(s,"browser_snapshot",{depth:6},8000));remember(s,fresh,true);observation=pageSlice(s);}catch{}
-      if(!preflight){s.dirty=true;deferCheckpoint(s);}
+      // A crashed browser can respawn as a blank page. Do not replace retained
+      // tabs with that diagnostic page before browser_recover can restore them.
+      if(!signal?.aborted)try{const fresh=checked(await call(s,"browser_snapshot",{depth:6},8000));remember(s,fresh,true,false);observation=pageSlice(s);}catch{}
+      if(!preflight)s.dirty=true;
       return {error:message,recovery,observation};
     }
   });

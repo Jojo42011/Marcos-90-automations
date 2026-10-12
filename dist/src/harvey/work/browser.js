@@ -66,10 +66,12 @@ async function call(s, name, args = {}, timeout = 15000, signal) {
 }
 function checked(r) { if (r.isError)
     throw new Error((0, browserState_js_1.resultText)(r).slice(0, 2000)); return r; }
-function remember(s, r, full = false) {
+function remember(s, r, full = false, persistTabs = true) {
     const raw = (0, browserState_js_1.resultText)(r);
     if (full || /### Snapshot/.test(raw))
         s.snapshot = { id: (0, crypto_1.randomUUID)(), raw, at: Date.now() };
+    if (!persistTabs)
+        return;
     const tabs = (0, browserState_js_1.parseTabs)(raw);
     if (tabs)
         s.tabs = tabs;
@@ -208,7 +210,8 @@ async function checkpoint(s, force = false) {
 function deferCheckpoint(s) {
     if (s.saveTimer || s.closing)
         return;
-    s.saveTimer = setTimeout(() => { s.saveTimer = undefined; void observedAction(s, "session checkpoint", () => checkpoint(s)); }, 1500);
+    s.saveTimer = setTimeout(() => { s.saveTimer = undefined; if (!s.failed && !s.closing)
+        void observedAction(s, "session checkpoint", () => checkpoint(s)).catch(() => { }); }, 1500);
     s.saveTimer.unref();
 }
 async function observedAction(s, name, fn) {
@@ -239,7 +242,8 @@ async function closeSession(s, explicit = false) {
     await s.chain.catch(() => { });
     await s.preview?.catch(() => { });
     try {
-        await checkpoint(s, true);
+        if (!s.failed)
+            await checkpoint(s, true);
         if (explicit)
             (0, browserState_js_1.writeTabs)(s.tabsPath, { urls: s.tabs?.urls || [], active: s.tabs?.active || 0, open: false, updatedAt: new Date().toISOString() });
     }
@@ -269,9 +273,9 @@ finally {
 // Closing a laptop only disconnects the UI. There is deliberately no idle tab eviction.
 // Periodically capture cookie changes and client-side tab navigation while the model is idle.
 const maintenance = setInterval(() => { for (const pending of sessions.values())
-    void pending.then(s => { if (!s.busy && !s.closing) {
+    void pending.then(s => { if (!s.busy && !s.closing && !s.failed) {
         s.dirty = true;
-        void observedAction(s, "session checkpoint", () => checkpoint(s));
+        void observedAction(s, "session checkpoint", () => checkpoint(s)).catch(() => { });
     } }).catch(() => { }); }, 30000);
 maintenance.unref();
 async function browserTools(owner, chat, name) { const tools = (await session(owner, chat)).tools; if (name) {
@@ -461,17 +465,17 @@ async function browserCall(owner, chat, name, args, signal) {
             if (!preflight && name === "browser_fill_form" && recovery.safeToRetry)
                 recovery = { kind: "partial_form", actionOutcome: "unknown", safeToRetry: false, guidance: "Some fields may already be filled. Inspect the fresh form and fill only the remaining fields; do not blindly replay the batch or submit." };
             let observation;
+            // A crashed browser can respawn as a blank page. Do not replace retained
+            // tabs with that diagnostic page before browser_recover can restore them.
             if (!signal?.aborted)
                 try {
                     const fresh = checked(await call(s, "browser_snapshot", { depth: 6 }, 8000));
-                    remember(s, fresh, true);
+                    remember(s, fresh, true, false);
                     observation = pageSlice(s);
                 }
                 catch { }
-            if (!preflight) {
+            if (!preflight)
                 s.dirty = true;
-                deferCheckpoint(s);
-            }
             return { error: message, recovery, observation };
         }
     });
