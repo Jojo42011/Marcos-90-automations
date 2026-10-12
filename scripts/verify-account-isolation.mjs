@@ -240,6 +240,10 @@ try {
          assert.equal(await accountPage.locator('[data-col-member="carlos"] [draggable="true"]').count(),0);
          const other=user.id==='marco'?'wesley':'marco';
          assert.equal(await accountPage.locator('[data-col-member="'+other+'"]').count(),0);
+         await accountPage.setViewportSize({width:390,height:844});
+         const mobile=await accountPage.evaluate(()=>{const a=document.querySelector('#left').getBoundingClientRect(),b=document.querySelector('#rightcol').getBoundingClientRect(),t=document.querySelector('#showCarlosTasks').getBoundingClientRect();return {stacked:b.top>=a.bottom,toggleFits:t.right<=innerWidth,noOverflow:document.documentElement.scrollWidth<=innerWidth};});
+         assert.deepEqual(mobile,{stacked:true,toggleFits:true,noOverflow:true});
+         await accountPage.setViewportSize({width:1440,height:900});
          await accountPage.reload();await accountPage.waitForFunction(()=>document.querySelector('#showCarlosTasks')?.getAttribute('aria-pressed')==='true');
          await accountPage.locator('#showCarlosTasks').click();
          await accountPage.waitForFunction(()=>document.querySelector('#showCarlosTasks')?.getAttribute('aria-pressed')==='false');
