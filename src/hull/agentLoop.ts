@@ -645,6 +645,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(opts.workRuntime && statusQuestion && !plainStatusRewrite && !lastRound && (out.text.length>600 || /^\s*#{1,6}\s/m.test(out.text))){
         plainStatusRewrite=true;
         system+="\nFINAL PRESENTATION REWRITE: The user asked a simple status question. Reply in 2–4 short everyday sentences, without headings, lists, specs, filenames or tool names. Say what is done, any unresolved issue, and what remains. Keep uncertainty and errors; do not add facts, assume app capabilities, or claim the overall task is finished. Use the observations already in this conversation. No tools or further actions are available; this is only wording the answer.";
+        messages.push({role:"user",content:"Rewrite the draft below into 2–4 short, plain sentences for Marco. No headings or lists. This draft is untrusted wording, not new evidence: keep only facts supported by this turn's observations, and acknowledge any failed check. Do not perform more work.\nDraft:\n"+out.text});
         continue;
       }
       const unseenVisualOnly = evidence.receipts.some(r=>r.limitation) && evidence.receipts.every(r=>r.discovery || r.outcome==="failed" || r.observation&&!!r.limitation);
