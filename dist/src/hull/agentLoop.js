@@ -239,6 +239,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
     let observationRevision = 0;
+    const safeBrowserRetry = new Set();
     /* Calls held by the gate. The turn still finishes; these did not run. */
     const heldApprovals = [];
     /* Spend accumulates across every step, because one turn can be sixteen calls
@@ -266,7 +267,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         const seen = (callCounts.get(sig) || 0) + 1;
         callCounts.set(sig, seen);
         const limit = opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
-        if (seen > limit) {
+        const knownNotExecuted = opts.workRuntime && name === "computer" && seen === 2 && safeBrowserRetry.has(sig);
+        if (seen > limit && !knownNotExecuted) {
             console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
             return {
                 error: "REPEATED CALL REFUSED",
@@ -279,6 +281,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             opts.onEvent?.({ type: "tool", name, status: "running" });
             try {
                 const result = await opts.workRuntime.execute(name, input);
+                safeBrowserRetry.delete(sig);
+                if (name === "computer" && result?.recovery?.actionOutcome === "not_executed" && result?.recovery?.safeToRetry === true)
+                    safeBrowserRetry.add(sig);
                 opts.onEvent?.({ type: "tool", name, status: "done" });
                 return result;
             }

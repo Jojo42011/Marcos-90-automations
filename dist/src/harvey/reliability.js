@@ -52,7 +52,7 @@ function isObservation(name, input) {
         return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
     }
     if (name === "computer")
-        return input.action === "call" && /^(browser_snapshot|browser_take_screenshot|browser_tabs)$/.test(input.tool);
+        return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
     if (name === "plugin_request")
         return String(input.method || "GET").toUpperCase() === "GET";
     if (name === "business_call" && input.tool === "crm_api")
@@ -90,9 +90,11 @@ class TurnVerification {
     report;
     record(name, input, result) {
         this.report = undefined; // A new action invalidates the earlier completion claim.
+        // Pixels are evidence payload, not text truncation. Never retain base64 in the receipt/source ledger.
+        const source = result && typeof result === "object" && result._image ? Object.fromEntries(Object.entries(result).filter(([key]) => key !== "_image")) : result;
         let size = 0;
         try {
-            size = JSON.stringify(result)?.length || 0;
+            size = JSON.stringify(source)?.length || 0;
         }
         catch {
             size = 12001;
@@ -102,7 +104,7 @@ class TurnVerification {
             observation: isObservation(name, input), discovery: isDiscovery(name, input), scope: resourceScope(name, input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated === true };
         this.receipts.push(receipt);
         if (receipt.outcome === "returned" && size <= 60000)
-            this.sources.set(receipt.id, result);
+            this.sources.set(receipt.id, source);
         return receipt;
     }
     verifyValues(input) {
