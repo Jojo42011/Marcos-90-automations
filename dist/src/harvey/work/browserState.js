@@ -48,7 +48,11 @@ function writeTabs(path, value) {
 }
 function resultText(result) { return (result?.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n"); }
 function parseTabs(raw) {
-    const rows = [...raw.matchAll(/^- (\d+):( \(current\))? \[.*\]\((.*)\)(?: \[crashed\])?$/gm)];
+    // Tab mutations can repeat the list in both Result and Open tabs sections.
+    const byIndex = new Map();
+    for (const row of raw.matchAll(/^- (\d+):( \(current\))? \[.*\]\((.*)\)(?: \[crashed\])?$/gm))
+        byIndex.set(Number(row[1]), row);
+    const rows = [...byIndex].sort(([a], [b]) => a - b).map(([, row]) => row);
     if (!rows.length)
         return;
     // Unsupported internal URLs are represented by a blank tab, never executed on restore.

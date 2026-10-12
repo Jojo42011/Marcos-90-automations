@@ -59,6 +59,7 @@ try{
  assert((await B.browserTools('alice','recovery','browser_click'))[0].inputSchema);
  console.log('ok iframe targets, model-visible pixels and restricted visual tools');
  await call('browser_tabs',{action:'new',url:base+'/second'});
+ assert.equal(JSON.parse(readFileSync(join(B.browserDirectory('alice','recovery'),'tabs.json'),'utf8')).urls.length,2,'Repeated MCP tab sections must not duplicate retained tabs');
  await call('browser_tabs',{action:'select',index:0});
  await B.closeBrowsers();
  r=await call('browser_snapshot',{target:'h1'});assert.match(txt(r),/Recovery fixture/);
