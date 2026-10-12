@@ -11103,7 +11103,8 @@ const COMMAND_STATUS_SORT = {
 /** Carlos command-center task board (db.json). */
 app.get("/api/tasks", (req, res) => {
     (0, db_js_1.seedCommandTasksIfEmpty)();
-    let tasks = (0, db_js_1.getCommandTasks)();
+    // Opt-in read access only; mutation and background-worker scopes stay unchanged.
+    let tasks = (0, db_js_1.getCommandTasks)(req.query.includeCarlos === "true");
     const column = typeof req.query.column === "string" ? req.query.column : undefined;
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const assignedTo = typeof req.query.assignedTo === "string" ? req.query.assignedTo : undefined;
