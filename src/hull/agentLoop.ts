@@ -13,6 +13,7 @@ import {
   BudgetRefusedError,
   complete,
   getModelInfo,
+  resolveModel,
   ModelLayerError,
   providerStatus,
   type CompletionOutcome,
@@ -192,7 +193,7 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Owner-scoped work surface. Its executor enforces connection grants. */
   workDelegated?: boolean;
-  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
+  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; loginEmailAvailable?: boolean; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
   message: string;
   history?: MessageParam[];
   /** Timestamped turns for the continuity layer (conversation state, deictic
@@ -407,6 +408,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let cachedTokens = 0;
   let lastPlan: ContextPlan | undefined;
   let lastModelUsed = model;
+  let effectiveJob = job;
+  let recoveryModel: string | undefined;
+  let formatFallbackUsed = false;
+  let emailRecoveryPrompted = false;
   let substituted: { asked: string; ran: string } | undefined;
 
   const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
@@ -489,7 +494,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     let result = await executeTool(name, input);
     if (!opts.workRuntime) return result;
-    if(result && typeof result==="object" && (result as any)._image && getModelInfo(lastModelUsed)?.supportsVision===false){
+    if(result && typeof result==="object" && (result as any)._image && !opts.modelOverride){
+      effectiveJob="vision";
+      recoveryModel=undefined;
+    }
+    if(result && typeof result==="object" && (result as any)._image && getModelInfo(lastModelUsed)?.supportsVision===false && opts.modelOverride){
       const {_image,...rest}=result as any;
       result={...rest,imageUnavailableToModel:true,imageWarning:"Screenshot captured, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model."};
     }
@@ -509,8 +518,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
        answer assembled from everything gathered, instead of the dead-end
        "hit the tool loop limit" that discarded the whole turn's work. */
     const lastRound = step === stepBudget - 1;
-    const stepTools = lastRound ? undefined : activeTools;
-    const stepSystem = lastRound && toolRounds > 0
+    const summaryRound = opts.workRuntime ? step >= stepBudget - 3 : lastRound;
+    const stepTools = summaryRound ? undefined : activeTools;
+    const stepSystem = summaryRound && toolRounds > 0
       ? system +
         "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
       : system;
@@ -518,8 +528,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let out: CompletionOutcome;
     try {
       out = await complete({
-        job,
-        modelOverride: opts.modelOverride,
+        job: effectiveJob,
+        modelOverride: opts.modelOverride || recoveryModel,
         system: stepSystem,
         messages,
         tools: stepTools,
@@ -560,7 +570,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       }
       console.error("[agentLoop] model call failed:", detail);
       return {
-        speech: "The selected model did not respond. Any completed actions remain saved. You can retry or choose another model for this chat.",
+        speech: /\b402\b|credits|afford/i.test(detail) ? "I couldn’t continue because the AI provider’s available credit limit won’t cover this request. Your files and completed work are still saved." : "I couldn’t get a response from the AI service. Your files and completed work are still saved; I haven’t restarted the task.",
         toolRounds,
         model,
         modelUsed: lastModelUsed,
@@ -598,9 +608,18 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
         continue;
       }
-      return {speech:"The model could not produce a usable next step. Completed actions and files remain saved. Continue this chat to inspect the current state before retrying the unfinished step.",modelError:"Empty or malformed model response after bounded repair",verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+      if(!opts.modelOverride && !formatFallbackUsed && !lastRound){
+        const alternate=resolveModel(effectiveJob,{exclude:[lastModelUsed]}).model;
+        if(alternate!==lastModelUsed){recoveryModel=alternate;formatFallbackUsed=true;malformedRepairs=0;continue;}
+      }
+      return {speech:"I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }
     if (!out.toolUses.length) {
+      if(opts.workRuntime?.loginEmailAvailable && !emailRecoveryPrompted && !summaryRound && /(?:share|provide|send me|check your|need you|need the).{0,100}(?:code|inbox)|(?:code).{0,60}(?:from you|share it)/is.test(out.text)){
+        emailRecoveryPrompted=true;
+        system+="\nAn authorized connected mailbox is available. Before asking the user to supply this sign-in code, discover and search the matching recent login email yourself, if the login is authorized. Match site, recipient and current request; do not use unrelated codes or print/save them. If access actually fails, explain that observed reason. Do not bypass CAPTCHA/device approval. Keep the existing login page; do not restart login.";
+        continue;
+      }
       // A missing review is our bookkeeping problem, never a request for the
       // user to re-authorize a login. Give the agent a bounded chance to act or
       // inspect its results before returning; ordinary conversation needs none.
@@ -610,7 +629,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
       if (opts.workRuntime && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
-        messages.push({role:"assistant",content:out.text || "I need to continue the requested work."});
+        // Do not append an unanswered assistant turn: some providers interpret
+        // that as unsupported prefill. The last real user/tool-result stays last.
         // Runtime bookkeeping belongs in system context, never as a fabricated user turn.
         system += "\n\n" + (evidence.receipts.length
           ? "Runtime verification reminder: inspect the actual receipts returned this turn. For a read, report_verification may cite its complete observation directly; no extra read-back is required. Retrieve smaller results when truncated (crm_api supports select for top-level fields). For writes, perform the necessary read-back without repeating the write. Then report the verified outcome or explain the observed blocker."

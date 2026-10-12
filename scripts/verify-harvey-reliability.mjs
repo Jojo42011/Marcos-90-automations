@@ -13,7 +13,13 @@ Object.assign(process.env,{TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work')
 const originalFetch=global.fetch;
 global.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url||String(url));assert(['127.0.0.1','localhost'].includes(u.hostname),'External request blocked: '+u.hostname);return originalFetch(url,...args);};
 const root=resolve('dist/src'),store=require(join(root,'harvey/work/store.js')),rel=require(join(root,'harvey/reliability.js'));
+const progress=require(join(root,'harvey/work/progress.js'));
 let checks=0;const ok=(name,fn)=>{fn();checks++;console.log('ok',name);};
+ok('automatic resume retains media across browser reads without secrets or cross-owner leakage',()=>{
+ progress.recordProgress('progress-alice','chat','edit_video',{file:'original.mov'},{file:'export.mp4',source:'original.mov',verified:true,frames:414,durationSeconds:13.8});
+ for(let i=0;i<20;i++)progress.recordProgress('progress-alice','chat','computer',{action:'call',tool:'browser_type',arguments:{text:'private-password'}},{content:[{type:'text',text:'verification code 123456'}]});
+ const p=progress.readProgress('progress-alice','chat');assert.equal(p.events.length,9);assert.equal(p.events[0].file,'export.mp4');assert.equal(p.events[0].verified,true);assert(!JSON.stringify(p).includes('private-password'));assert(!JSON.stringify(p).includes('123456'));assert.equal(progress.readProgress('progress-bob','chat').events.length,0);
+});
 ok('nested argument hashing preserves IDs and ignores key order',()=>{assert.equal(rel.stableCallKey('x',{a:{b:1,c:2}}),rel.stableCallKey('x',{a:{c:2,b:1}}));assert.notEqual(rel.stableCallKey('x',{arguments:{id:'one'}}),rel.stableCallKey('x',{arguments:{id:'two'}}));});
 const proof=new rel.TurnVerification();
 proof.record('business_call',{tool:'get_listing'},{listing:{id:'fixture-1',address:'100 Fixture Street',status:'active'}});
@@ -49,7 +55,17 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  const toolMessages=b.messages.filter(m=>m.role==='tool');const n=toolMessages.length;
  let response={role:'assistant',content:'A conversational fixture answer.'};
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
- if(user.includes('VIDEO_RECOVERY_BUDGET')){
+ if(JSON.stringify(b.messages).includes('AUTO_BROWSER_VISION_FIXTURE')){
+   if(n===1){assert.notEqual(b.model,'inception/mercury-2.5');assert(JSON.stringify(b.messages).includes('image_url'));}
+   response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):{role:'assistant',content:'The visual step is done.'};
+ }
+ else if(user.includes('AUTO_FORMAT_RECOVERY_FIXTURE')){
+   response=b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'Recovered without replaying the task.'};
+ }
+ else if(user.includes('LOGIN_EMAIL_RECOVERY_FIXTURE')){
+   response=n?{role:'assistant',content:'I checked the available mail connection.'}:JSON.stringify(b.messages).includes('Before asking the user to supply this sign-in code')?tc('COMPOSIO_SEARCH_TOOLS',{queries:[{use_case:'Find the current sign-in email'}]}):{role:'assistant',content:'Please share the verification code from your inbox.'};
+ }
+ else if(user.includes('VIDEO_RECOVERY_BUDGET')){
    response=n<5?tc('edit_video',{file:'original.mov',durationSeconds:15-n}):{role:'assistant',content:'The diagnostic is retained; no more export attempts were made.'};
  }
  else if(user.includes('MALFORMED_REPLY_FIXTURE')){
@@ -131,6 +147,19 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ const oldAgent=process.env.HARVEY_MODEL_AGENT;
+ process.env.HARVEY_MODEL_AGENT='inception/mercury-2.5';
+ let autoVisualExecutions=0;
+ const autoVisual=await runAgentLoop({message:'AUTO_BROWSER_VISION_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_n,i)=>{autoVisualExecutions++;return i.tool==='browser_take_screenshot'?{_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]}:{ok:true};}}});
+ ok('Auto hands actual screenshot pixels to a vision model before coordinate action',()=>{assert.equal(autoVisualExecutions,2);assert.notEqual(autoVisual.modelUsed,'inception/mercury-2.5');});
+ const autoFormat=await runAgentLoop({message:'AUTO_FORMAT_RECOVERY_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[],execute:async()=>{throw Error('No action expected');}}});
+ ok('Auto changes model once after malformed replies without replaying any action',()=>{assert.match(autoFormat.speech,/Recovered/);assert(!autoFormat.modelError);});
+ if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
+ for(const available of [true,false]){
+   let mailDiscovery=0;
+   await runAgentLoop({message:'LOGIN_EMAIL_RECOVERY_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',loginEmailAvailable:available,tools:[{name:'COMPOSIO_SEARCH_TOOLS',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{mailDiscovery++;return {tools:[]};}}});
+   ok('email recovery respects authorized mailbox availability '+available,()=>assert.equal(mailDiscovery,available?1:0));
+ }
  let editCalls=0;
  const videoResult=await runAgentLoop({message:'VIDEO_RECOVERY_BUDGET',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'edit_video',description:'Fixture',input_schema:{type:'object',properties:{}}}],context:'Fixture',execute:async()=>{editCalls++;return {error:'Fixture failure',diagnostic:{code:'unsupported_track',message:'Unsupported alternate audio',detail:'apple_apac'}};}}});
  ok('varying edit arguments cannot bypass per-source recovery budget and diagnostics survive',()=>{assert.equal(editCalls,2);assert(videoResult.verification.receipts.some(r=>r.diagnostic?.detail==='apple_apac'));});
