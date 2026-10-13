@@ -76,36 +76,24 @@ export function run(command: string, args: string[], cwd: string, timeout = 1200
             resolve(output); });
     });
 }
-/** Local whisper.cpp, following Victoria's earlier implementation. No paid speech API. */
-export async function transcribeVideo(video: Video, deps = { request: zernioRequest, download: downloadMedia, execute: run }): Promise<string> {
+/** Victoria's URL downloader plus local Whisper. No paid download or speech API. */
+export async function transcribeVideo(video: Video, deps = { execute: run, download: async (v: Video, dir: string, execute: typeof run) => (await import('./downloader.js')).downloadVideo(v, dir, execute) }): Promise<string> {
     const model = process.env.VIDEO_WHISPER_MODEL;
-    if (!model)
-        throw new Error('VIDEO_WHISPER_MODEL must point to an installed whisper.cpp model');
+    if (!model) throw new Error('VIDEO_WHISPER_MODEL must point to an installed whisper.cpp model');
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'property-video-'));
     try {
-        const result = await deps.request('/tools/tiktok/download?url=' + encodeURIComponent(video.url));
-        if (typeof result.downloadUrl !== 'string')
-            throw new Error('Zernio did not return downloadable media');
-        const media = path.join(dir, 'source.mp4');
-        const bytes = await deps.download(result.downloadUrl);
-        if (!bytes.subarray(0, 64).includes(Buffer.from('ftyp'))) throw new Error('Expected an MP4 video');
-        await fs.writeFile(media, bytes);
-        const probe = JSON.parse(await deps.execute('ffprobe', ['-v', 'error', '-f', 'mov', '-protocol_whitelist', 'file,pipe', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', media], dir));
+        const {file: media, duration: expected} = await deps.download(video, dir, deps.execute);
+        const demuxer = ({'.mp4':'mov','.m4a':'mov','.mp3':'mp3','.webm':'matroska'} as Record<string,string>)[path.extname(media)];
+        if (!demuxer) throw Error('Unsupported media format');
+        const probe = JSON.parse(await deps.execute('ffprobe', ['-v','error','-f',demuxer,'-protocol_whitelist','file,pipe','-show_entries','format=duration:stream=codec_type','-of','json',media], dir));
         const duration = Number(probe.format?.duration);
-        if (!probe.streams?.some((s: any) => s.codec_type === 'audio') || !Number.isFinite(duration) || duration <= 0 || duration > 1200)
-            throw new Error('Expected an audio/video clip up to 20 minutes');
+        if (!probe.streams?.some((s: any) => s.codec_type === 'audio') || !Number.isFinite(duration) || duration <= 0 || duration > 1200 || !Number.isFinite(expected) || expected <= 0 || Math.abs(duration-expected) > Math.max(2,expected*0.03)) throw Error('Audio coverage incomplete or unsupported duration');
         const audio = path.join(dir, 'audio.wav');
-        await deps.execute('ffmpeg', ['-nostdin', '-y', '-v', 'error', '-f', 'mov', '-protocol_whitelist', 'file,pipe', '-i', media, '-t', '1200', '-map', '0:a:0', '-vn', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', audio], dir);
-        const size = (await fs.stat(audio)).size;
-        if (Math.abs(size / 32000 - duration) > Math.max(2, duration * 0.03))
-            throw new Error('Audio coverage incomplete');
-        await deps.execute(process.env.VIDEO_WHISPER_BIN || 'whisper-cli', ['-m', model, '-f', audio, '-l', 'auto', '-t', '1', '-otxt', '-of', path.join(dir, 'transcript'), '-np'], dir, 900000);
-        const text = (await fs.readFile(path.join(dir, 'transcript.txt'), 'utf8')).trim();
-        if (text.length < 10 || text.length > 60000)
-            throw new Error('No usable complete speech transcript');
+        await deps.execute('ffmpeg', ['-nostdin','-y','-v','error','-f',demuxer,'-protocol_whitelist','file,pipe','-i',media,'-t','1200','-map','0:a:0','-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',audio], dir);
+        if (Math.abs((await fs.stat(audio)).size/32000-duration) > Math.max(2,duration*0.03)) throw Error('Audio coverage incomplete');
+        await deps.execute(process.env.VIDEO_WHISPER_BIN || 'whisper-cli', ['-m',model,'-f',audio,'-l','auto','-t','1','-otxt','-of',path.join(dir,'transcript'),'-np'],dir,900000);
+        const text = (await fs.readFile(path.join(dir,'transcript.txt'),'utf8')).trim();
+        if (text.length < 10 || text.length > 60000) throw Error('No usable complete speech transcript');
         return text;
-    }
-    finally {
-        await fs.rm(dir, { recursive: true, force: true });
-    }
+    } finally { await fs.rm(dir,{recursive:true,force:true}); }
 }

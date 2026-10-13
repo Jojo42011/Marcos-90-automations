@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -98,34 +131,29 @@ function run(command, args, cwd, timeout = 120000) {
         });
     });
 }
-/** Local whisper.cpp, following Victoria's earlier implementation. No paid speech API. */
-async function transcribeVideo(video, deps = { request: zernioRequest, download: downloadMedia, execute: run }) {
+/** Victoria's URL downloader plus local Whisper. No paid download or speech API. */
+async function transcribeVideo(video, deps = { execute: run, download: async (v, dir, execute) => (await Promise.resolve().then(() => __importStar(require('./downloader.js')))).downloadVideo(v, dir, execute) }) {
     const model = process.env.VIDEO_WHISPER_MODEL;
     if (!model)
         throw new Error('VIDEO_WHISPER_MODEL must point to an installed whisper.cpp model');
     const dir = await promises_2.default.mkdtemp(node_path_1.default.join(node_os_1.default.tmpdir(), 'property-video-'));
     try {
-        const result = await deps.request('/tools/tiktok/download?url=' + encodeURIComponent(video.url));
-        if (typeof result.downloadUrl !== 'string')
-            throw new Error('Zernio did not return downloadable media');
-        const media = node_path_1.default.join(dir, 'source.mp4');
-        const bytes = await deps.download(result.downloadUrl);
-        if (!bytes.subarray(0, 64).includes(Buffer.from('ftyp')))
-            throw new Error('Expected an MP4 video');
-        await promises_2.default.writeFile(media, bytes);
-        const probe = JSON.parse(await deps.execute('ffprobe', ['-v', 'error', '-f', 'mov', '-protocol_whitelist', 'file,pipe', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', media], dir));
+        const { file: media, duration: expected } = await deps.download(video, dir, deps.execute);
+        const demuxer = { '.mp4': 'mov', '.m4a': 'mov', '.mp3': 'mp3', '.webm': 'matroska' }[node_path_1.default.extname(media)];
+        if (!demuxer)
+            throw Error('Unsupported media format');
+        const probe = JSON.parse(await deps.execute('ffprobe', ['-v', 'error', '-f', demuxer, '-protocol_whitelist', 'file,pipe', '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', media], dir));
         const duration = Number(probe.format?.duration);
-        if (!probe.streams?.some((s) => s.codec_type === 'audio') || !Number.isFinite(duration) || duration <= 0 || duration > 1200)
-            throw new Error('Expected an audio/video clip up to 20 minutes');
+        if (!probe.streams?.some((s) => s.codec_type === 'audio') || !Number.isFinite(duration) || duration <= 0 || duration > 1200 || !Number.isFinite(expected) || expected <= 0 || Math.abs(duration - expected) > Math.max(2, expected * 0.03))
+            throw Error('Audio coverage incomplete or unsupported duration');
         const audio = node_path_1.default.join(dir, 'audio.wav');
-        await deps.execute('ffmpeg', ['-nostdin', '-y', '-v', 'error', '-f', 'mov', '-protocol_whitelist', 'file,pipe', '-i', media, '-t', '1200', '-map', '0:a:0', '-vn', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', audio], dir);
-        const size = (await promises_2.default.stat(audio)).size;
-        if (Math.abs(size / 32000 - duration) > Math.max(2, duration * 0.03))
-            throw new Error('Audio coverage incomplete');
+        await deps.execute('ffmpeg', ['-nostdin', '-y', '-v', 'error', '-f', demuxer, '-protocol_whitelist', 'file,pipe', '-i', media, '-t', '1200', '-map', '0:a:0', '-vn', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', audio], dir);
+        if (Math.abs((await promises_2.default.stat(audio)).size / 32000 - duration) > Math.max(2, duration * 0.03))
+            throw Error('Audio coverage incomplete');
         await deps.execute(process.env.VIDEO_WHISPER_BIN || 'whisper-cli', ['-m', model, '-f', audio, '-l', 'auto', '-t', '1', '-otxt', '-of', node_path_1.default.join(dir, 'transcript'), '-np'], dir, 900000);
         const text = (await promises_2.default.readFile(node_path_1.default.join(dir, 'transcript.txt'), 'utf8')).trim();
         if (text.length < 10 || text.length > 60000)
-            throw new Error('No usable complete speech transcript');
+            throw Error('No usable complete speech transcript');
         return text;
     }
     finally {

@@ -31,7 +31,26 @@ function validateNotes(value, video) {
     for (const k of n.keywords)
         if (typeof k !== "string" || normalize(k).length < 3 || k.length > 50 || generic.has(normalize(k)))
             throw new Error("Use specific property keywords");
-    return { facts: n.facts.map(f => ({ field: f.field, value: f.value.trim(), quote: f.quote, source: f.source })), keywords: [...new Set(n.keywords.map(normalize))] };
+    if (n.warnings !== undefined && (!Array.isArray(n.warnings) || n.warnings.length > 40 || n.warnings.some(w => typeof w !== 'string' || w.length > 500)))
+        throw Error('Invalid review warnings');
+    if (n.conflicts !== undefined) {
+        if (!Array.isArray(n.conflicts) || n.conflicts.length > exports.FIELDS.length)
+            throw Error('Invalid review conflicts');
+        const fields = new Set();
+        for (const c of n.conflicts) {
+            if (!c || !exports.FIELDS.includes(c.field) || fields.has(c.field) || typeof c.question !== 'string' || c.question.length > 500 || !Array.isArray(c.candidates) || c.candidates.length < 2 || c.candidates.length > 8)
+                throw Error('Invalid review conflict');
+            fields.add(c.field);
+            for (const fact of c.candidates) {
+                if (fact.field !== c.field)
+                    throw Error('Conflict field mismatch');
+                validateNotes({ facts: [fact], keywords: [] }, video);
+            }
+            if (n.facts.some(f => f.field === c.field))
+                throw Error('Conflicting facts must be held for review');
+        }
+    }
+    return { ...(n.warnings !== undefined ? { warnings: n.warnings } : {}), ...(n.conflicts !== undefined ? { conflicts: n.conflicts } : {}), facts: n.facts.map(f => ({ field: f.field, value: f.value.trim(), quote: f.quote, source: f.source })), keywords: [...new Set(n.keywords.map(normalize))] };
 }
 function postId(url) {
     try {
@@ -58,19 +77,36 @@ class VideoStore {
       CREATE TABLE IF NOT EXISTS video_audit (id INTEGER PRIMARY KEY, account TEXT, post TEXT, revision TEXT, action TEXT, at INTEGER);
       CREATE TABLE IF NOT EXISTS video_context (account TEXT, person TEXT, post TEXT, at INTEGER, PRIMARY KEY(account,person));
       CREATE TABLE IF NOT EXISTS video_comments (account TEXT, person TEXT, post TEXT, at INTEGER, PRIMARY KEY(account,person,post));`);
+        this.migrateReviewColumns();
+    }
+    migrateReviewColumns() {
+        const columns = this.db.prepare('PRAGMA table_info(videos)').all();
+        for (const name of ['conflicts', 'decisions', 'warnings'])
+            if (!columns.some(c => c.name === name))
+                this.db.exec(`ALTER TABLE videos ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`);
+        const audit = this.db.prepare('PRAGMA table_info(video_audit)').all();
+        if (!audit.some(c => c.name === 'detail'))
+            this.db.exec("ALTER TABLE video_audit ADD COLUMN detail TEXT");
+    }
+    summary(account) {
+        return Object.fromEntries(this.db.prepare('SELECT state,count(*) count FROM videos WHERE account=? GROUP BY state').all(account).map(r => [r.state, r.count]));
     }
     get(account, post) { return this.db.prepare("SELECT * FROM videos WHERE account=? AND post=?").get(account, post); }
     list(account, offset = 0) { return this.db.prepare("SELECT * FROM videos WHERE account=? ORDER BY published DESC,post DESC LIMIT 50 OFFSET ?").all(account, offset); }
     ingest(v) {
         if (!v.account || !/^\d+$/.test(v.post) || postId(v.url) !== v.post || v.caption.length > 16000 || !Number.isFinite(Date.parse(v.published)))
             throw new Error("Invalid video metadata");
+        const canonical = new URL(v.url);
+        canonical.search = '';
+        canonical.hash = '';
+        v = { ...v, url: canonical.href, published: new Date(v.published).toISOString() };
         const revision = (0, node_crypto_1.createHash)("sha256").update(JSON.stringify([v.url, v.caption, v.published])).digest("hex");
         const old = this.get(v.account, v.post);
         if (old?.source_hash === revision)
             return false;
         this.db.prepare(`INSERT INTO videos(account,post,url,caption,published,revision,source_hash) VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(account,post) DO UPDATE SET url=excluded.url,caption=excluded.caption,published=excluded.published,revision=excluded.revision,source_hash=excluded.source_hash,
-      state='queued',transcript='',notes='{}',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, (0, node_crypto_1.randomUUID)(), revision);
+      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, (0, node_crypto_1.randomUUID)(), revision);
         return true;
     }
     claim(account, now = Date.now()) {
@@ -84,29 +120,64 @@ class VideoStore {
             return { ...v, lease, attempts: v.attempts + 1 };
         }).immediate();
     }
+    saveTranscript(v, transcript) {
+        if (!transcript.trim() || transcript.length > 60000)
+            throw Error('Transcript missing or too large');
+        this.db.prepare("UPDATE videos SET transcript=? WHERE account=? AND post=? AND lease=? AND revision=?").run(transcript, v.account, v.post, v.lease, v.revision);
+    }
     complete(v, transcript, notes) {
         if (!transcript.trim() || transcript.length > 60000)
-            throw new Error("Transcript missing or too large");
-        validateNotes(notes, { ...v, transcript });
-        this.db.prepare("UPDATE videos SET state='needs_review',transcript=?,notes=?,revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?").run(transcript, JSON.stringify(notes), (0, node_crypto_1.randomUUID)(), v.account, v.post, v.lease, v.revision);
+            throw Error('Transcript missing or too large');
+        const checked = validateNotes(notes, { ...v, transcript });
+        const conflicts = checked.conflicts || [];
+        this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
+            .run(conflicts.length || checked.warnings?.length ? 'needs_confirmation' : 'needs_review', transcript, JSON.stringify({ facts: checked.facts, keywords: checked.keywords }), JSON.stringify(conflicts), JSON.stringify(checked.warnings || []), (0, node_crypto_1.randomUUID)(), v.account, v.post, v.lease, v.revision);
     }
     fail(v, stage = 'transcription') {
         this.db.prepare("UPDATE videos SET state=?,next_attempt=?,error=?,lease=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
-            .run(v.attempts >= 3 ? 'failed' : 'queued', Date.now() + v.attempts * 300000, stage === 'transcription' ? 'Transcription failed: check Zernio Tools access, video availability and local media tools.' : 'Fact extraction failed: check model access or review source ambiguity.', v.account, v.post, v.lease, v.revision);
+            .run(v.attempts >= 3 ? 'failed' : 'queued', Date.now() + v.attempts * 300000, stage === 'transcription' ? 'Transcription failed: check public video access, duration and installed media tools.' : 'Fact extraction failed validation or model access. Transcript retained for retry; no facts approved.', v.account, v.post, v.lease, v.revision);
     }
-    review(account, post, revision, action, notes) {
+    review(account, post, revision, action, notes, resolutions, acknowledgeWarnings = false) {
         return this.db.transaction(() => {
             const v = this.get(account, post);
             if (!v || v.revision !== revision)
-                throw new Error("Video changed; reload before reviewing");
-            if (action === 'approve' && (!['needs_review', 'ready'].includes(v.state) || !v.transcript))
-                throw new Error("Transcript is not ready for approval");
-            const checked = action === 'approve' ? validateNotes(notes ?? JSON.parse(v.notes), v) : null;
-            if (checked && !checked.facts.length)
-                throw new Error("Approve at least one supported property fact");
-            this.db.prepare("UPDATE videos SET state=?,notes=?,revision=?,lease=NULL,attempts=0,next_attempt=0 WHERE account=? AND post=?")
-                .run(action === 'approve' ? 'ready' : action === 'disable' ? 'disabled' : 'queued', checked ? JSON.stringify(checked) : v.notes, (0, node_crypto_1.randomUUID)(), account, post);
-            this.db.prepare("INSERT INTO video_audit(account,post,revision,action,at) VALUES(?,?,?,?,?)").run(account, post, revision, action, Date.now());
+                throw Error('Video changed; reload before reviewing');
+            if (action === 'approve' && (!['needs_review', 'needs_confirmation', 'ready'].includes(v.state) || !v.transcript))
+                throw Error('Transcript is not ready for approval');
+            let checked = null;
+            let decisions = [];
+            if (action === 'approve') {
+                if (JSON.parse(v.warnings).length && acknowledgeWarnings !== true)
+                    throw Error('Review and acknowledge the omitted extraction claims before approval');
+                const conflicts = JSON.parse(v.conflicts);
+                const proposed = (notes ?? JSON.parse(v.notes));
+                if (!proposed || !Array.isArray(proposed.facts))
+                    throw Error('Invalid property notes');
+                if (conflicts.length) {
+                    if (!Array.isArray(resolutions) || resolutions.length !== conflicts.length || new Set(resolutions.map(r => r.field)).size !== conflicts.length)
+                        throw Error('Resolve every source disagreement before approval');
+                    const chosen = [];
+                    for (const conflict of conflicts) {
+                        const answer = resolutions.find(r => r.field === conflict.field);
+                        if (!answer || typeof answer.reason !== 'string' || answer.reason.trim().length < 3 || answer.reason.length > 500)
+                            throw Error('Explain each source disagreement decision');
+                        if (answer.candidate !== null) {
+                            if (!Number.isInteger(answer.candidate) || answer.candidate < 0 || answer.candidate >= conflict.candidates.length)
+                                throw Error('Choose a displayed source value or omit it');
+                            chosen.push(conflict.candidates[answer.candidate]);
+                        }
+                        decisions.push({ field: conflict.field, candidate: answer.candidate, reason: answer.reason.trim() });
+                    }
+                    checked = validateNotes({ facts: [...proposed.facts.filter(f => !conflicts.some(c => c.field === f.field)), ...chosen], keywords: proposed.keywords }, v);
+                }
+                else
+                    checked = validateNotes({ facts: proposed.facts, keywords: proposed.keywords }, v);
+                if (!checked.facts.length)
+                    throw Error('Approve at least one supported property fact');
+            }
+            this.db.prepare('UPDATE videos SET state=?,notes=?,decisions=?,revision=?,lease=NULL,attempts=0,next_attempt=0 WHERE account=? AND post=?')
+                .run(action === 'approve' ? 'ready' : action === 'disable' ? 'disabled' : 'queued', checked ? JSON.stringify(checked) : v.notes, action === 'approve' ? JSON.stringify(decisions) : v.decisions, (0, node_crypto_1.randomUUID)(), account, post);
+            this.db.prepare('INSERT INTO video_audit(account,post,revision,action,at,detail) VALUES(?,?,?,?,?,?)').run(account, post, revision, action, Date.now(), JSON.stringify({ decisions, acknowledgedWarnings: acknowledgeWarnings === true }));
             return this.get(account, post);
         }).immediate();
     }
@@ -124,7 +195,7 @@ class VideoStore {
             reason = 'link';
         }
         else {
-            const rows = this.db.prepare("SELECT post,notes FROM videos WHERE account=? AND state='ready'").all(account);
+            const rows = this.db.prepare("SELECT post,notes FROM videos WHERE account=? AND state IN ('ready','needs_review','needs_confirmation')").all(account);
             const words = ` ${normalize(message)} `;
             candidates = rows.filter(v => JSON.parse(v.notes).keywords.some(k => words.includes(` ${normalize(k)} `))).map(v => v.post);
             if (candidates.length)

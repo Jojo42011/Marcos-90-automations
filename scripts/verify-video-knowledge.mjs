@@ -8,7 +8,7 @@ const root=existsSync('dist/src/videoKnowledge')?'dist/src/videoKnowledge':'dist
 const load=name=>import(pathToFileURL(path.resolve(root,name+'.js')).href);
 const {VideoStore,validateNotes,postId}=await load('store');
 const {videoReply,videoAdmin,videoStore,closeVideoStore}=await load('index');
-const {processVideo,syncVideos}=await load('worker');
+const {processVideo,syncVideos,parseExtractedNotes}=await load('worker');
 const {publicIpv4,downloadMedia,transcribeVideo}=await load('media');
 const dir=mkdtempSync(path.join(tmpdir(),'video-knowledge-test-'));
 process.env.VIDEO_KNOWLEDGE_DB_PATH=path.join(dir,'admin.db');
@@ -21,6 +21,9 @@ const video=(post='111',account='account-a',caption='This house is in San Antoni
 const notes={facts:[{field:'city',value:'San Antonio',quote:'This house is in San Antonio.',source:'caption'},{field:'price',value:'$450,000',quote:'Listed at $450,000.',source:'caption'}],keywords:['oak hill']};
 const approve=(v)=>store.review(v.account,v.post,v.revision,'approve');
 try {
+ await check('real extraction accepts a single JSON markdown fence',()=>{assert.deepEqual(parseExtractedNotes('```json\n'+JSON.stringify(notes)+'\n```',{...video(),transcript:''}),notes);});
+ await check('fenced extraction still rejects invented facts',()=>{assert.throws(()=>parseExtractedNotes('```json\n'+JSON.stringify({...notes,facts:[{...notes.facts[0],value:'Austin'}]})+'\n```',{...video(),transcript:''}),/supported/);});
+ await check('extraction rejects surrounding prose and incomplete JSON',()=>{assert.throws(()=>parseExtractedNotes('Here are the facts: '+JSON.stringify(notes),{...video(),transcript:''}));assert.throws(()=>parseExtractedNotes('```json\n{\n```',{...video(),transcript:''}));});
  await check('default disabled leaves DM behavior untouched',()=>{delete process.env.VIDEO_KNOWLEDGE_ENABLED;delete process.env.VIDEO_KNOWLEDGE_REPLIES_ENABLED;assert.equal(videoReply('u','OAK HILL',store,'account-a'),null);});
  await check('valid canonical URL only',()=>{assert.equal(postId(video().url),'111');assert.equal(postId('https://tiktok.com.evil.test/@a/video/111'),null);assert.equal(postId('http://tiktok.com/@a/video/111'),null);assert.equal(postId('https://tiktok.com:444/@a/video/111'),null);});
  await check('duplicate discovery does not requeue',()=>{assert.equal(store.ingest(video()),true);assert.equal(store.ingest(video()),false);});
@@ -56,7 +59,7 @@ try {
  await check('no model path fails before downloading or spending',async()=>{delete process.env.VIDEO_WHISPER_MODEL;await assert.rejects(()=>transcribeVideo(video()),/MODEL/);});
  await check('local media pipeline checks full audio and cleans temporary files',async()=>{
    process.env.VIDEO_WHISPER_MODEL=path.join(dir,'fixture-model.bin');let workDir;let speechCalls=0;
-   const result=await transcribeVideo(video(),{request:async()=>({downloadUrl:'https://example.invalid/video'}),download:async()=>Buffer.from('0000ftypfixture'),execute:async(cmd,args,cwd)=>{
+   const result=await transcribeVideo(video(),{download:async(_v,cwd)=>({file:path.join(cwd,'fixture.mp3'),duration:5}),execute:async(cmd,args,cwd)=>{
      workDir=cwd;
      if(cmd==='ffprobe')return JSON.stringify({format:{duration:5},streams:[{codec_type:'audio'}]});
      if(cmd==='ffmpeg'){assert.ok(args.includes('file,pipe'));await fs.writeFile(args.at(-1),Buffer.alloc(5*32000+44));return '';}
@@ -65,7 +68,7 @@ try {
    assert.equal(result,'The house is in San Antonio.');assert.equal(speechCalls,1);assert.equal(existsSync(workDir),false);
  });
  await check('truncated audio never reaches speech recognition',async()=>{
-   await assert.rejects(()=>transcribeVideo(video(),{request:async()=>({downloadUrl:'https://example.invalid/video'}),download:async()=>Buffer.from('0000ftypfixture'),execute:async(cmd,args)=>{
+   await assert.rejects(()=>transcribeVideo(video(),{download:async(_v,cwd)=>({file:path.join(cwd,'fixture.mp3'),duration:60}),execute:async(cmd,args)=>{
      if(cmd==='ffprobe')return JSON.stringify({format:{duration:60},streams:[{codec_type:'audio'}]});
      if(cmd==='ffmpeg'){await fs.writeFile(args.at(-1),Buffer.alloc(32044));return '';}
      throw new Error('Transcriber must not run');

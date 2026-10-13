@@ -4,6 +4,7 @@ ARG APP_IMAGE
 FROM debian:bookworm-slim AS video-tools
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl cmake make g++ \
     && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_linux -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp
 WORKDIR /src
 # Same pinned whisper.cpp release used by Victoria's earlier local implementation.
 RUN curl -fsSL https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz | tar xz --strip-components=1 \
@@ -16,6 +17,7 @@ FROM ${APP_IMAGE}
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libgomp1 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+COPY --from=video-tools /usr/local/bin/yt-dlp /usr/local/bin/yt-dlp
 COPY --from=video-tools /src/build/bin/whisper-cli /usr/local/bin/whisper-cli
 COPY --from=video-tools /opt/whisper /opt/whisper
 ENV VIDEO_WHISPER_MODEL=/opt/whisper/ggml-base.bin
