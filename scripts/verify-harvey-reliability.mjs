@@ -13,7 +13,13 @@ Object.assign(process.env,{TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work')
 const originalFetch=global.fetch;
 global.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url||String(url));assert(['127.0.0.1','localhost'].includes(u.hostname),'External request blocked: '+u.hostname);return originalFetch(url,...args);};
 const root=resolve('dist/src'),store=require(join(root,'harvey/work/store.js')),rel=require(join(root,'harvey/reliability.js'));
+const progress=require(join(root,'harvey/work/progress.js'));
 let checks=0;const ok=(name,fn)=>{fn();checks++;console.log('ok',name);};
+ok('automatic resume retains media across browser reads without secrets or cross-owner leakage',()=>{
+ progress.recordProgress('progress-alice','chat','edit_video',{file:'original.mov'},{file:'export.mp4',source:'original.mov',verified:true,frames:414,durationSeconds:13.8});
+ for(let i=0;i<20;i++)progress.recordProgress('progress-alice','chat','computer',{action:'call',tool:'browser_type',arguments:{text:'private-password'}},{content:[{type:'text',text:'verification code 123456'}]});
+ const p=progress.readProgress('progress-alice','chat');assert.equal(p.events.length,9);assert.equal(p.events[0].file,'export.mp4');assert.equal(p.events[0].verified,true);assert(!JSON.stringify(p).includes('private-password'));assert(!JSON.stringify(p).includes('123456'));assert.equal(progress.readProgress('progress-bob','chat').events.length,0);
+});
 ok('nested argument hashing preserves IDs and ignores key order',()=>{assert.equal(rel.stableCallKey('x',{a:{b:1,c:2}}),rel.stableCallKey('x',{a:{c:2,b:1}}));assert.notEqual(rel.stableCallKey('x',{arguments:{id:'one'}}),rel.stableCallKey('x',{arguments:{id:'two'}}));});
 const proof=new rel.TurnVerification();
 proof.record('business_call',{tool:'get_listing'},{listing:{id:'fixture-1',address:'100 Fixture Street',status:'active'}});
@@ -40,6 +46,7 @@ ok('CRM GET receipts are observations and writes still require read-back',()=>{
  const w=new rel.TurnVerification();w.record('business_call',{tool:'crm_api',arguments:{method:'PATCH'}},{ok:true});assert.throws(()=>w.review(review),/Read back/);
 });
 
+const repairAttempts=new Map();
 const calls=[];let releaseSlow,slowStarted,transientCalls=0;
 const slowReady=new Promise(r=>slowStarted=r),slowHold=new Promise(r=>releaseSlow=r);
 const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{
@@ -48,7 +55,39 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
  const toolMessages=b.messages.filter(m=>m.role==='tool');const n=toolMessages.length;
  let response={role:'assistant',content:'A conversational fixture answer.'};
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
- if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
+ if(JSON.stringify(b.messages).includes('AUTO_BROWSER_VISION_FIXTURE')){
+   if(n===1){assert.notEqual(b.model,'inception/mercury-2.5');assert(JSON.stringify(b.messages).includes('image_url'));}
+   response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):{role:'assistant',content:'The visual step is done.'};
+ }
+ else if(user.includes('AUTO_FORMAT_RECOVERY_FIXTURE')){
+   response=b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'Recovered without replaying the task.'};
+ }
+ else if(JSON.stringify(b.messages).includes('PLAIN_STATUS_FIXTURE')||JSON.stringify(b.messages).includes('PLAIN_STATUS_CALL_FIXTURE')){
+   const rewrite=JSON.stringify(b.messages).includes('Rewrite the draft below into 2–4 short, plain sentences for Marco.');
+   response=!rewrite&&n===0?tc('workspace_files',{}):rewrite?(JSON.stringify(b.messages).includes('PLAIN_STATUS_CALL_FIXTURE')?tc('workspace_files',{}):{role:'assistant',content:'Both videos are ready. They still need to be combined, and I have not started that step.'}):{role:'assistant',content:'## Technical status\n'+('The source files are prepared; combining them is still pending. '.repeat(14))};
+ }
+ else if(user.includes('SUMMARY_RECOVERY_FIXTURE')){
+   response=b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'The files are ready. The last step is still pending.'};
+ }
+ else if(user.includes('LOGIN_EMAIL_RECOVERY_FIXTURE')){
+   response=n?{role:'assistant',content:'I checked the available mail connection.'}:JSON.stringify(b.messages).includes('Before asking the user to supply this sign-in code')?tc('COMPOSIO_SEARCH_TOOLS',{queries:[{use_case:'Find the current sign-in email'}]}):{role:'assistant',content:'Please share the verification code from your inbox.'};
+ }
+ else if(user.includes('VIDEO_RECOVERY_BUDGET')){
+   response=n<5?tc('edit_video',{file:'original.mov',durationSeconds:15-n}):{role:'assistant',content:'The diagnostic is retained; no more export attempts were made.'};
+ }
+ else if(user.includes('MALFORMED_REPLY_FIXTURE')){
+   const attempt=(repairAttempts.get(user)||0)+1;repairAttempts.set(user,attempt);
+   response=attempt<=2?{role:'assistant',content:attempt===1?'':'<|tool_call_start|><function=computer>bad call</function><|tool_call_end|>'}:{role:'assistant',content:'Recovered into a usable answer.'};
+ }
+ else if(user.includes('ALWAYS_EMPTY_FIXTURE'))response={role:'assistant',content:''};
+ else if(user.includes('ORDERED_TOOLS_FIXTURE')){
+   response=n===0?{role:'assistant',content:'',tool_calls:[
+    {id:'write',type:'function',function:{name:'schedule_agent',arguments:JSON.stringify({action:'create'})}},
+    {id:'read',type:'function',function:{name:'schedule_agent',arguments:JSON.stringify({action:'list'})}},
+    {id:'verify',type:'function',function:{name:'report_verification',arguments:JSON.stringify({status:'completed',evidenceIds:['e2'],checks:['Read after write'],limitations:[]})}}
+   ]}:{role:'assistant',content:'Saved and verified.'};
+ }
+ else if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
  else if(user.includes('TRANSIENT_FIXTURE')){if(++transientCalls===1){res.statusCode=504;res.end(JSON.stringify({error:{message:'Upstream idle timeout exceeded'}}));return;}response={role:'assistant',content:'Transient provider recovered.'};}
  else if(user.includes('BROWSER_VISION_FIXTURE')){
   if(n===1)assert(!JSON.stringify(b.messages).includes('image_url'),'Text-only model must not receive image input');
@@ -86,7 +125,9 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
    ['projects',{action:'list_chats'}],
    ['schedule_agent',{action:'create',title:'Fixture weekly review',prompt:'Review fixture information',cron:'0 9 * * 1',timezone:'America/Chicago'}],
    ['schedule_agent',{action:'list'}],
-   ['report_verification',{status:'completed',evidenceIds:['e2','e4','e6'],checks:['Read back created agent and weekly schedule'],limitations:[]}]
+   ['task_plan',{action:'checkpoint',completedSteps:[0,1,2],nextStep:3}],
+   ['task_plan',{action:'get'}],
+   ['report_verification',{status:'completed',evidenceIds:['e8','e4','e6'],checks:['Read back created agent and weekly schedule'],limitations:[]}]
   ];response=n<sequence.length?tc(...sequence[n]):{role:'assistant',content:'Fixture agent created and schedule saved. Worker is disabled in this test.'};
  }
  else if(user.includes('REPEAT_FIXTURE')){
@@ -113,6 +154,38 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ for(const invalidCall of [false,true]){
+   let reads=0;
+   const simple=await runAgentLoop({message:"What's left? "+(invalidCall?'PLAIN_STATUS_CALL_FIXTURE':'PLAIN_STATUS_FIXTURE'),modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[{name:'workspace_files',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{reads++;return {files:[{name:'ready.mp4'}]};}}});
+   ok('plain status rewrite cannot execute additional tools '+invalidCall,()=>{assert.equal(reads,1);if(!invalidCall){assert(simple.speech.length<200);assert(!simple.speech.includes('##'));assert.match(simple.speech,/still need/);}else assert(simple.modelError);});
+ }
+ const oldAgent=process.env.HARVEY_MODEL_AGENT;
+ process.env.HARVEY_MODEL_AGENT='inception/mercury-2.5';
+ let autoVisualExecutions=0;
+ const autoVisual=await runAgentLoop({message:'AUTO_BROWSER_VISION_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_n,i)=>{autoVisualExecutions++;return i.tool==='browser_take_screenshot'?{_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]}:{ok:true};}}});
+ ok('Auto hands actual screenshot pixels to a vision model before coordinate action',()=>{assert.equal(autoVisualExecutions,2);assert.notEqual(autoVisual.modelUsed,'inception/mercury-2.5');});
+ const autoFormat=await runAgentLoop({message:'AUTO_FORMAT_RECOVERY_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[],execute:async()=>{throw Error('No action expected');}}});
+ ok('Auto changes model once after malformed replies without replaying any action',()=>{assert.match(autoFormat.speech,/Recovered/);assert(!autoFormat.modelError);});
+ let longActions=0;
+ const summary=await runAgentLoop({message:'SUMMARY_RECOVERY_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{longActions++;return {content:[{type:'text',text:'Existing work observed'}]};}}});
+ ok('long tool run reserves enough room to recover its final answer without restarting work',()=>{assert.equal(longActions,29);assert.match(summary.speech,/last step is still pending/);assert(!summary.modelError);});
+ if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
+ for(const available of [true,false]){
+   let mailDiscovery=0;
+   await runAgentLoop({message:'LOGIN_EMAIL_RECOVERY_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',loginEmailAvailable:available,tools:[{name:'COMPOSIO_SEARCH_TOOLS',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{mailDiscovery++;return {tools:[]};}}});
+   ok('email recovery respects authorized mailbox availability '+available,()=>assert.equal(mailDiscovery,available?1:0));
+ }
+ let editCalls=0;
+ const videoResult=await runAgentLoop({message:'VIDEO_RECOVERY_BUDGET',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'edit_video',description:'Fixture',input_schema:{type:'object',properties:{}}}],context:'Fixture',execute:async()=>{editCalls++;return {error:'Fixture failure',diagnostic:{code:'unsupported_track',message:'Unsupported alternate audio',detail:'apple_apac'}};}}});
+ ok('varying edit arguments cannot bypass per-source recovery budget and diagnostics survive',()=>{assert.equal(editCalls,2);assert(videoResult.verification.receipts.some(r=>r.diagnostic?.detail==='apple_apac'));});
+ const repairRuntime={tools:[],context:'Fixture',execute:async()=>{throw new Error('No tool should run');}};
+ const formatRepaired=await runAgentLoop({message:'MALFORMED_REPLY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
+ ok('empty and pseudo-tool output repairs into a usable answer without executing text',()=>{assert.match(formatRepaired.speech,/Recovered/);assert(!formatRepaired.modelError);});
+ const empty=await runAgentLoop({message:'ALWAYS_EMPTY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
+ ok('persistent empty replies return an honest nonempty failure after bounded repair',()=>{assert(empty.modelError);assert(empty.speech.length>20);});
+ let written=false,writeCount=0;
+ const ordered=await runAgentLoop({message:'ORDERED_TOOLS_FIXTURE',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'schedule_agent',description:'Fixture',input_schema:{type:'object',properties:{action:{type:'string'}}}}],context:'Fixture',execute:async(_n,i)=>{if(i.action==='create'){await new Promise(r=>setTimeout(r,30));written=true;writeCount++;return {id:'one'};}assert(written);return [{id:'one'}];}}});
+ ok('dependent tool batch executes write then read then verification without racing or replay',()=>{assert.equal(writeCount,1);assert.equal(ordered.verification.status,'completed');});
  let visualExecutions=0;
  const visualResult=await runAgentLoop({message:'BROWSER_VISION_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Local browser visual capability fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{visualExecutions++;return {_image:{media_type:'image/jpeg',data:'fixture-pixels'},content:[{type:'text',text:'Screenshot captured'}]};}}});
  ok('text-only model keeps working after screenshots and cannot issue unseen coordinate clicks',()=>assert.equal(visualExecutions,1));
@@ -140,7 +213,7 @@ try{
  assert.equal((await api('/chat','POST',{...input,message:'different input'})).status,400);checks++;
  assert.equal((await api('/work/jobs/'+jobId,'GET',undefined,'bob')).status,404);assert.equal((await api('/work/jobs/'+jobId+'/cancel','POST',{},'bob')).status,404);checks++;
  const checkpoints=(await api('/work/chats/'+c.id+'/verification')).data.checkpoints;
- ok('owner-scoped task plan and evidence checkpoints persist',()=>{assert.equal(checkpoints[0].status,'completed');assert(checkpoints[0].receipts.length>=6);assert.equal(store.list('task_plan','alice')[0].objective,'Fixture agent and schedule');assert.equal(store.list('task_plan','bob').length,0);});
+ ok('owner-scoped task plan and evidence checkpoints persist',()=>{assert.equal(checkpoints[0].status,'completed');assert(checkpoints[0].receipts.length>=6);assert.equal(store.list('task_plan','alice')[0].objective,'Fixture agent and schedule');assert.equal(store.list('task_plan','bob').length,0);assert.deepEqual(store.list('task_plan','alice')[0].completedSteps,[0,1,2]);assert.equal(store.list('task_plan','alice')[0].nextStep,3);});
  const originalHistory=JSON.stringify(store.messages('alice',c.id));store.closeStore();
  ok('store reopen retains jobs, conversations, agents, schedules and verification',()=>{assert.equal(store.get('job','alice',jobId).status,'completed');assert.equal(JSON.stringify(store.messages('alice',c.id)),originalHistory);assert.equal(store.list('schedule','alice').length,1);assert(store.list('verification','alice').length);});
  const delegated=await chat('chat');await runtime.runChat('alice',delegated,'Monte Carlo',{workDelegated:true,modelOverride:'openai/fixture'});

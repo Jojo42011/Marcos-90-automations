@@ -22,11 +22,16 @@ jobs:
       - run: node scripts/verify-account-isolation.mjs
       - run: node scripts/verify-account-ui.mjs
       - run: node scripts/verify-harvey-credential-consent.mjs
+      - run: node scripts/verify-workspace-files.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - run: node scripts/verify-video-edit.mjs
+      - run: node scripts/verify-harvey-job-ui.mjs
       - run: node scripts/verify-harvey-work.mjs
       - run: npx playwright install --with-deps chromium
       - run: node scripts/verify-video-review-ui.mjs
       - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-reliability.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-persistence.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-recovery.mjs
+      - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-upload.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-computer-ui.mjs
       - run: TASK_UI_BROWSER=true HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-account-isolation.mjs

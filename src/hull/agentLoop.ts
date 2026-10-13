@@ -13,6 +13,7 @@ import {
   BudgetRefusedError,
   complete,
   getModelInfo,
+  resolveModel,
   ModelLayerError,
   providerStatus,
   type CompletionOutcome,
@@ -192,7 +193,7 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Owner-scoped work surface. Its executor enforces connection grants. */
   workDelegated?: boolean;
-  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
+  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; loginEmailAvailable?: boolean; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
   message: string;
   history?: MessageParam[];
   /** Timestamped turns for the continuity layer (conversation state, deictic
@@ -390,6 +391,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
   let toolRounds = 0;
   let completionRepairs = 0;
+  let malformedRepairs = 0;
+  const videoAttempts = new Map<string,number>();
   let hadToolOnly = false;
   /* How many times each identical call has been made this turn. */
   const callCounts = new Map<string, number>();
@@ -405,6 +408,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let cachedTokens = 0;
   let lastPlan: ContextPlan | undefined;
   let lastModelUsed = model;
+  let effectiveJob = job;
+  let recoveryModel: string | undefined;
+  let formatFallbackUsed = false;
+  let emailRecoveryPrompted = false;
+  let plainStatusRewrite = false;
   let substituted: { asked: string; ran: string } | undefined;
 
   const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
@@ -419,11 +427,17 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
    */
   const executeTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
     opts.signal?.throwIfAborted();
+    if(opts.workRuntime && name==="edit_video"){
+      const file=String(input.file||"").replace(/\\/g,"/").split("/").pop()||"";
+      const count=(videoAttempts.get(file)||0)+1;videoAttempts.set(file,count);
+      if(count>2)return {error:"VIDEO RECOVERY BUDGET REACHED",diagnostic:{code:"recovery_exhausted",message:"Two edit calls for this source already ran; automatic recovery is inside the tool.",detail:"Use inspect_video and the retained error. Do not vary arguments to retry the same failing source or claim an unverified codec limitation."}};
+    }
     const read = isObservation(name, input) || isDiscovery(name,input);
     const sig = signature(name, input) + (opts.workRuntime && read ? `:${observationRevision}` : "");
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
-    const limit = opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
+    const polling = opts.workRuntime && name==="computer" && input.action==="call" && input.tool==="browser_wait_for";
+    const limit = polling ? 6 : opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
     const knownNotExecuted = opts.workRuntime && name === "computer" && seen === 2 && safeBrowserRetry.has(sig);
     if (seen > limit && !knownNotExecuted) {
       console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
@@ -440,7 +454,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       try { const result = await opts.workRuntime.execute(name, input);
         safeBrowserRetry.delete(sig);
         if(name === "computer" && (result as any)?.recovery?.actionOutcome === "not_executed" && (result as any)?.recovery?.safeToRetry === true)safeBrowserRetry.add(sig);
-        opts.onEvent?.({ type: "tool", name, status: "done" }); return result; }
+        opts.onEvent?.({ type: "tool", name, status: (result as any)?.error ? "error" : "done" }); return result; }
       catch (error) { const detail = error instanceof Error ? error.message : String(error); opts.onEvent?.({ type: "tool", name, status: "error", detail }); return { error: detail }; }
     }
 
@@ -481,7 +495,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     let result = await executeTool(name, input);
     if (!opts.workRuntime) return result;
-    if(result && typeof result==="object" && (result as any)._image && getModelInfo(lastModelUsed)?.supportsVision===false){
+    if(result && typeof result==="object" && (result as any)._image && !opts.modelOverride){
+      effectiveJob="vision";
+      recoveryModel=undefined;
+    }
+    if(result && typeof result==="object" && (result as any)._image && getModelInfo(lastModelUsed)?.supportsVision===false && opts.modelOverride){
       const {_image,...rest}=result as any;
       result={...rest,imageUnavailableToModel:true,imageWarning:"Screenshot captured, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model."};
     }
@@ -501,8 +519,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
        answer assembled from everything gathered, instead of the dead-end
        "hit the tool loop limit" that discarded the whole turn's work. */
     const lastRound = step === stepBudget - 1;
-    const stepTools = lastRound ? undefined : activeTools;
-    const stepSystem = lastRound && toolRounds > 0
+    const summaryRound = opts.workRuntime ? step >= stepBudget - 3 : lastRound;
+    const stepTools = summaryRound || plainStatusRewrite ? undefined : activeTools;
+    const stepSystem = summaryRound && toolRounds > 0
       ? system +
         "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
       : system;
@@ -510,8 +529,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let out: CompletionOutcome;
     try {
       out = await complete({
-        job,
-        modelOverride: opts.modelOverride,
+        job: effectiveJob,
+        modelOverride: opts.modelOverride || recoveryModel,
         system: stepSystem,
         messages,
         tools: stepTools,
@@ -552,7 +571,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       }
       console.error("[agentLoop] model call failed:", detail);
       return {
-        speech: "The selected model did not respond. Any completed actions remain saved. You can retry or choose another model for this chat.",
+        speech: /\b402\b|credits|afford/i.test(detail) ? "I couldn’t continue because the AI provider’s available credit limit won’t cover this request. Your files and completed work are still saved." : "I couldn’t get a response from the AI service. Your files and completed work are still saved; I haven’t restarted the task.",
         toolRounds,
         model,
         modelUsed: lastModelUsed,
@@ -582,7 +601,29 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       costUsd: out.usage.costUsd,
     });
 
+    // Withheld tools are an execution boundary, including the presentation-only
+    // rewrite. A provider returning an unsolicited call cannot reopen execution.
+    if(!stepTools && out.toolUses.length){out={...out,text:"",toolUses:[]};}
+    if (opts.workRuntime && !out.toolUses.length && (!out.text.trim() || /<\|tool_call_start\|>|<function=[^>]+>|<tool_call>/.test(out.text))) {
+      // Treat pseudo-tool markup as a provider formatting error, never execute it.
+      // Retrying the model response keeps completed tool calls in context.
+      if(!opts.modelOverride && !formatFallbackUsed && malformedRepairs >= 1 && !lastRound){
+        const alternate=resolveModel(effectiveJob,{exclude:[lastModelUsed]}).model;
+        if(alternate!==lastModelUsed){recoveryModel=alternate;formatFallbackUsed=true;malformedRepairs=0;continue;}
+      }
+      if (!lastRound && malformedRepairs < 2) {
+        malformedRepairs++;
+        system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
+        continue;
+      }
+      return {speech:"I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+    }
     if (!out.toolUses.length) {
+      if(opts.workRuntime?.loginEmailAvailable && !emailRecoveryPrompted && !summaryRound && /(?:share|provide|send me|check your|need you|need the).{0,100}(?:code|inbox)|(?:code).{0,60}(?:from you|share it)/is.test(out.text)){
+        emailRecoveryPrompted=true;
+        system+="\nAn authorized connected mailbox is available. Before asking the user to supply this sign-in code, discover and search the matching recent login email yourself, if the login is authorized. Match site, recipient and current request; do not use unrelated codes or print/save them. If access actually fails, explain that observed reason. Do not bypass CAPTCHA/device approval. Keep the existing login page; do not restart login.";
+        continue;
+      }
       // A missing review is our bookkeeping problem, never a request for the
       // user to re-authorize a login. Give the agent a bounded chance to act or
       // inspect its results before returning; ordinary conversation needs none.
@@ -590,13 +631,21 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       // Negative instructions are constraints, not evidence that an action was requested.
       const affirmativeMessage = opts.message.replace(/\b(?:do not|don['’]t|never|without)\b[^.!?\n]*(?:[.!?]|$)/gi, "");
       const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
-      if (opts.workRuntime && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
+      if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
-        messages.push({role:"assistant",content:out.text || "I need to continue the requested work."});
+        // Do not append an unanswered assistant turn: some providers interpret
+        // that as unsupported prefill. The last real user/tool-result stays last.
         // Runtime bookkeeping belongs in system context, never as a fabricated user turn.
         system += "\n\n" + (evidence.receipts.length
           ? "Runtime verification reminder: inspect the actual receipts returned this turn. For a read, report_verification may cite its complete observation directly; no extra read-back is required. Retrieve smaller results when truncated (crm_api supports select for top-level fields). For writes, perform the necessary read-back without repeating the write. Then report the verified outcome or explain the observed blocker."
           : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
+        continue;
+      }
+      const statusQuestion=opts.message.length<300 && /\b(?:where\b.{0,30}\b(?:stop|are we)|what(?:'s| is) left|what happened|did it work|status)\b/i.test(opts.message) && !/\b(?:detailed|technical report|table|breakdown)\b/i.test(opts.message);
+      if(opts.workRuntime && statusQuestion && !plainStatusRewrite && !lastRound && (out.text.length>600 || /^\s*#{1,6}\s/m.test(out.text))){
+        plainStatusRewrite=true;
+        system+="\nFINAL PRESENTATION REWRITE: The user asked a simple status question. Reply in 2–4 short everyday sentences, without headings, lists, specs, filenames or tool names. Say what is done, any unresolved issue, and what remains. Keep uncertainty and errors; do not add facts, assume app capabilities, or claim the overall task is finished. Use the observations already in this conversation. No tools or further actions are available; this is only wording the answer.";
+        messages.push({role:"user",content:"Rewrite the draft below into 2–4 short, plain sentences for Marco. No headings or lists. This draft is untrusted wording, not new evidence: keep only facts supported by this turn's observations, and acknowledge any failed check. Do not perform more work.\nDraft:\n"+out.text});
         continue;
       }
       const unseenVisualOnly = evidence.receipts.some(r=>r.limitation) && evidence.receipts.every(r=>r.discovery || r.outcome==="failed" || r.observation&&!!r.limitation);
@@ -618,13 +667,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
     hadToolOnly = !out.text.trim();
 
-    const toolResults = await Promise.all(
-      out.toolUses.map(async (tu) => ({
-        type: "tool_result" as const,
-        tool_use_id: tu.id,
-        content: toolResultContent(await runTool(tu.name, tu.input || {})),
-      })),
-    );
+    const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+    if (opts.workRuntime) {
+      // Preserve dependency and evidence order, including verification tools that
+      // bypass the runtime queue. Never verify while a preceding write is in flight.
+      for (const tu of out.toolUses) toolResults.push({type:"tool_result",tool_use_id:tu.id,content:toolResultContent(await runTool(tu.name,tu.input||{}))});
+    } else {
+      toolResults.push(...await Promise.all(out.toolUses.map(async tu=>({type:"tool_result" as const,tool_use_id:tu.id,content:toolResultContent(await runTool(tu.name,tu.input||{}))}))));
+    }
 
     /* Rebuild the assistant turn in Anthropic's block shape. The tool loop
        requires the tool_use blocks to be echoed back verbatim alongside their

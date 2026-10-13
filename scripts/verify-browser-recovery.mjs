@@ -31,11 +31,13 @@ try{
  r=await call('browser_snapshot',{target:'#one'});assert(!r.error,txt(r));
  const before=await B.browserMetrics('alice','recovery');
  assert.equal(before.checkpoints,baseline.checkpoints,'Read-only snapshot must not save browser storage');
- r=await call('browser_click',{target:'#one'});assert(!r.error,txt(r));
+ r=await call('browser_click',{selector:'#one'});assert(!r.error,txt(r));
  const after=await B.browserMetrics('alice','recovery');
  assert.equal(after.preflights,before.preflights,'Fresh observation avoids duplicate preflight');
  assert.equal(after.calls-before.calls,1,'One MCP call for an observed click');
  console.log('ok fresh click uses one MCP call; reads skip storage export');
+ r=await call('browser_snapshot',{target:'#absent-snapshot-target'});assert(!r.error,txt(r));assert(r.recovered);assert.match(txt(r),/Recovery fixture/);assert.equal(writes,0);
+ console.log('ok failed targeted snapshot recovers with whole-page evidence without writes');
  r=await call('browser_click',{target:'missing999'});assert.equal(r.recovery.actionOutcome,'not_executed');assert(r.observation);
  r=await call('browser_click',{target:'button:has-text("Duplicate")'});assert.equal(r.recovery.actionOutcome,'not_executed');assert.equal(writes,0);
  console.log('ok stale and ambiguous targets return fresh recovery evidence without submitting');
@@ -51,7 +53,7 @@ try{
  r=await call('browser_snapshot',{depth:4});let raw=r.content.map(x=>x.text).join('\n');let frameRef=raw.match(/button "Frame action" \[ref=([^\]]+)\]/)?.[1];
  if(!frameRef){r=await call('browser_snapshot',{target:'iframe'});raw=r.content.map(x=>x.text).join('\n');frameRef=raw.match(/button "Frame action" \[ref=([^\]]+)\]/)?.[1];}
  assert(frameRef,'Iframe must expose its control');r=await call('browser_click',{target:frameRef});assert(!r.error,txt(r));
- r=await call('browser_take_screenshot');assert(r._image?.data.length>1000,'Model gets real pixels');
+ r=await call('browser_take_screenshot');assert(r._image?.data.length>1000,'Model gets real pixels: '+JSON.stringify(r).slice(0,2500));
  const ledger=new TurnVerification();const receipt=ledger.record('computer',{action:'call',tool:'browser_take_screenshot'},r);assert(!receipt.truncated,'Image bytes are not text truncation');
  assert((await B.browserTools('alice','recovery')).some(t=>t.name==='browser_mouse_click_xy'));
  assert(!(await B.browserTools('alice','recovery')).some(t=>t.name==='browser_run_code_unsafe'));

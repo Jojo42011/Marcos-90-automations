@@ -6,6 +6,9 @@ import { join, resolve, sep } from "path";
 import { get, list, put, seal, unseal, workDir, text } from "./store.js";
 import {browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
 
+import { browserArguments } from "./browserArguments.js";
+import { uploadArguments } from "./uploadFiles.js";
+
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close", "browser_mouse_click_xy", "browser_mouse_drag_xy", "browser_mouse_wheel"]);
 const TARGETED = new Set(["browser_click","browser_type","browser_fill_form","browser_select_option","browser_hover","browser_drag"]);
 const EXTRA_TOOLS = [
@@ -136,7 +139,7 @@ export async function closeBrowsers(){await Promise.all([...sessions].map(async(
 // Closing a laptop only disconnects the UI. There is deliberately no idle tab eviction.
 // Periodically capture cookie changes and client-side tab navigation while the model is idle.
 const maintenance=setInterval(()=>{for(const pending of sessions.values())void pending.then(s=>{if(!s.busy&&!s.closing&&!s.failed){s.dirty=true;void observedAction(s,"session checkpoint",()=>checkpoint(s)).catch(()=>{});}}).catch(()=>{});},30000);maintenance.unref();
-export async function browserTools(owner:string,chat:string,name?:string){const tools=(await session(owner,chat)).tools;if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
+export async function browserTools(owner:string,chat:string,name?:string){const tools=(await session(owner,chat)).tools.map(t=>t.name!=="browser_file_upload"?t:{...t,description:"Upload local workspace files into the currently opened file chooser. Click Choose files first, then use paths from workspace_files. Native OS interaction is unnecessary. Missing paths do not cancel; cancel:true explicitly cancels.",inputSchema:{type:"object",properties:{paths:{type:"array",items:{type:"string"},minItems:1,maxItems:20},cancel:{type:"boolean"}}}});if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
 export async function browserMetrics(owner:string,chat:string){const s=await sessions.get(owner+":"+chat);return s?{...s.metrics}:undefined;}
 export async function browserPreview(owner:string,chat:string){
   if(!browserEnabled())return {state:"disabled"};
@@ -173,11 +176,13 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
   if(!ALLOWED.has(name))throw new Error("Unsupported browser action");
   if(name==="browser_navigate" || name==="browser_tabs"&&args.url){const url=new URL(text(args.url,"URL",4000));if(!["https:","http:"].includes(url.protocol)||url.username||url.password)throw new Error("Use an HTTP(S) URL without embedded credentials");}
   const filesDir=join(browserDirectory(owner,chat),"files");
-  if(name==="browser_file_upload")for(const file of args.paths||[])if(!resolve(file).startsWith(resolve(filesDir)+sep))throw new Error("Upload files must belong to this chat's browser workspace");
+  if(name==="browser_file_upload")args=uploadArguments(filesDir,args);
   if(name==="browser_take_screenshot"||name==="browser_snapshot")delete args.filename;
   if(name==="browser_take_screenshot"){args.type="jpeg";args.fullPage=false;}
   if(name==="browser_close"){await closeBrowser(owner,chat);return {content:[{type:"text",text:"Browser closed; saved login retained. Tabs will not reopen until requested."}]};}
   const s=await session(owner,chat);
+  const schema=s.tools.find(t=>t.name===name)?.inputSchema;
+  try{args=browserArguments(schema,args);}catch(error){return {error:(error as Error).message,recovery:{kind:"arguments",actionOutcome:"not_executed",safeToRetry:true,guidance:"No page action ran. Correct the arguments using this installed schema; do not retry guessed shapes or ask the user to perform the action."},inputSchema:schema};}
   return observedAction(s,name,async()=>{
     signal?.throwIfAborted();let preflight=true;
     try{
@@ -192,7 +197,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       }
       if(name==="browser_mouse_click_xy"||name==="browser_mouse_drag_xy")if(!s.visionAt||Date.now()-s.visionAt>30000)throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
       preflight=false;
-      const result=checked(await call(s,name,args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:15000,signal));
+      const result=checked(await call(s,name,args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
       if(!browserRead(name,args)){s.visionAt=undefined;s.snapshot=undefined;s.dirty=true;}
       if(name==="browser_take_screenshot")s.visionAt=Date.now();
       try{remember(s,result,name==="browser_snapshot");}catch{s.saveWarning="The action returned successfully but tab state could not be saved. Inspect the page before repeating any action.";}
@@ -203,12 +208,19 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       s.failed=true;const message=(e as Error).message;let recovery=recoveryFor(message,preflight);s.visionAt=undefined;
       // A batch may have changed earlier fields before a later target failed.
       if(!preflight&&name==="browser_fill_form"&&recovery.safeToRetry)recovery={kind:"partial_form",actionOutcome:"unknown",safeToRetry:false,guidance:"Some fields may already be filled. Inspect the fresh form and fill only the remaining fields; do not blindly replay the batch or submit."};
+      if(name==="browser_file_upload")recovery={...recovery,guidance:"Inspect the page for selected files or progress before repeating an upload. If no chooser is visible and no file was selected, click the observed Choose files control, then use browser_file_upload with paths from workspace_files. A native chooser is supported. "+recovery.guidance};
       let observation:any;
       // A crashed browser can respawn as a blank page. Do not replace retained
       // tabs with that diagnostic page before browser_recover can restore them.
-      if(!signal?.aborted)try{const fresh=checked(await call(s,"browser_snapshot",{depth:6},8000));remember(s,fresh,true,false);observation=pageSlice(s);}catch{}
+      if(!signal?.aborted)try{
+        const fresh=checked(await call(s,"browser_snapshot",{},8000));remember(s,fresh,true,false);observation=pageSlice(s);
+        // Snapshot reads have no external effect to replay. If a focused read
+        // fails but a whole-page read succeeds, return the fresh observation.
+        // Keep failed writes uncertain even when their diagnostic read succeeds.
+        if(name==="browser_snapshot") {s.failed=false;return {...normalized(s,fresh),recovered:true,note:"The requested snapshot failed; this is a fresh whole-page observation instead. Choose targets from this result; the original target was not verified."};}
+      }catch{}
       if(!preflight)s.dirty=true;
-      return {error:message,recovery,observation};
+      return {error:message,recovery,observation,inputSchema:schema,note:"Use this installed schema to correct the next call. For a failed targeted snapshot, read the whole page with browser_snapshot arguments {} before choosing a fresh target; do not guess more references."};
     }
   });
 }

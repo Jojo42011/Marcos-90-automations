@@ -126,6 +126,7 @@
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
       .replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>")
+      .replace(/\[([^\]]+)\]\((\/api\/harvey\/work\/files\/[a-zA-Z0-9-]+\/[a-zA-Z0-9%_.-]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   }
@@ -743,6 +744,7 @@
     var text = "";
     var frame = null;
     var toolRows = {};
+    var lastError = "";
 
     function paint(withCaret) {
       body.innerHTML = renderMarkdown(text) + (withCaret ? '<span class="caret" aria-hidden="true"></span>' : "");
@@ -766,12 +768,14 @@
       setText: function (t) { text = t || ""; paint(false); },
       finish: function () {
         if (frame) { cancelAnimationFrame(frame); frame = null; }
-        if (!text) { body.innerHTML = '<span class="err-line">Harvey returned nothing.</span>'; return; }
+        if(lastError){body.innerHTML=(text?renderMarkdown(text):"")+'<div class="err-line">'+esc(lastError)+'</div>';return;}
+        if (!text) { body.innerHTML = '<span class="err-line">The model did not return a usable reply. Completed work remains saved; continue the chat to check the unfinished step.</span>'; return; }
         paint(false);
       },
       error: function (msg) {
         if (frame) { cancelAnimationFrame(frame); frame = null; }
-        var line = '<div class="err-line">' + esc(msg || "Something went wrong.") + "</div>";
+        lastError=msg || "Something went wrong.";
+        var line = '<div class="err-line">' + esc(lastError) + "</div>";
         body.innerHTML = text ? renderMarkdown(text) + line : line;
         scrollToBottom();
       },
@@ -987,6 +991,7 @@
       ui.note('Sent to '+relay.data.deliveries.map(function(d){return d.title+' ('+d.ownerName+')';}).join(', '));
       text+='\n\n[App receipt: this message was delivered to '+relay.data.deliveries.map(function(d){return d.title;}).join(', ')+'. Do not send it again. Responses will appear in the recipient chats.]';
     }
+    run.startedAt=Date.now();
     var body={message:text,workspace:true,background:true,requestId:crypto.randomUUID(),conversationId:run.chatId,model:run.model,stream:true};
     var res;
     try {
@@ -1039,27 +1044,43 @@
       }
     }
     if (buf.trim()&&current(run)) handleSseBlock(buf, ui);
+    if(current(run)&&!ui.responseDone){
+      // An ended stream is not an empty model answer. Recover saved state without
+      // resubmitting the task or repeating its side effects.
+      var active=await api('/api/harvey/work/chats/'+encodeURIComponent(run.chatId)+'/job');
+      if(active.ok&&active.data.job){await watchJob(active.data.job,ui,run);return;}
+      var saved=await api('/api/harvey/conversations/'+encodeURIComponent(run.chatId));
+      if(!current(run))return;
+      var reply=saved.ok&&(saved.data.messages||[]).filter(function(m){return m.role==='assistant'&&Date.parse(m.at)>=run.startedAt;}).pop();
+      if(reply&&reply.content){ui.setText(reply.content);return;}
+      throw new Error('The response connection ended before completion. Saved work is retained; reopen this chat to inspect progress before retrying.');
+    }
   }
 
   async function watchJob(job,ui,run) {
     if(!current(run))return;
     state.activeJobId=job.id;
-    var cursor=0, signal=run.abort.signal;
+    var cursor=0, failures=0, signal=run.abort.signal;
     try{
       while(true){
         if(!current(run))return;
         (job.events||[]).forEach(function(e){if(e.seq>cursor){handleSseBlock('event: tool\ndata: '+JSON.stringify(e),ui);cursor=e.seq;}});
         if(['queued','running','cancelling'].indexOf(job.status)<0){applyNonStream(job.result||{text:job.status==='cancelled'?'Cancelled before starting.':'Task needs attention.'},ui);return;}
         if(signal&&signal.aborted){
-          if(!run.cancel){ui.note('Task continues in the background. Reopen this chat to view it.');return;}
+          if(!run.cancel){ui.setText('Task continues in the background. Reopen this chat to view it.');return;}
           var cancelled=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id)+'/cancel',{method:'POST',body:{}});
           if(!cancelled.ok)throw new Error('Could not confirm cancellation. Reopen this chat to inspect the running task.');
-          ui.note('Stop requested. An action already in progress may finish; reopen this chat to inspect the outcome.');return;
+          ui.setText('Stop requested. An action already in progress may finish; reopen this chat to inspect the outcome.');return;
         }
-        await new Promise(function(resolve){setTimeout(resolve,1000);});
+        await new Promise(function(resolve){setTimeout(resolve,Math.min(1000*Math.pow(2,failures),8000));});
+        if(!current(run))return;
         var r=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id));
-        if(!r.ok)throw new Error('Connection interrupted. Your task remains saved; reopen this chat to check its progress.');
-        job=r.data;
+        if(!current(run))return;
+        if(!r.ok){
+          if(r.status!==401&&r.status!==403&&r.status!==404&&++failures<=5){ui.note('Reconnecting to the saved task…');continue;}
+          throw new Error('Connection interrupted. The task is saved and may still be running. Reopen this chat to reconnect; do not resubmit the same task.');
+        }
+        failures=0;job=r.data;
       }
     }finally{if(current(run))state.activeJobId=null;}
   }
@@ -1100,10 +1121,11 @@
         if(d.sessionId) state.sessionId=d.sessionId;
         break;
       case "done":
+        ui.responseDone=true;
         if (d.usage) ui.setUsage(d.usage);
         if (d.sessionId) state.sessionId = d.sessionId;
         if (d.conversationId) state.conversationId = d.conversationId; if(window.HarveyComputer)window.HarveyComputer.sync();
-        if (d.text && !ui.text) ui.setText(d.text);
+        if (d.text) ui.setText(d.text);
         try { sessionStorage.setItem("harvey_session_id", state.sessionId); } catch (_) {}
         break;
       case "error":
@@ -1122,7 +1144,7 @@
     if (data.conversationId) state.conversationId = data.conversationId; if(window.HarveyComputer)window.HarveyComputer.sync();
     (data.schedules || []).forEach(function(s){if(window.HarveyWork)HarveyWork.scheduleEvent({schedule:s});});
     (data.approvals || []).forEach(function (a) { ui.approval(a); });
-    ui.setText(data.text || data.speech || data.reply || "");
+    ui.setText(data.text || data.speech || data.reply || "The task ended without a usable response. Its saved progress is available in this chat; inspect it before retrying actions.");
     if (data.usage) ui.setUsage(Object.assign({}, data.usage, { contextPlan: data.contextPlan, memoryContext:data.memoryContext }));
   }
 

@@ -187,6 +187,7 @@ export function resolveModel(job: ModelJob, opts: ResolveOpts = {}): ResolvedMod
     !candidate ||
     exclude.includes(candidate) ||
     !getModelInfo(candidate) ||
+    (source !== "explicit" && shape.needsVision && !getModelInfo(candidate)?.supportsVision) ||
     !modelIsReachable(candidate);
   if (unusable) {
     const alt = fallbackFor(job, exclude);
