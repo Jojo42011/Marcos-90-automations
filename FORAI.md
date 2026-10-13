@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-13: Harvey now inspects visible canvas port geometry and validates fresh targets before controlled multi-event drags. Destination read-back remains required; missing alpha labels are not treated as proof of a Beeble limitation. Saved interactive jobs can checkpoint observed unfinished work and resume within one aggregate budget, with cancellable waits, restart recovery and no blind replay of interrupted actions. Existing chats, files, profiles and completed matte/render work are retained. Added real Chromium zoomed-port tests, continuation regressions and opt-in deployed-image verification; see docs/harvey-work.md. Fixture success does not certify the live Beeble workflow.
+
 - 2026-10-12: Final live check exposed a failed focused browser observation and ignored system-only wording guidance. A failed snapshot now returns a successful whole-page fallback when available (never retries writes), and the tool-free status pass receives an explicit draft-rewrite message. Regression tests cover the missing snapshot target and wording-only execution boundary.
 
 - 2026-10-12: Live follow-up now completed with two successful read-only calls and no repeated media work, but status prose remained too technical. Added a bounded tool-free rewrite for overlong/heading-heavy simple status answers; it retains unresolved work and cannot execute provider-emitted tool calls. Detailed requests retain their format.

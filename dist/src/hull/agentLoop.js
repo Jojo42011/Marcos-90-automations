@@ -241,6 +241,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     /* How many times each identical call has been made this turn. */
     const callCounts = new Map();
     let observationRevision = 0;
+    let continuation;
+    let unfinishedReminders = 0;
     const safeBrowserRetry = new Set();
     /* Calls held by the gate. The turn still finishes; these did not run. */
     const heldApprovals = [];
@@ -338,6 +340,25 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         }
     };
     const runTool = async (name, input) => {
+        if (opts.workRuntime && name === "continue_work") {
+            try {
+                if (!opts.allowContinuation || !opts.workRuntime.tools.some(t => t.name === "continue_work"))
+                    throw new Error("Continuation is only available inside a saved interactive job");
+                if (opts.workRuntime.pendingWork && !opts.workRuntime.pendingWork())
+                    throw new Error("Save an unfinished task_plan for this authorized execution request before continuing; do not continue a status question or blocked task");
+                verification.continuationEvidence(input.evidenceId, input.quote);
+                const delaySeconds = Number(input.delaySeconds);
+                if (!Number.isInteger(delaySeconds) || delaySeconds < 10 || delaySeconds > 120)
+                    throw new Error("Continuation delay must be 10–120 seconds");
+                if (typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 500)
+                    throw new Error("Provide a short remaining-work checkpoint, without secrets");
+                continuation = { delaySeconds, reason: input.reason };
+                return { waiting: true, note: "The saved job will resume. No external action will be replayed automatically." };
+            }
+            catch (e) {
+                return { error: e.message };
+            }
+        }
         if (opts.workRuntime && name === "verify_source_values") {
             try {
                 return verification.verifyValues(input);
@@ -382,11 +403,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
            "hit the tool loop limit" that discarded the whole turn's work. */
         const lastRound = step === stepBudget - 1;
         const summaryRound = opts.workRuntime ? step >= stepBudget - 3 : lastRound;
-        const stepTools = summaryRound || plainStatusRewrite ? undefined : activeTools;
-        const stepSystem = summaryRound && toolRounds > 0
-            ? system +
-                "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
-            : system;
+        const checkpointRound = !!opts.allowContinuation && !plainStatusRewrite && step === stepBudget - 3;
+        const stepTools = plainStatusRewrite ? undefined : checkpointRound ? activeTools?.filter(t => ["continue_work", "report_verification"].includes(t.name)) : summaryRound ? undefined : activeTools;
+        const stepSystem = checkpointRound
+            ? system + "\n\nCHECKPOINT ROUND: If authorized plan steps remain without a blocker, use continue_work with an exact current observation and a brief remaining-work note. A continuation preserves this same job and budget; it must inspect current state before further actions. Otherwise report the actual verified result or concrete blocker. No external actions are available in this round."
+            : summaryRound && toolRounds > 0
+                ? system +
+                    "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
+                : system;
         let out;
         try {
             out = await (0, index_js_1.complete)({
@@ -488,6 +512,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             return { speech: "I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.", modelError: "Empty or malformed model response after bounded repair; finish reason: " + String(out.stopReason || "unknown"), verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
         }
         if (!out.toolUses.length) {
+            if (opts.allowContinuation && !summaryRound && unfinishedReminders < 2 && opts.workRuntime?.pendingWork?.()) {
+                unfinishedReminders++;
+                system += "\nThe authorized task still has unfinished plan steps and no concrete blocker. A status report is not task completion. Continue the next step, or use continue_work with an exact observed progress quote while an external render runs. If targeting fails, inspect ports/geometry and change approach; do not infer an application limitation or missing credits from a failed gesture. If genuinely blocked, checkpoint the precise observed reason before answering.";
+                continue;
+            }
             if (opts.workRuntime?.loginEmailAvailable && !emailRecoveryPrompted && !summaryRound && /(?:share|provide|send me|check your|need you|need the).{0,100}(?:code|inbox)|(?:code).{0,60}(?:from you|share it)/is.test(out.text)) {
                 emailRecoveryPrompted = true;
                 system += "\nAn authorized connected mailbox is available. Before asking the user to supply this sign-in code, discover and search the matching recent login email yourself, if the login is authorized. Match site, recipient and current request; do not use unrelated codes or print/save them. If access actually fails, explain that observed reason. Do not bypass CAPTCHA/device approval. Keep the existing login page; do not restart login.";
@@ -538,8 +567,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if (opts.workRuntime) {
             // Preserve dependency and evidence order, including verification tools that
             // bypass the runtime queue. Never verify while a preceding write is in flight.
-            for (const tu of out.toolUses)
-                toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: toolResultContent(await runTool(tu.name, tu.input || {})) });
+            for (const tu of out.toolUses) {
+                toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: toolResultContent(stepTools?.some(t => t.name === tu.name) ? await runTool(tu.name, tu.input || {}) : { error: "Tool is not available in this round" }) });
+                if (continuation)
+                    return { speech: "Work is saved and will continue after the current step is ready.", continuation, verification: verification.result(), toolRounds: toolRounds + 1, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens };
+            }
         }
         else {
             toolResults.push(...await Promise.all(out.toolUses.map(async (tu) => ({ type: "tool_result", tool_use_id: tu.id, content: toolResultContent(await runTool(tu.name, tu.input || {})) }))));

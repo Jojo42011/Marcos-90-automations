@@ -8,10 +8,15 @@ import {browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText
 
 import { browserArguments } from "./browserArguments.js";
 import { uploadArguments } from "./uploadFiles.js";
+import { inspectCode, parseBrowserJson, dragCode, CanvasTarget } from "./canvas.js";
+
+const canvasObservations = new Map<string,{id:string;at:number;targets:CanvasTarget[]}>();
 
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close", "browser_mouse_click_xy", "browser_mouse_drag_xy", "browser_mouse_wheel"]);
 const TARGETED = new Set(["browser_click","browser_type","browser_fill_form","browser_select_option","browser_hover","browser_drag"]);
 const EXTRA_TOOLS = [
+  {name:"browser_inspect_targets",description:"Inspect visible canvas nodes, ports, controls and exposed graph edges with precise viewport rectangles and a screenshot. Optionally focus on observed nodeIds when the graph is large. Use before connecting overlapping nodes; missing DOM edges require destination read-back, not guesswork.",inputSchema:{type:"object",properties:{nodeIds:{type:"array",items:{type:"string"},maxItems:4}}}},
+  {name:"browser_drag_targets",description:"Connect two freshly observed port targets with a controlled mouse gesture. Requires observationId and target IDs from browser_inspect_targets. Rejects moved/obscured targets before pressing. Returns fresh graph and pixels; verify the intended input, not just gesture completion.",inputSchema:{type:"object",properties:{observationId:{type:"string"},start:{type:"string"},end:{type:"string"}},required:["observationId","start","end"]}},
   {name:"browser_read_snapshot",description:"Read another bounded page of the most recent full snapshot without recapturing it. Use snapshotId and nextOffset returned by the previous result. For a new state or a specific region use browser_snapshot with target/depth instead.",inputSchema:{type:"object",properties:{snapshotId:{type:"string"},offset:{type:"integer",minimum:0}},required:["snapshotId","offset"]}},
   {name:"browser_recover",description:"Restart this chat's unresponsive hosted browser and restore saved tabs/cookies. Only after observing a connection or browser crash. Never replays a click, form submission or other action; unsaved page state can be lost. Inspect the restored page before continuing.",inputSchema:{type:"object",properties:{}}}
 ];
@@ -36,8 +41,8 @@ async function call(s:Session,name:string,args:any={},timeout=15000,signal?:Abor
   // This MCP version puts implicit action snapshots in local files. Return their
   // actual observations to the model without paying for another browser call.
   const dir=browserDirectory(s.owner,s.chat),files=realpathSync(join(dir,"files"));
-  for(const content of result.content||[])if(content.type==="text")content.text=content.text.replace(/(### Snapshot\r?\n)- \[Snapshot\]\((files\/page-[\w.-]+\.yml)\)/g,(_match:string,header:string,file:string)=>{
-    try{const path=realpathSync(resolve(dir,file));if(!path.startsWith(files+sep)||statSync(path).size>2*1024*1024)throw new Error("Snapshot outside bounded workspace");return header+"```yaml\n"+readFileSync(path,"utf8")+"\n```";}
+  for(const content of result.content||[])if(content.type==="text")content.text=content.text.replace(/(### Snapshot\r?\n)- \[Snapshot\]\((files[\\/]+page-[\w.-]+\.yml)\)/g,(_match:string,header:string,file:string)=>{
+    try{const path=realpathSync(resolve(dir,file.replace(/[\\/]+/g,sep)));if(!path.startsWith(files+sep)||statSync(path).size>2*1024*1024)throw new Error("Snapshot outside bounded workspace");return header+"```yaml\n"+readFileSync(path,"utf8")+"\n```";}
     catch{return header+"Snapshot content unavailable. Request a focused browser_snapshot before acting or claiming page contents.";}
   });
   return result;
@@ -134,8 +139,8 @@ async function closeSession(s:Session,explicit=false){
   await s.chain.catch(()=>{});await s.preview?.catch(()=>{});
   try{if(!s.failed)await checkpoint(s,true);if(explicit)writeTabs(s.tabsPath,{urls:s.tabs?.urls||[],active:s.tabs?.active||0,open:false,updatedAt:new Date().toISOString()});}finally{await s.client.close();}
 }
-export async function closeBrowser(owner:string,chat:string){const key=owner+":"+chat,pending=sessions.get(key);if(pending){const s=await pending.catch(()=>null);if(s)await closeSession(s,true);sessions.delete(key);}else{const path=tabsPath(owner,chat),saved=readTabs(path);if(saved)writeTabs(path,{...saved,open:false});}}
-export async function closeBrowsers(){await Promise.all([...sessions].map(async([key,pending])=>{try{const s=await pending.catch(()=>null);if(s)await closeSession(s);}finally{sessions.delete(key);}}));}
+export async function closeBrowser(owner:string,chat:string){const key=owner+":"+chat,pending=sessions.get(key);canvasObservations.delete(key);if(pending){const s=await pending.catch(()=>null);if(s)await closeSession(s,true);sessions.delete(key);}else{const path=tabsPath(owner,chat),saved=readTabs(path);if(saved)writeTabs(path,{...saved,open:false});}}
+export async function closeBrowsers(){canvasObservations.clear();await Promise.all([...sessions].map(async([key,pending])=>{try{const s=await pending.catch(()=>null);if(s)await closeSession(s);}finally{sessions.delete(key);}}));}
 // Closing a laptop only disconnects the UI. There is deliberately no idle tab eviction.
 // Periodically capture cookie changes and client-side tab navigation while the model is idle.
 const maintenance=setInterval(()=>{for(const pending of sessions.values())void pending.then(s=>{if(!s.busy&&!s.closing&&!s.failed){s.dirty=true;void observedAction(s,"session checkpoint",()=>checkpoint(s)).catch(()=>{});}}).catch(()=>{});},30000);maintenance.unref();
@@ -168,8 +173,32 @@ export function validateActionReferences(snapshot:string,args:any){
 }
 export async function browserCall(owner:string,chat:string,name:string,args:any,signal?:AbortSignal):Promise<any>{
   signal?.throwIfAborted();args={...(args||{})};
+  if(name==="browser_inspect_targets"||name==="browser_drag_targets"){
+    if(args.nodeIds!==undefined&&(!Array.isArray(args.nodeIds)||args.nodeIds.length>4||args.nodeIds.some((id:any)=>typeof id!=="string"||id.length>200)))return {error:"nodeIds must contain up to four observed node IDs"};
+    const s=await session(owner,chat),key=owner+":"+chat;
+    return observedAction(s,name,async()=>{
+      let gesture:any;
+      if(name==="browser_drag_targets"){
+        const observation=canvasObservations.get(key);
+        if(!observation||observation.id!==args.observationId||Date.now()-observation.at>30000)return {error:"Canvas observation expired; inspect targets again",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};
+        const start=observation.targets.find(t=>t.id===args.start),end=observation.targets.find(t=>t.id===args.end);
+        if(!start||!end||start.id===end.id)return {error:"Select two distinct observed targets",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};
+        canvasObservations.delete(key);s.visionAt=undefined;s.snapshot=undefined;
+        try{gesture=parseBrowserJson(checked(await call(s,"browser_run_code_unsafe",{code:dragCode({x:start.rect.x+start.rect.width/2,y:start.rect.y+start.rect.height/2},{x:end.rect.x+end.rect.width/2,y:end.rect.y+end.rect.height/2},[start,end])},15000,signal)));}
+        catch{return {error:"Canvas gesture outcome is unknown; inspect the destination before another attempt",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:false}};}
+        if(gesture.error)return {...gesture,recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};
+        s.dirty=true;deferCheckpoint(s);
+      }
+      try{
+        const geometry=parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode(args.nodeIds)},15000,signal)));
+        const shot=checked(await call(s,"browser_take_screenshot",{type:"jpeg",fullPage:false},15000,signal));
+        const id=randomUUID();canvasObservations.set(key,{id,at:Date.now(),targets:geometry.targets});s.visionAt=Date.now();
+        return {...normalized(s,shot),...geometry,targets:geometry.targets.map(({selector,...target}:CanvasTarget)=>target),observationId:id,...(gesture?{gesture}:{}),coordinateSpace:"CSS viewport pixels; do not use the scaled Computer preview coordinates"};
+      }catch(error){return {error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),...(gesture?{gesture}:{}),recovery:{kind:"targeting",actionOutcome:gesture?"unknown":"not_executed",safeToRetry:!gesture,guidance:"Use a fresh semantic snapshot or screenshot. This is an observation/targeting failure, not proof the app cannot complete the workflow."}};}
+    });
+  }
   if(name==="browser_recover"){
-    const key=owner+":"+chat,pending=sessions.get(key);if(pending){const s=await pending.catch(()=>null);if(s){s.closing=true;if(s.saveTimer)clearTimeout(s.saveTimer);s.previewAbort?.abort();await s.chain.catch(()=>{});await s.client.close().catch(()=>{});}sessions.delete(key);}
+    const key=owner+":"+chat,pending=sessions.get(key);canvasObservations.delete(key);if(pending){const s=await pending.catch(()=>null);if(s){s.closing=true;if(s.saveTimer)clearTimeout(s.saveTimer);s.previewAbort?.abort();await s.chain.catch(()=>{});await s.client.close().catch(()=>{});}sessions.delete(key);}
     const s=await session(owner,chat);return observedAction(s,name,async()=>{const r=checked(await call(s,"browser_snapshot",{},15000,signal));remember(s,r,true);return {...normalized(s,r),recovered:true,note:"Restored saved tabs and cookies; inspect authentication and effects of the interrupted action before continuing."};});
   }
   if(name==="browser_read_snapshot"){const s=await session(owner,chat);if(s.snapshot?.id!==args.snapshotId)throw new Error("Snapshot changed; request a fresh focused snapshot");return pageSlice(s,args.offset);}
@@ -197,7 +226,9 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       }
       if(name==="browser_mouse_click_xy"||name==="browser_mouse_drag_xy")if(!s.visionAt||Date.now()-s.visionAt>30000)throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
       preflight=false;
-      const result=checked(await call(s,name,args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
+      const result=checked(await call(s,name==="browser_mouse_drag_xy"?"browser_run_code_unsafe":name,name==="browser_mouse_drag_xy"?{code:dragCode({x:args.startX,y:args.startY},{x:args.endX,y:args.endY})}:args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
+      if(name==="browser_mouse_drag_xy"){const gesture=parseBrowserJson(result);if(gesture.error)return {...gesture,recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};}
+      if(!browserRead(name,args))canvasObservations.delete(owner+":"+chat);
       if(!browserRead(name,args)){s.visionAt=undefined;s.snapshot=undefined;s.dirty=true;}
       if(name==="browser_take_screenshot")s.visionAt=Date.now();
       try{remember(s,result,name==="browser_snapshot");}catch{s.saveWarning="The action returned successfully but tab state could not be saved. Inspect the page before repeating any action.";}

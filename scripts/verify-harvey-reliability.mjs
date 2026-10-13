@@ -66,6 +66,17 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
    const rewrite=JSON.stringify(b.messages).includes('Rewrite the draft below into 2–4 short, plain sentences for Marco.');
    response=!rewrite&&n===0?tc('workspace_files',{}):rewrite?(JSON.stringify(b.messages).includes('PLAIN_STATUS_CALL_FIXTURE')?tc('workspace_files',{}):{role:'assistant',content:'Both videos are ready. They still need to be combined, and I have not started that step.'}):{role:'assistant',content:'## Technical status\n'+('The source files are prepared; combining them is still pending. '.repeat(14))};
  }
+ else if(user.includes('CONTINUATION_RUNTIME_FIXTURE')){
+   const steps=[['task_plan',{action:'save',objective:'Existing project composite',steps:['Inspect saved render','Export'],successCriteria:['Verified output'],requiredSources:[]}],['task_plan',{action:'get'}],['continue_work',{delaySeconds:30,reason:'Inspect existing render, then export.',evidenceId:'e2',quote:'Existing project composite'}]];
+   response=n<steps.length?tc(...steps[n]):{role:'assistant',content:'The saved render is still pending.'};
+ }
+ else if(user.includes('CONTINUATION_CHECKPOINT_FIXTURE')){
+   const checkpoint=b.tools?.some(t=>t.function.name==='continue_work')&&!b.tools?.some(t=>t.function.name==='computer');
+   response=checkpoint?{role:'assistant',content:'',tool_calls:[
+     {id:'forbidden',type:'function',function:{name:'computer',arguments:JSON.stringify({action:'call',tool:'browser_click',arguments:{target:'#generate'}})}},
+     {id:'checkpoint',type:'function',function:{name:'continue_work',arguments:JSON.stringify({delaySeconds:30,reason:'Inspect existing render then export.',evidenceId:'e29',quote:'Rendering at 46%'})}}
+   ]}:b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):{role:'assistant',content:'Stopped.'};
+ }
  else if(user.includes('SUMMARY_RECOVERY_FIXTURE')){
    response=b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'The files are ready. The last step is still pending.'};
  }
@@ -159,6 +170,11 @@ try{
    const simple=await runAgentLoop({message:"What's left? "+(invalidCall?'PLAIN_STATUS_CALL_FIXTURE':'PLAIN_STATUS_FIXTURE'),modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[{name:'workspace_files',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{reads++;return {files:[{name:'ready.mp4'}]};}}});
    ok('plain status rewrite cannot execute additional tools '+invalidCall,()=>{assert.equal(reads,1);if(!invalidCall){assert(simple.speech.length<200);assert(!simple.speech.includes('##'));assert.match(simple.speech,/still need/);}else assert(simple.modelError);});
  }
+ for(const execution of [true,false]){
+   const continuationChat=store.createChat('continuation-fixture',{});
+   const result=await require(join(root,'harvey/work/runtime.js')).runChat('continuation-fixture',continuationChat,(execution?'Finish':'Did you finish')+' CONTINUATION_RUNTIME_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
+   ok('real runtime continuation requires an execution request and unfinished plan '+execution,()=>assert.equal(!!result.continuation,execution));
+ }
  const oldAgent=process.env.HARVEY_MODEL_AGENT;
  process.env.HARVEY_MODEL_AGENT='inception/mercury-2.5';
  let autoVisualExecutions=0;
@@ -169,6 +185,10 @@ try{
  let longActions=0;
  const summary=await runAgentLoop({message:'SUMMARY_RECOVERY_FIXTURE',job:'agent',workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{longActions++;return {content:[{type:'text',text:'Existing work observed'}]};}}});
  ok('long tool run reserves enough room to recover its final answer without restarting work',()=>{assert.equal(longActions,29);assert.match(summary.speech,/last step is still pending/);assert(!summary.modelError);});
+ let continuationReads=0;
+ const continuationTools=['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}}));
+ const checkpointed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot','Checkpoint round must reject a fabricated external action');continuationReads++;return {text:'Rendering at 46%'};}}});
+ ok('reserved checkpoint yields unfinished work with observed state and cannot run external actions',()=>{assert.equal(continuationReads,29);assert.equal(checkpointed.continuation.delaySeconds,30);assert.match(checkpointed.continuation.reason,/existing render/);});
  if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
  for(const available of [true,false]){
    let mailDiscovery=0;

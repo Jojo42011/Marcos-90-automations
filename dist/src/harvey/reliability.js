@@ -52,7 +52,7 @@ function isObservation(name, input) {
         return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
     }
     if (name === "computer")
-        return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
+        return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
     if (name === "plugin_request")
         return String(input.method || "GET").toUpperCase() === "GET";
     if (name === "business_call" && input.tool === "crm_api")
@@ -88,6 +88,15 @@ class TurnVerification {
     receipts = [];
     sources = new Map();
     report;
+    continuationEvidence(id, quote) {
+        const receipt = this.receipts.find(r => r.id === id);
+        if (!receipt || !receipt.observation || receipt.outcome !== "returned" || receipt.limitation)
+            throw new Error("Continuation needs a successful current observation");
+        if (typeof quote !== "string" || quote.length < 4 || quote.length > 500 || !JSON.stringify(this.sources.get(receipt.id)).includes(quote))
+            throw new Error("Quote the exact observed progress/state before continuing; no invented job status");
+        if (this.receipts.slice(this.receipts.indexOf(receipt) + 1).some(r => !r.observation && !r.discovery))
+            throw new Error("Observe again after the last action before yielding");
+    }
     record(name, input, result) {
         this.report = undefined; // A new action invalidates the earlier completion claim.
         // Pixels are evidence payload, not text truncation. Never retain base64 in the receipt/source ledger.
