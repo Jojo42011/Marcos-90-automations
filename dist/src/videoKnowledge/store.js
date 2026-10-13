@@ -10,6 +10,7 @@ const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
+const approval_js_1 = require("./approval.js");
 exports.FIELDS = ["city", "area", "address", "price", "bedrooms", "bathrooms", "size", "acreage", "builder", "features"];
 const normalize = (s) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 function validateNotes(value, video) {
@@ -33,6 +34,12 @@ function validateNotes(value, video) {
             throw new Error("Use specific property keywords");
     if (n.warnings !== undefined && (!Array.isArray(n.warnings) || n.warnings.length > 40 || n.warnings.some(w => typeof w !== 'string' || w.length > 500)))
         throw Error('Invalid review warnings');
+    if (n.evidence !== undefined) {
+        if (!Array.isArray(n.evidence) || n.evidence.length > 128)
+            throw Error('Invalid source evidence');
+        for (const fact of n.evidence)
+            validateNotes({ facts: [fact], keywords: [] }, video);
+    }
     if (n.conflicts !== undefined) {
         if (!Array.isArray(n.conflicts) || n.conflicts.length > exports.FIELDS.length)
             throw Error('Invalid review conflicts');
@@ -50,7 +57,7 @@ function validateNotes(value, video) {
                 throw Error('Conflicting facts must be held for review');
         }
     }
-    return { ...(n.warnings !== undefined ? { warnings: n.warnings } : {}), ...(n.conflicts !== undefined ? { conflicts: n.conflicts } : {}), facts: n.facts.map(f => ({ field: f.field, value: f.value.trim(), quote: f.quote, source: f.source })), keywords: [...new Set(n.keywords.map(normalize))] };
+    return { ...(n.evidence !== undefined ? { evidence: n.evidence } : {}), ...(n.warnings !== undefined ? { warnings: n.warnings } : {}), ...(n.conflicts !== undefined ? { conflicts: n.conflicts } : {}), facts: n.facts.map(f => ({ field: f.field, value: f.value.trim(), quote: f.quote, source: f.source })), keywords: [...new Set(n.keywords.map(normalize))] };
 }
 function postId(url) {
     try {
@@ -84,6 +91,8 @@ class VideoStore {
         for (const name of ['conflicts', 'decisions', 'warnings'])
             if (!columns.some(c => c.name === name))
                 this.db.exec(`ALTER TABLE videos ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`);
+        if (!columns.some(c => c.name === 'approval'))
+            this.db.exec("ALTER TABLE videos ADD COLUMN approval TEXT NOT NULL DEFAULT '{}'");
         const audit = this.db.prepare('PRAGMA table_info(video_audit)').all();
         if (!audit.some(c => c.name === 'detail'))
             this.db.exec("ALTER TABLE video_audit ADD COLUMN detail TEXT");
@@ -106,7 +115,7 @@ class VideoStore {
             return false;
         this.db.prepare(`INSERT INTO videos(account,post,url,caption,published,revision,source_hash) VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(account,post) DO UPDATE SET url=excluded.url,caption=excluded.caption,published=excluded.published,revision=excluded.revision,source_hash=excluded.source_hash,
-      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, (0, node_crypto_1.randomUUID)(), revision);
+      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',approval='{}',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, (0, node_crypto_1.randomUUID)(), revision);
         return true;
     }
     claim(account, now = Date.now()) {
@@ -130,8 +139,16 @@ class VideoStore {
             throw Error('Transcript missing or too large');
         const checked = validateNotes(notes, { ...v, transcript });
         const conflicts = checked.conflicts || [];
-        this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
-            .run(conflicts.length || checked.warnings?.length ? 'needs_confirmation' : 'needs_review', transcript, JSON.stringify({ facts: checked.facts, keywords: checked.keywords }), JSON.stringify(conflicts), JSON.stringify(checked.warnings || []), (0, node_crypto_1.randomUUID)(), v.account, v.post, v.lease, v.revision);
+        const approval = (0, approval_js_1.assessApproval)(checked, { ...v, transcript });
+        const state = approval.mode === 'automatic' ? 'ready' : conflicts.length || checked.warnings?.length || checked.evidence ? 'needs_confirmation' : 'needs_review';
+        this.db.transaction(() => {
+            const revision = (0, node_crypto_1.randomUUID)();
+            const updated = this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,approval=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
+                .run(state, transcript, JSON.stringify({ facts: checked.facts, keywords: checked.keywords, evidence: checked.evidence }), JSON.stringify(conflicts), JSON.stringify(checked.warnings || []), JSON.stringify(approval), revision, v.account, v.post, v.lease, v.revision);
+            if (updated.changes)
+                this.db.prepare('INSERT INTO video_audit(account,post,revision,action,at,detail) VALUES(?,?,?,?,?,?)')
+                    .run(v.account, v.post, revision, approval.mode === 'automatic' ? 'auto_approve' : 'review_required', Date.now(), JSON.stringify({ ...approval, evidence: checked.evidence || [] }));
+        }).immediate();
     }
     fail(v, stage = 'transcription') {
         this.db.prepare("UPDATE videos SET state=?,next_attempt=?,error=?,lease=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
@@ -175,8 +192,8 @@ class VideoStore {
                 if (!checked.facts.length)
                     throw Error('Approve at least one supported property fact');
             }
-            this.db.prepare('UPDATE videos SET state=?,notes=?,decisions=?,revision=?,lease=NULL,attempts=0,next_attempt=0 WHERE account=? AND post=?')
-                .run(action === 'approve' ? 'ready' : action === 'disable' ? 'disabled' : 'queued', checked ? JSON.stringify(checked) : v.notes, action === 'approve' ? JSON.stringify(decisions) : v.decisions, (0, node_crypto_1.randomUUID)(), account, post);
+            this.db.prepare('UPDATE videos SET state=?,notes=?,decisions=?,approval=?,revision=?,lease=NULL,attempts=0,next_attempt=0 WHERE account=? AND post=?')
+                .run(action === 'approve' ? 'ready' : action === 'disable' ? 'disabled' : 'queued', checked ? JSON.stringify(checked) : v.notes, action === 'approve' ? JSON.stringify(decisions) : v.decisions, action === 'approve' ? JSON.stringify({ ...JSON.parse(v.approval), mode: 'manual' }) : '{}', (0, node_crypto_1.randomUUID)(), account, post);
             this.db.prepare('INSERT INTO video_audit(account,post,revision,action,at,detail) VALUES(?,?,?,?,?,?)').run(account, post, revision, action, Date.now(), JSON.stringify({ decisions, acknowledgedWarnings: acknowledgeWarnings === true }));
             return this.get(account, post);
         }).immediate();

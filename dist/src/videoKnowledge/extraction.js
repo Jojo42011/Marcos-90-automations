@@ -66,7 +66,7 @@ function reconcileEvidence(caption, transcript, video) {
         else
             facts.push(unique[0]);
     }
-    const notes = { facts, keywords: explicitKeywords(video.caption, video.transcript), conflicts };
+    const notes = { facts, evidence: all, keywords: explicitKeywords(video.caption, video.transcript), conflicts };
     return (0, store_js_1.validateNotes)(notes, video);
 }
 const descriptions = {

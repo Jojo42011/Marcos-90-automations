@@ -28,7 +28,7 @@ try {
  await check('valid canonical URL only',()=>{assert.equal(postId(video().url),'111');assert.equal(postId('https://tiktok.com.evil.test/@a/video/111'),null);assert.equal(postId('http://tiktok.com/@a/video/111'),null);assert.equal(postId('https://tiktok.com:444/@a/video/111'),null);});
  await check('duplicate discovery does not requeue',()=>{assert.equal(store.ingest(video()),true);assert.equal(store.ingest(video()),false);});
  await check('account separation',()=>{store.ingest(video('111','account-b'));assert.equal(store.list('account-b').length,1);assert.equal(store.list('account-a').length,1);});
- await check('worker produces review state, never automatic approval',async()=>{assert.equal(await processVideo(store,'account-a',{transcribe:async()=> 'This is the full recorded speech.',extract:async()=>notes}),'needs_review');assert.equal(store.get('account-a','111').state,'needs_review');});
+ await check('worker holds legacy notes without separate source evidence',async()=>{assert.equal(await processVideo(store,'account-a',{transcribe:async()=> 'This is the full recorded speech.',extract:async()=>notes}),'needs_review');assert.equal(store.get('account-a','111').state,'needs_review');});
  process.env.VIDEO_KNOWLEDGE_ENABLED='true';process.env.VIDEO_KNOWLEDGE_REPLIES_ENABLED='true';
  await check('unreviewed exact video cannot supply facts',()=>{assert.doesNotMatch(videoReply('u',video().url+' location?',store,'account-a'),/San Antonio/);});
  await check('unsupported city rejected',()=>{assert.throws(()=>validateNotes({...notes,facts:[{field:'city',value:'Austin',quote:'This house is in San Antonio.',source:'caption'}]},video()),/supported/);});

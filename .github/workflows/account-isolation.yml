@@ -16,6 +16,7 @@ jobs:
       - run: npm run build
       - run: node scripts/verify-video-knowledge.mjs
       - run: node scripts/verify-video-flow.mjs
+      - run: node scripts/verify-video-auto-approval.mjs
       - run: node scripts/verify-comment-agent.mjs
       - run: node scripts/verify-dm-reliability.mjs
       - run: node scripts/verify-task-owner-recovery.mjs

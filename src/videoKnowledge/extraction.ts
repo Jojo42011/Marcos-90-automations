@@ -49,7 +49,7 @@ export function reconcileEvidence(caption: Fact[], transcript: Fact[], video: Pi
             conflicts.push({field,question:`The sources disagree about ${field}. Which value is correct, or should this detail be omitted?`,candidates:unique.slice(0,8)});
         } else facts.push(unique[0]!);
     }
-    const notes = {facts,keywords:explicitKeywords(video.caption,video.transcript),conflicts};
+    const notes = {facts,evidence:all,keywords:explicitKeywords(video.caption,video.transcript),conflicts};
     return validateNotes(notes,video);
 }
 
