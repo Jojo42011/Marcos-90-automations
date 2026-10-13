@@ -542,7 +542,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       ? system + "\n\nCHECKPOINT ROUND: If authorized plan steps remain without a blocker, use continue_work with an exact current observation and a brief remaining-work note. A continuation preserves this same job and budget; it must inspect current state before further actions. Otherwise report the actual verified result or concrete blocker. No external actions are available in this round."
       : summaryRound && toolRounds > 0
       ? system +
-        "\n\nFINAL ROUND: no more tool calls are available this turn. Answer the current user now using what you already gathered above. If something is genuinely still missing, say which part you could not get and what you would need — do not apologise for the process or mention limits, rounds, or tools."
+        "\n\nFINAL ROUND: no more actions are available this turn. Report verified progress and the precise unresolved reason using current evidence. If the execution budget is why work stopped, say it paused at its execution limit. Never substitute an unsupported website, alpha, permission or credit diagnosis for an execution or targeting limit. Distinguish an observed application error from a hypothesis. Do not claim the workflow finished without verification."
       : system;
 
     let out: CompletionOutcome;
