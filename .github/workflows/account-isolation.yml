@@ -14,6 +14,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - run: node scripts/verify-storage-guards.mjs
       - run: node scripts/verify-video-knowledge.mjs
       - run: node scripts/verify-video-flow.mjs
       - run: node scripts/verify-video-auto-approval.mjs
