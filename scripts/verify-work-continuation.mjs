@@ -44,3 +44,45 @@ try{
  const fail=new TurnVerification();fail.record('computer',{action:'call',tool:'browser_snapshot'},{error:'timeout'});assert.throws(()=>fail.continuationEvidence('e1','timeout'),/successful/);
  console.log('ok waiting requires real observed progress and rejects invented, failed or pre-write evidence');
 }finally{S.closeStore();}
+
+// New durable recovery checks use isolated chats and only local executors.
+const recoveryChat=S.createChat('alice',{});
+const recovery=J.enqueueJob('alice',recoveryChat.id,{requestId:'safe-recovery',message:'Transfer all verified records'});
+const receipt=(observation,scope='business:lead',outcome='returned')=>({id:'e',tool:'business_call',at:new Date().toISOString(),observation,scope,outcome,discovery:false,truncated:false});
+assert(!J.safeRecovery([receipt(false)]));
+assert(!J.safeRecovery([receipt(false),receipt(true,'business:other')]));
+assert(!J.safeRecovery([receipt(false,'business:lead','failed'),receipt(true)]));
+assert(J.safeRecovery([receipt(false),receipt(true)]));
+S.put('task_plan','alice',{id:'recovery-plan',chatId:recoveryChat.id,requestId:recovery.id,steps:['Transfer remaining records'],nextStep:0});
+S.put('job','alice',{...S.get('job','alice',recovery.id),status:'running',safeResume:true,totalCostUsd:.25});
+J.recoverJobs();assert.equal(S.get('job','alice',recovery.id).status,'waiting');
+let recovered=0;
+await J.executeJob('alice',recovery.id,async(_o,_c,prompt,opts)=>{recovered++;assert(opts.continuationTurn);assert.equal(opts.maxCostUsd,1.75);assert.match(prompt,/Inspect current state/);opts.onEvent({type:'usage',costUsd:.1});return {speech:'Verified existing batch; finished remaining records.',costUsd:.1,verification:{status:'completed'}};});
+assert.equal(recovered,1);assert.equal(S.get('job','alice',recovery.id).totalCostUsd,.35,'Persisted step cost must not be double counted');
+const longChat=S.createChat('alice',{}),long=J.enqueueJob('alice',longChat.id,{requestId:'long',message:'Transfer all authorized records'});
+S.put('job','alice',{...S.get('job','alice',long.id),continuationCount:20,createdAt:new Date(Date.now()-2*60*60_000).toISOString()});
+await J.executeJob('alice',long.id,async()=>({speech:'Long task completed',verification:{status:'completed'}}));assert.equal(S.get('job','alice',long.id).status,'completed');
+const cancellingChat=S.createChat('alice',{}),cancelling=J.enqueueJob('alice',cancellingChat.id,{requestId:'stop-restart',message:'Finish'});
+S.put('job','alice',{...S.get('job','alice',cancelling.id),status:'cancelling',safeResume:true});J.recoverJobs();assert.equal(S.get('job','alice',cancelling.id).status,'needs_attention');
+console.log('ok matching read-back recovery, no cross-resource/failed-write replay, persisted spend, >12 segments/>1 hour, cancellation remains stopped');
+S.closeStore();
+
+const batchesChat=S.createChat('alice',{}),batches=J.enqueueJob('alice',batchesChat.id,{requestId:'many-batches',message:'Transfer all authorized source records into the separate destination'});
+const sourceRecords=Array.from({length:30},(_,id)=>({id,sourceAccount:'source'})),destination=new Map();
+for(let i=0;i<30;i++){
+ const before=S.get('job','alice',batches.id);if(i)S.put('job','alice',{...before,nextRunAt:new Date(0).toISOString()});
+ await J.executeJob('alice',batches.id,async(owner,c,prompt,opts)=>{
+   assert.equal(owner,'alice');assert.equal(c.id,batchesChat.id);assert.equal(opts.workRequestId,batches.id);
+   const source=sourceRecords.find(r=>!destination.has(r.id));assert(source);destination.set(source.id,{...source,destinationAccount:'destination'});
+   return {speech:i===29?'All batches verified':'Batch verified',costUsd:.01,...(i<29?{continuation:{delaySeconds:10,reason:'Inspect destination before creating remaining source records',progressKey:String(destination.size)}}:{verification:{status:'completed'}})};
+ });
+}
+assert.equal(destination.size,30);assert.equal(sourceRecords.length,30);assert.equal(S.get('job','alice',batches.id).status,'completed');assert.equal(S.list('job','bob').length,0);
+const brokenChat=S.createChat('alice',{}),broken=J.enqueueJob('alice',brokenChat.id,{requestId:'bounded-model-repair',message:'Finish remaining batch'});
+for(let i=0;i<4;i++){
+ if(i)S.put('job','alice',{...S.get('job','alice',broken.id),nextRunAt:new Date(0).toISOString()});
+ await J.executeJob('alice',broken.id,async()=>({speech:'Recovering',continuation:{delaySeconds:10,reason:'Inspect saved progress',recovery:'model_response'},costUsd:.01}));
+}
+assert.equal(S.get('job','alice',broken.id).status,'needs_attention');assert.equal(S.get('job','alice',broken.id).result.failure.kind,'invalid_model_response');
+console.log('ok 30 batches retain distinct source/destination and job identity without duplicate records; persistent malformed service responses stop after bounded automatic recovery');
+S.closeStore();

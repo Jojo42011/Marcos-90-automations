@@ -138,7 +138,7 @@ async function runAgentLoop(opts) {
     const businessSpecific = !opts.fastMode &&
         !opts.voiceMode &&
         /\b(lead|client|deal|listing|marco|tiktok|mojo|brivity|canyon|price|funnel)\b/i.test(opts.message);
-    if (!opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
+    if (!opts.workRuntime && !opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
         /* A one-line clarification is the cheapest thing Harvey ever does, so it
            runs on the `classify` slot rather than whatever the chat is set to. */
         const clar = await (0, index_js_1.complete)({
@@ -406,6 +406,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let providerRetries = 0;
     for (let step = 0; step < stepBudget; step++) {
         opts.signal?.throwIfAborted();
+        if (opts.allowContinuation && opts.checkpointAt && Date.now() >= opts.checkpointAt && step < stepBudget - 3)
+            step = stepBudget - 3;
         /* The final round runs with tools WITHHELD. The budget then ends in an
            answer assembled from everything gathered, instead of the dead-end
            "hit the tool loop limit" that discarded the whole turn's work. */
@@ -458,10 +460,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 };
             }
             const detail = err instanceof index_js_1.ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
-            if (opts.workRuntime && !opts.signal?.aborted && providerRetries < 1 && /timeout|\b50[234]\b|temporarily unavailable/i.test(detail)) {
+            if (opts.workRuntime && !opts.signal?.aborted && providerRetries < 3 && /timeout|timed out|\b(?:429|50[0234]|529)\b|temporarily unavailable|overloaded|ECONNRESET|fetch failed/i.test(detail)) {
                 providerRetries++;
                 step--;
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, Math.min(1000 * 2 ** (providerRetries - 1), 4000)));
                 continue;
             }
             console.error("[agentLoop] model call failed:", detail);
@@ -479,6 +481,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 modelError: detail,
             };
         }
+        providerRetries = 0;
         costUsd += out.usage.costUsd;
         promptTokens += out.usage.promptTokens;
         completionTokens += out.usage.completionTokens;
@@ -516,6 +519,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 malformedRepairs++;
                 system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
                 continue;
+            }
+            if (opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status !== "blocked" && (0, reliability_js_1.canResumeFromReceipts)(verification.result().receipts, true)) {
+                return { speech: "Recovering the AI response and continuing from saved progress.", continuation: { delaySeconds: 10, recovery: "model_response", reason: "The last model reply was malformed; no action from that reply ran. Inspect the saved task_plan, work_records and current site before continuing unfinished work. Do not repeat completed actions." }, verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
             }
             return { speech: "I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.", modelError: "Empty or malformed model response after bounded repair; finish reason: " + String(out.stopReason || "unknown"), verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
         }

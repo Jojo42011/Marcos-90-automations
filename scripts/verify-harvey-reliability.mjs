@@ -93,6 +93,7 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
    const attempt=(repairAttempts.get(user)||0)+1;repairAttempts.set(user,attempt);
    response=attempt<=2?{role:'assistant',content:attempt===1?'':'<|tool_call_start|><function=computer>bad call</function><|tool_call_end|>'}:{role:'assistant',content:'Recovered into a usable answer.'};
  }
+ else if(user.includes('BROKEN_BATCH_FIXTURE'))response=n===0?tc('computer',{action:'call',tool:user.includes('UNKNOWN_WRITE')?'browser_click':'browser_snapshot'}):{role:'assistant',content:''};
  else if(user.includes('ALWAYS_EMPTY_FIXTURE'))response={role:'assistant',content:''};
  else if(user.includes('ORDERED_TOOLS_FIXTURE')){
    response=n===0?{role:'assistant',content:'',tool_calls:[
@@ -196,6 +197,8 @@ try{
  const continuationTools=['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}}));
  const checkpointed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot','Checkpoint round must reject a fabricated external action');continuationReads++;return {text:'Rendering at 46%'};}}});
  ok('reserved checkpoint yields unfinished work with observed state and cannot run external actions',()=>{assert.equal(continuationReads,29);assert.equal(checkpointed.continuation.delaySeconds,30);assert.match(checkpointed.continuation.reason,/existing render/);});
+ const elapsed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async()=>{throw new Error('The elapsed segment must not execute more external actions');}}});
+ ok('elapsed segment enters checkpoint rounds before the hard task timer',()=>assert.equal(elapsed.verification?.receipts.length,0));
  if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
  for(const available of [true,false]){
    let mailDiscovery=0;
@@ -210,6 +213,11 @@ try{
  ok('empty and pseudo-tool output repairs into a usable answer without executing text',()=>{assert.match(formatRepaired.speech,/Recovered/);assert(!formatRepaired.modelError);});
  const empty=await runAgentLoop({message:'ALWAYS_EMPTY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
  ok('persistent empty replies return an honest nonempty failure after bounded repair',()=>{assert(empty.modelError);assert(empty.speech.length>20);});
+ for(const unknownWrite of [false,true]){
+   let actions=0;
+   const recovered=await runAgentLoop({message:'Finish BROKEN_BATCH_FIXTURE '+(unknownWrite?'UNKNOWN_WRITE':''),fullMode:true,allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{actions++;return {text:'Source account and destination account inspected; completed batch retained.'};}}});
+   ok('malformed batch resumes only after safe observation '+unknownWrite,()=>{assert.equal(actions,1);assert.equal(recovered.continuation?.recovery,unknownWrite?undefined:'model_response');assert.equal(!!recovered.modelError,unknownWrite);});
+ }
  let written=false,writeCount=0;
  const ordered=await runAgentLoop({message:'ORDERED_TOOLS_FIXTURE',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'schedule_agent',description:'Fixture',input_schema:{type:'object',properties:{action:{type:'string'}}}}],context:'Fixture',execute:async(_n,i)=>{if(i.action==='create'){await new Promise(r=>setTimeout(r,30));written=true;writeCount++;return {id:'one'};}assert(written);return [{id:'one'}];}}});
  ok('dependent tool batch executes write then read then verification without racing or replay',()=>{assert.equal(writeCount,1);assert.equal(ordered.verification.status,'completed');});
@@ -303,6 +311,18 @@ try{
    checks++;console.log('ok onboarding guide renders real costs, measured timing and model selection');
    await page.getByRole('button',{name:'Scheduled',exact:true}).click();await page.getByText('Repeated runs need attention; inspect before resuming.',{exact:true}).waitFor({timeout:10000});checks++;console.log('ok paused schedule explains why it stopped in the real UI');
    store.remove('schedule','alice',paused.id);
+   const removed=store.createChat('alice',{title:'Remote deletion fixture'});
+   const other=await browser.newPage();
+   await other.goto(base.replace('/api/harvey','')+'/harvey.html?token=fixture&chat='+removed.id);
+   await other.waitForFunction(id=>new URL(location.href).searchParams.get('chat')===id,removed.id);
+   await other.locator('#input').fill('Keep my unsent draft');
+   const deleted=await api('/conversations/'+removed.id,'DELETE');assert.equal(deleted.status,200);
+   await other.evaluate(()=>window.dispatchEvent(new Event('focus')));
+   await other.waitForFunction(()=>!new URL(location.href).searchParams.get('chat'));
+   assert.equal(await other.locator('#input').inputValue(),'Keep my unsent draft');
+   assert.equal(await other.locator('[data-conv="'+removed.id+'"]').count(),0);
+   await other.close();checks++;console.log('ok remote chat deletion clears another live session and preserves its unsent draft');
+
   }finally{await browser.close();}
  }
  assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400);checks++;

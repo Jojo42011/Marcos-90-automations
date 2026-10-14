@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { RELIABILITY_RULES, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
+import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
 import { getAethonModel, getHaikuModel, getMaxTokens, isSocialTurn, needsSonnet } from "./modelRouting.js";
@@ -125,7 +125,7 @@ function extractAssistantText(content: Anthropic.Messages.Message["content"]): s
 }
 
 export interface AgentLoopResult {
-  continuation?: {delaySeconds:number;reason:string;progressKey?:string};
+  continuation?: {delaySeconds:number;reason:string;progressKey?:string;recovery?:"model_response"};
   verification?: Verification;
   speech: string;
   toolRounds: number;
@@ -190,6 +190,7 @@ export type AgentLoopEvent =
 
 export interface AgentLoopOptions {
   allowContinuation?: boolean;
+  checkpointAt?: number;
   workRequestId?: string;
   continuationTurn?: boolean;
   actorId?: string;
@@ -290,7 +291,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     !opts.voiceMode &&
     /\b(lead|client|deal|listing|marco|tiktok|mojo|brivity|canyon|price|funnel)\b/i.test(opts.message);
 
-  if (!opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
+  if (!opts.workRuntime && !opts.voiceMode && confidence < 0.15 && count < 3 && businessSpecific) {
     /* A one-line clarification is the cheapest thing Harvey ever does, so it
        runs on the `classify` slot rather than whatever the chat is set to. */
     const clar = await complete({
@@ -535,6 +536,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let providerRetries=0;
   for (let step = 0; step < stepBudget; step++) {
     opts.signal?.throwIfAborted();
+    if(opts.allowContinuation && opts.checkpointAt && Date.now()>=opts.checkpointAt && step<stepBudget-3)step=stepBudget-3;
     /* The final round runs with tools WITHHELD. The budget then ends in an
        answer assembled from everything gathered, instead of the dead-end
        "hit the tool loop limit" that discarded the whole turn's work. */
@@ -589,8 +591,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         };
       }
       const detail = err instanceof ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
-      if(opts.workRuntime && !opts.signal?.aborted && providerRetries<1 && /timeout|\b50[234]\b|temporarily unavailable/i.test(detail)){
-        providerRetries++;step--;await new Promise(resolve=>setTimeout(resolve,1000));continue;
+      if(opts.workRuntime && !opts.signal?.aborted && providerRetries<3 && /timeout|timed out|\b(?:429|50[0234]|529)\b|temporarily unavailable|overloaded|ECONNRESET|fetch failed/i.test(detail)){
+        providerRetries++;step--;await new Promise(resolve=>setTimeout(resolve,Math.min(1000 * 2 ** (providerRetries-1),4000)));continue;
       }
       console.error("[agentLoop] model call failed:", detail);
       return {
@@ -608,6 +610,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       };
     }
 
+    providerRetries=0;
     costUsd += out.usage.costUsd;
     promptTokens += out.usage.promptTokens;
     completionTokens += out.usage.completionTokens;
@@ -638,6 +641,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         malformedRepairs++;
         system += "\nRuntime format repair: your previous reply was empty or contained textual tool-call markup. No action from that text ran. Use the actual structured tool-call interface with the discovered schema, or return a plain-language outcome. Keep previously completed actions; do not repeat them.";
         continue;
+      }
+      if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && canResumeFromReceipts(verification.result().receipts,true)){
+        return {speech:"Recovering the AI response and continuing from saved progress.",continuation:{delaySeconds:10,recovery:"model_response",reason:"The last model reply was malformed; no action from that reply ran. Inspect the saved task_plan, work_records and current site before continuing unfinished work. Do not repeat completed actions."},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
       }
       return {speech:"I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }
