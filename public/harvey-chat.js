@@ -1065,7 +1065,8 @@
       while(true){
         if(!current(run))return;
         (job.events||[]).forEach(function(e){if(e.seq>cursor){handleSseBlock('event: tool\ndata: '+JSON.stringify(e),ui);cursor=e.seq;}});
-        if(['queued','running','cancelling'].indexOf(job.status)<0){applyNonStream(job.result||{text:job.status==='cancelled'?'Cancelled before starting.':'Task needs attention.'},ui);return;}
+        if(['queued','running','waiting','cancelling'].indexOf(job.status)<0){applyNonStream(job.result||{text:job.status==='cancelled'?'Cancelled before starting.':'Task needs attention.'},ui);return;}
+        if(job.status==='waiting')ui.note('Waiting for the current step; this task will continue automatically.');
         if(signal&&signal.aborted){
           if(!run.cancel){ui.setText('Task continues in the background. Reopen this chat to view it.');return;}
           var cancelled=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id)+'/cancel',{method:'POST',body:{}});
@@ -1077,7 +1078,7 @@
         var r=await api('/api/harvey/work/jobs/'+encodeURIComponent(job.id));
         if(!current(run))return;
         if(!r.ok){
-          if(r.status!==401&&r.status!==403&&r.status!==404&&++failures<=5){ui.note('Reconnecting to the saved task…');continue;}
+          if(r.status!==401&&r.status!==403&&r.status!==404&&++failures<=5){ui.note('Reconnecting to the saved task...');continue;}
           throw new Error('Connection interrupted. The task is saved and may still be running. Reopen this chat to reconnect; do not resubmit the same task.');
         }
         failures=0;job=r.data;

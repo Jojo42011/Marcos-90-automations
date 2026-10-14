@@ -4,15 +4,16 @@ import { runChat } from "./runtime.js";
 
 export interface WorkJob {
   actorId?: string; id: string; chatId: string; requestId: string; fingerprint: string; prompt: string; model?: string;
-  status: "queued" | "running" | "cancelling" | "cancelled" | "completed" | "needs_attention" | "failed";
+  status: "queued" | "running" | "waiting" | "cancelling" | "cancelled" | "completed" | "needs_attention" | "failed";
+  continuationCount?:number; nextRunAt?:string; resumeReason?:string; totalCostUsd?:number;
   createdAt: string; updatedAt: string; result?: any; originChatId?: string; maxCostUsd?: number;
   events: {seq:number;type:string;name?:string;status?:string;at:string}[];
 }
 const controllers = new Map<string, AbortController>();
 const key = (owner:string,id:string) => owner+":"+id;
-export const activeJob = (j: WorkJob) => ["queued","running","cancelling"].includes(j.status);
+export const activeJob = (j: WorkJob) => ["queued","running","waiting","cancelling"].includes(j.status);
 export function publicJob(j: WorkJob) {
-  const {prompt,fingerprint,requestId,...visible}=j; return visible;
+  const {prompt,fingerprint,requestId,resumeReason,...visible}=j; return visible;
 }
 export function chatJob(owner:string,chatId:string) {
   get<Chat>("chat",owner,chatId);
@@ -35,22 +36,28 @@ export function enqueueJob(owner:string,chatId:string,input:any,delegation?:{ori
 export function cancelJob(owner:string,id:string) {
   const job=get<WorkJob>("job",owner,id);get<Chat>("chat",owner,job.chatId);
   if(!activeJob(job))return publicJob(job);
-  job.status=job.status==="queued"?"cancelled":"cancelling";job.updatedAt=new Date().toISOString();put("job",owner,job);
+  job.status=["queued","waiting"].includes(job.status)?"cancelled":"cancelling";job.updatedAt=new Date().toISOString();put("job",owner,job);
   controllers.get(key(owner,id))?.abort();return publicJob(job);
 }
 export async function executeJob(owner:string,id:string,executor=runChat) {
   if(process.env.TENANT_OWNER_ID && process.env.TENANT_OWNER_ID!==owner)return;
   if(controllers.size>=2)return;
   let job=get<WorkJob>("job",owner,id);
-  if(job.status!=="queued")return;
+  const due=(j:WorkJob)=>j.status==="queued"||j.status==="waiting"&&!!j.nextRunAt&&Date.parse(j.nextRunAt)<=Date.now();
+  if(!due(job))return;
   if(workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(owner,job.chatId))return;
-  job=workDb().transaction(()=>{const current=get<WorkJob>("job",owner,id);if(current.status!=="queued")return null;return put("job",owner,{...current,status:"running" as const,updatedAt:new Date().toISOString()});}).immediate();
+  job=workDb().transaction(()=>{const current=get<WorkJob>("job",owner,id);if(!due(current))return null;return put("job",owner,{...current,status:"running" as const,updatedAt:new Date().toISOString()});}).immediate();
   if(!job)return;
   const controller=new AbortController();controllers.set(key(owner,id),controller);
   const timer=setTimeout(()=>controller.abort(),15*60_000);timer.unref();
-  const approvals:unknown[]=[],schedules:unknown[]=[];
+  const approvals:unknown[]=[...(job.result?.approvals||[])],schedules:unknown[]=[...(job.result?.schedules||[])];
   try {
-    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),job.prompt,{actorId:job.actorId||owner,modelOverride:job.model,maxCostUsd:job.maxCostUsd,workDelegated:!!job.originChatId,signal:controller.signal,onEvent:e=>{
+    const ceiling=job.maxCostUsd??2, remaining=ceiling-(job.totalCostUsd||0);
+    if(remaining<=0||(job.continuationCount||0)>=12||Date.now()-Date.parse(job.createdAt)>60*60_000){
+      job.status="needs_attention";job.result={text:"The saved task reached its time, continuation or model-spend limit. Completed work is retained; inspect it before resuming.",needsAttention:true};return;
+    }
+    const prompt=job.continuationCount ? job.prompt+"\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): "+job.resumeReason : job.prompt;
+    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,maxCostUsd:remaining,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,onEvent:e=>{
       // Persist progress without tool arguments, passwords or raw response data.
       if(e.type==="approval"){approvals.push(e.approval);return;}
       if(e.type==="schedule"){schedules.push(e.schedule);return;}
@@ -60,11 +67,17 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
       current.events=current.events.slice(-200);current.updatedAt=new Date().toISOString();put("job",owner,current);
     }});
     job=get<WorkJob>("job",owner,id);
+    job.totalCostUsd=(job.totalCostUsd||0)+(result.costUsd||0);
     const attention=result.toolFailed||!!result.modelError||!!result.budgetRefused||("needsVerification" in result&&result.needsVerification);
     job.status=controller.signal.aborted?"needs_attention":result.modelError||result.budgetRefused?"failed":attention?"needs_attention":"completed";
     job.result={text:result.speech,conversationId:job.chatId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,needsAttention:attention||controller.signal.aborted,approvals,schedules,
       ...(result.modelError?{failure:{kind:/402|credits|afford/i.test(result.modelError)?"provider_credit_limit":/Empty or malformed/i.test(result.modelError)?"invalid_model_response":"provider_error",model:result.modelUsed||result.model}}:{}),
       usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0}};
+    if(result.continuation&&!controller.signal.aborted&&!result.modelError&&!result.budgetRefused&&!job.originChatId){
+      job.status="waiting";job.continuationCount=(job.continuationCount||0)+1;
+      job.nextRunAt=new Date(Date.now()+Math.max(10,Math.min(120,result.continuation.delaySeconds))*1000).toISOString();
+      job.resumeReason=result.continuation.reason;job.result.needsAttention=false;
+    }
   } catch {
     job=get<WorkJob>("job",owner,id);job.status="needs_attention";
     job.result={text:controller.signal.aborted?"Stopped. Inspect any action already in progress before retrying.":"The task was interrupted. Review saved chat and verification checkpoints before retrying; no automatic replay was performed.",needsAttention:true};
@@ -81,6 +94,6 @@ export function recoverJobs() {
 let started=false;
 export function startJobWorker() {
   if(started)return;started=true;recoverJobs();
-  const pump=()=>{for(const owner of owners("job"))for(const job of list<WorkJob>("job",owner))if(job.status==="queued")void executeJob(owner,job.id).catch(()=>{});};
+  const pump=()=>{for(const owner of owners("job"))for(const job of list<WorkJob>("job",owner))if(["queued","waiting"].includes(job.status))void executeJob(owner,job.id).catch(()=>{});};
   pump();const timer=setInterval(pump,2000);timer.unref();
 }

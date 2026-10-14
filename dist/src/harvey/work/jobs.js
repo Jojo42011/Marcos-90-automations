@@ -13,10 +13,10 @@ const store_js_1 = require("./store.js");
 const runtime_js_1 = require("./runtime.js");
 const controllers = new Map();
 const key = (owner, id) => owner + ":" + id;
-const activeJob = (j) => ["queued", "running", "cancelling"].includes(j.status);
+const activeJob = (j) => ["queued", "running", "waiting", "cancelling"].includes(j.status);
 exports.activeJob = activeJob;
 function publicJob(j) {
-    const { prompt, fingerprint, requestId, ...visible } = j;
+    const { prompt, fingerprint, requestId, resumeReason, ...visible } = j;
     return visible;
 }
 function chatJob(owner, chatId) {
@@ -49,7 +49,7 @@ function cancelJob(owner, id) {
     (0, store_js_1.get)("chat", owner, job.chatId);
     if (!(0, exports.activeJob)(job))
         return publicJob(job);
-    job.status = job.status === "queued" ? "cancelled" : "cancelling";
+    job.status = ["queued", "waiting"].includes(job.status) ? "cancelled" : "cancelling";
     job.updatedAt = new Date().toISOString();
     (0, store_js_1.put)("job", owner, job);
     controllers.get(key(owner, id))?.abort();
@@ -61,11 +61,12 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
     if (controllers.size >= 2)
         return;
     let job = (0, store_js_1.get)("job", owner, id);
-    if (job.status !== "queued")
+    const due = (j) => j.status === "queued" || j.status === "waiting" && !!j.nextRunAt && Date.parse(j.nextRunAt) <= Date.now();
+    if (!due(job))
         return;
     if ((0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(owner, job.chatId))
         return;
-    job = (0, store_js_1.workDb)().transaction(() => { const current = (0, store_js_1.get)("job", owner, id); if (current.status !== "queued")
+    job = (0, store_js_1.workDb)().transaction(() => { const current = (0, store_js_1.get)("job", owner, id); if (!due(current))
         return null; return (0, store_js_1.put)("job", owner, { ...current, status: "running", updatedAt: new Date().toISOString() }); }).immediate();
     if (!job)
         return;
@@ -73,9 +74,16 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
     controllers.set(key(owner, id), controller);
     const timer = setTimeout(() => controller.abort(), 15 * 60_000);
     timer.unref();
-    const approvals = [], schedules = [];
+    const approvals = [...(job.result?.approvals || [])], schedules = [...(job.result?.schedules || [])];
     try {
-        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), job.prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: job.maxCostUsd, workDelegated: !!job.originChatId, signal: controller.signal, onEvent: e => {
+        const ceiling = job.maxCostUsd ?? 2, remaining = ceiling - (job.totalCostUsd || 0);
+        if (remaining <= 0 || (job.continuationCount || 0) >= 12 || Date.now() - Date.parse(job.createdAt) > 60 * 60_000) {
+            job.status = "needs_attention";
+            job.result = { text: "The saved task reached its time, continuation or model-spend limit. Completed work is retained; inspect it before resuming.", needsAttention: true };
+            return;
+        }
+        const prompt = job.continuationCount ? job.prompt + "\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): " + job.resumeReason : job.prompt;
+        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: remaining, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, onEvent: e => {
                 // Persist progress without tool arguments, passwords or raw response data.
                 if (e.type === "approval") {
                     approvals.push(e.approval);
@@ -94,11 +102,19 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
                 (0, store_js_1.put)("job", owner, current);
             } });
         job = (0, store_js_1.get)("job", owner, id);
+        job.totalCostUsd = (job.totalCostUsd || 0) + (result.costUsd || 0);
         const attention = result.toolFailed || !!result.modelError || !!result.budgetRefused || ("needsVerification" in result && result.needsVerification);
         job.status = controller.signal.aborted ? "needs_attention" : result.modelError || result.budgetRefused ? "failed" : attention ? "needs_attention" : "completed";
         job.result = { text: result.speech, conversationId: job.chatId, verification: result.verification, contextPlan: result.contextPlan, memoryContext: result.memoryContext, needsAttention: attention || controller.signal.aborted, approvals, schedules,
             ...(result.modelError ? { failure: { kind: /402|credits|afford/i.test(result.modelError) ? "provider_credit_limit" : /Empty or malformed/i.test(result.modelError) ? "invalid_model_response" : "provider_error", model: result.modelUsed || result.model } } : {}),
             usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 } };
+        if (result.continuation && !controller.signal.aborted && !result.modelError && !result.budgetRefused && !job.originChatId) {
+            job.status = "waiting";
+            job.continuationCount = (job.continuationCount || 0) + 1;
+            job.nextRunAt = new Date(Date.now() + Math.max(10, Math.min(120, result.continuation.delaySeconds)) * 1000).toISOString();
+            job.resumeReason = result.continuation.reason;
+            job.result.needsAttention = false;
+        }
     }
     catch {
         job = (0, store_js_1.get)("job", owner, id);
@@ -129,7 +145,7 @@ function startJobWorker() {
     recoverJobs();
     const pump = () => { for (const owner of (0, store_js_1.owners)("job"))
         for (const job of (0, store_js_1.list)("job", owner))
-            if (job.status === "queued")
+            if (["queued", "waiting"].includes(job.status))
                 void executeJob(owner, job.id).catch(() => { }); };
     pump();
     const timer = setInterval(pump, 2000);

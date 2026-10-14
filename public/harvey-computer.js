@@ -41,7 +41,7 @@
       $('computerStatus').textContent=labels[data.state]||'Preview unavailable';
       var actions={browser_navigate:'Opening a page',browser_navigate_back:'Going back',browser_snapshot:'Inspecting the page',browser_click:'Clicking a control',browser_type:'Typing',browser_fill_form:'Filling a form',browser_press_key:'Using the keyboard',browser_select_option:'Selecting an option',browser_hover:'Inspecting a control',browser_drag:'Dragging',browser_tabs:'Switching tabs',browser_wait_for:'Waiting for the page',browser_handle_dialog:'Handling a dialog',browser_file_upload:'Uploading a file',browser_take_screenshot:'Capturing the page'};
       var action=actions[data.action];
-      $('computerActivity').textContent=(data.phase==='running'?'Harvey is working':data.phase==='queued'?'Task queued':data.phase==='cancelling'?'Stopping task':'No task running')+(action?' · '+(data.state==='working'?'':'Last browser action: ')+action:'');
+      $('computerActivity').textContent=(data.phase==='running'?'Harvey is working':data.phase==='queued'?'Task queued':data.phase==='waiting'?'Waiting to continue saved task':data.phase==='cancelling'?'Stopping task':'No task running')+(action?' · '+(data.state==='working'?'':'Last browser action: ')+action:'');
       if(data.persistenceWarning||data.restoreWarning)$('computerActivity').textContent+=' · '+(data.persistenceWarning||data.restoreWarning);
       if(data.frame && /^data:image\/jpeg;base64,/.test(data.frame.image)){
         $('computerImage').src=data.frame.image;$('computerImage').hidden=false;$('computerEmpty').hidden=true;
