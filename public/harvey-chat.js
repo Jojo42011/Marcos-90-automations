@@ -1746,6 +1746,7 @@
     });
 
     if(window.HarveyComputer) window.HarveyComputer.init({state:state,apiUrl:apiUrl});
+    if(window.HarveyMyBrowser) window.HarveyMyBrowser.init({state:state,apiUrl:apiUrl,ensureChat:ensureWorkChat});
     if(window.HarveyWork) window.HarveyWork.init({api:api,apiUrl:apiUrl,state:state,toast:toast,showView:showView,newChat:newChat,refresh:loadConversations,openChat:openConversation,ensureChat:ensureWorkChat});
 
     /* first load */

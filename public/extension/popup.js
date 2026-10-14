@@ -136,3 +136,6 @@ $("enabled").addEventListener("change", async (e) => {
 });
 
 refresh();
+
+chrome.runtime.sendMessage({type:'harvey:local-status'},r=>{$('stopLocal').hidden=!r?.active;});
+$('stopLocal').onclick=()=>chrome.runtime.sendMessage({type:'harvey:local-stop'},()=>{$('stopLocal').hidden=true;});

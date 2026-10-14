@@ -30,10 +30,13 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: node scripts/verify-video-edit.mjs
       - run: node scripts/verify-harvey-job-ui.mjs
+      - run: node scripts/verify-mls-live.mjs
       - run: node scripts/verify-harvey-work.mjs
       - run: node scripts/verify-work-continuation.mjs
       - run: node --check public/harvey-chat.js
       - run: npx playwright install --with-deps chromium
+      - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-local-browser.mjs
+      - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-extension.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-onboarding.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-canvas-targeting.mjs
       - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-reliability.mjs

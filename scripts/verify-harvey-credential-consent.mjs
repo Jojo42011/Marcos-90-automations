@@ -56,6 +56,7 @@ const store = {
   unlockChat: (_owner,_id,k) => locks.delete(k)
 };
 const runtime = load("harvey/work/runtime.js", {
+  "./localBrowser.js":{localBrowserSelected:()=>false},
   "./modelAdvice.js":{}, "./records.js":{}, "./execution.js":load("harvey/work/execution.js"),
   "../../core/users.js":{getAccountUserById:()=>null},
   "./teamTraining.js":{sharedTrainingContext:()=>[]},

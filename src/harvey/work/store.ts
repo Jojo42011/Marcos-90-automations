@@ -7,7 +7,7 @@ import { CronExpressionParser } from "cron-parser";
 
 export type Mode = "chat" | "work";
 export interface Project { id: string; name: string; instructions: string; timezone: string }
-export interface Chat { model?: string; allowChatCredentials?: boolean; id: string; projectId: string | null; title: string; mode: Mode; sessionId: string; updatedAt: string }
+export interface Chat { browserTarget?: "hosted" | "local"; model?: string; allowChatCredentials?: boolean; id: string; projectId: string | null; title: string; mode: Mode; sessionId: string; updatedAt: string }
 export interface Message { actorId?: string; sourceChatId?: string; role: "user" | "assistant"; content: string; at: string; runId?: string; origin?: "delegated" | "continuation" }
 export interface Schedule { id: string; chatId: string; title: string; prompt: string; cron: string; timezone: string; enabled: boolean; nextRunAt: string; maxCostUsd: number; workflowId?: string; pauseAfterFailures?: number; consecutiveFailures?: number; pauseReason?: string; lastRunStatus?: string; lastRunAt?: string }
 export interface Run { id: string; scheduleId: string; chatId: string; status: "running" | "completed" | "failed" | "needs_attention"; startedAt: string; finishedAt?: string; result?: string }

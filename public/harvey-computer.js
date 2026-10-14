@@ -27,6 +27,7 @@
     if(open)poll();
   }
   async function poll(){
+    if(window.HarveyMyBrowser?.isSelected())return;
     if(!h||!open||document.hidden||controller||Date.now()-lastPoll<4000)return;
     var id=h.state.conversationId;
     if(!id){$('computerStatus').textContent='Ready when you are';return;}
@@ -36,7 +37,7 @@
       var response=await fetch(h.apiUrl('/api/harvey/work/browser/'+encodeURIComponent(id)+'/preview'),{signal:abort.signal,cache:'no-store'});
       if(!response.ok)throw new Error('Computer preview unavailable. Try again shortly.');
       var data=await response.json();
-      if(version!==generation||id!==h.state.conversationId||data.chatId!==id||!open)return;
+      if(window.HarveyMyBrowser?.isSelected()||data.state==='local'||version!==generation||id!==h.state.conversationId||data.chatId!==id||!open)return;
       var labels={disabled:'Browser not enabled',closed:'No browser open',unavailable:'Preview unavailable',working:'Using browser',ready:'Browser ready',needs_attention:'Browser needs attention'};
       $('computerStatus').textContent=labels[data.state]||'Preview unavailable';
       var actions={browser_navigate:'Opening a page',browser_navigate_back:'Going back',browser_snapshot:'Inspecting the page',browser_click:'Clicking a control',browser_type:'Typing',browser_fill_form:'Filling a form',browser_press_key:'Using the keyboard',browser_select_option:'Selecting an option',browser_hover:'Inspecting a control',browser_drag:'Dragging',browser_tabs:'Switching tabs',browser_wait_for:'Waiting for the page',browser_handle_dialog:'Handling a dialog',browser_file_upload:'Uploading a file',browser_take_screenshot:'Capturing the page'};
@@ -67,6 +68,7 @@
       timer=setInterval(sync,500);window.addEventListener('pagehide',function(){clearInterval(timer);clear();});window.addEventListener('pageshow',function(e){if(e.persisted){clearInterval(timer);timer=setInterval(sync,500);lastPoll=0;sync();}});sync();
     },
     sync:sync,
+    show:function(){toggle(true,true);},
     hide:function(){if(open)toggle(false,true);}
   };
 })();

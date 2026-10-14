@@ -43,23 +43,24 @@ const codeExec_js_1 = require("../core/codeExec.js");
 const smsStore_js_1 = require("../core/smsStore.js");
 const harveyNotes_js_1 = require("../core/harveyNotes.js");
 const listingsStore_js_1 = require("../core/listingsStore.js");
-const index_js_1 = require("../agents/mlsSync/index.js");
+const index_js_1 = require("../integrations/simplyrets/index.js");
+const index_js_2 = require("../agents/mlsSync/index.js");
 const db_js_1 = require("../core/db.js");
 const socialStore_js_1 = require("../core/socialStore.js");
-const index_js_2 = require("../agents/morningScan/index.js");
-const index_js_3 = require("../agents/reporting/index.js");
-const index_js_4 = require("../agents/contentSuggestions/index.js");
-const index_js_5 = require("../agents/escalations/index.js");
-const index_js_6 = require("../agents/showingReminders/index.js");
-const index_js_7 = require("../agents/mojoOutreach/index.js");
+const index_js_3 = require("../agents/morningScan/index.js");
+const index_js_4 = require("../agents/reporting/index.js");
+const index_js_5 = require("../agents/contentSuggestions/index.js");
+const index_js_6 = require("../agents/escalations/index.js");
+const index_js_7 = require("../agents/showingReminders/index.js");
+const index_js_8 = require("../agents/mojoOutreach/index.js");
 const transactionsStore_js_1 = require("../core/transactionsStore.js");
-const index_js_8 = require("../agents/harveyContentDigest/index.js");
+const index_js_9 = require("../agents/harveyContentDigest/index.js");
 const leadScoreStore_js_1 = require("../core/leadScoreStore.js");
 const smsStore_js_2 = require("../core/smsStore.js");
-const index_js_9 = require("../agents/leadScoring/index.js");
+const index_js_10 = require("../agents/leadScoring/index.js");
 const sourceRouting_js_1 = require("../agents/leadNurture/sourceRouting.js");
-const index_js_10 = require("../agents/reEngagement/index.js");
-const index_js_11 = require("../agents/listingStatusAutomation/index.js");
+const index_js_11 = require("../agents/reEngagement/index.js");
+const index_js_12 = require("../agents/listingStatusAutomation/index.js");
 const crmNotificationStore_js_1 = require("../core/crmNotificationStore.js");
 const reportingStore_js_1 = require("../core/reportingStore.js");
 const financeStore_js_1 = require("../core/financeStore.js");
@@ -195,8 +196,13 @@ exports.HARVEY_TOOL_DEFINITIONS = [
         },
     },
     {
+        name: "search_mls_live",
+        description: "Read one page directly from the shared MLS API using server-side credentials. Available to all three accounts. Prefer this for current listing checks; search_listings searches the local mirror. Never treat a failed request as no matches or a page count as the market total. Follow nextOffset with unchanged filters. Defaults to Active status on the provider.",
+        input_schema: { type: "object", properties: { q: { type: "string" }, city: { type: "string" }, status: { type: "string" }, minPrice: { type: "number" }, maxPrice: { type: "number" }, minBeds: { type: "number" }, minBaths: { type: "number" }, limit: { type: "integer", minimum: 1, maximum: 50 }, offset: { type: "integer", minimum: 0 } }, additionalProperties: false },
+    },
+    {
         name: "search_listings",
-        description: "Search live MLS listings from the SABOR MLS feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
+        description: "Search the local mirror of MLS listings from the SABOR MLS feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
             "Returns totalMatching alongside the page, so say how many exist and not just how many you listed. " +
             "If it reports notConfigured or stale, SAY SO — an empty result from a disconnected feed is not a quiet market.",
         input_schema: {
@@ -583,7 +589,7 @@ function normalizeHarveyToolInput(input) {
 }
 /* Re-exported from the scoring model rather than copied, so Harvey can never
    quote a factor ceiling the scorer no longer uses. */
-const NURTURE_WEIGHTS = index_js_9.WEIGHTS;
+const NURTURE_WEIGHTS = index_js_10.WEIGHTS;
 function formatPreApproval(status) {
     if (!status)
         return "Not set";
@@ -664,8 +670,9 @@ async function executeHarveyTool(name, input) {
             });
         case "get_conversation":
             return getConversationForLead(String(normalized.leadId ?? ""));
+        case "search_mls_live": return (0, index_js_1.searchMlsLive)(normalized);
         case "search_listings": {
-            const st = (0, index_js_1.mlsStatus)();
+            const st = (0, index_js_2.mlsStatus)();
             if (!st.configured) {
                 return {
                     ok: false, notConfigured: true, error: st.error, fix: st.fix,
@@ -703,7 +710,7 @@ async function executeHarveyTool(name, input) {
             };
         }
         case "get_listing": {
-            const st = (0, index_js_1.mlsStatus)();
+            const st = (0, index_js_2.mlsStatus)();
             if (!st.configured) {
                 return { ok: false, notConfigured: true, error: st.error, fix: st.fix,
                     say: "The MLS feed is not connected. Do not say the property does not exist." };
@@ -722,7 +729,7 @@ async function executeHarveyTool(name, input) {
             return { ok: true, listing: row };
         }
         case "get_mls_status":
-            return (0, index_js_1.mlsStatus)();
+            return (0, index_js_2.mlsStatus)();
         case "get_sms_thread":
             return getSmsThreadForHarvey(String(normalized.leadId ?? ""), Number(normalized.limit) || 50);
         case "get_my_notes":
@@ -773,30 +780,30 @@ async function executeHarveyTool(name, input) {
         case "get_social_videos":
             return getSocialVideosForHarvey(normalized);
         case "get_morning_scan": {
-            const scan = (0, index_js_2.getLatestMorningScan)();
+            const scan = (0, index_js_3.getLatestMorningScan)();
             return { result: scan };
         }
         case "get_pending_comment_replies": {
             return { replies: (0, socialStore_js_1.getPendingCommentReplies)() };
         }
         case "get_evening_pull": {
-            return (0, index_js_3.getLatestReportingSnapshot)("evening");
+            return (0, index_js_4.getLatestReportingSnapshot)("evening");
         }
         case "get_content_suggestions": {
-            return (0, index_js_4.getLatestContentSuggestions)();
+            return (0, index_js_5.getLatestContentSuggestions)();
         }
         case "get_content_digest": {
-            return (0, index_js_8.getLatestContentDigest)();
+            return (0, index_js_9.getLatestContentDigest)();
         }
         case "get_recent_escalations": {
-            return { escalations: (0, index_js_5.getRecentEscalations)(10) };
+            return { escalations: (0, index_js_6.getRecentEscalations)(10) };
         }
         case "get_upcoming_showings": {
-            const upcoming = await (0, index_js_6.getUpcomingShowings)();
+            const upcoming = await (0, index_js_7.getUpcomingShowings)();
             return { upcoming };
         }
         case "get_mojo_outreach_status": {
-            return await (0, index_js_7.getMojoOutreachStatus)();
+            return await (0, index_js_8.getMojoOutreachStatus)();
         }
         case "get_paused_conversations": {
             const leads = (await (0, db_js_1.listAllLeads)()).filter((l) => l.automationPaused);
@@ -933,10 +940,10 @@ async function executeHarveyTool(name, input) {
             };
         }
         case "lead_nurture_score_all": {
-            return (0, index_js_9.scoreAllLeads)();
+            return (0, index_js_10.scoreAllLeads)();
         }
         case "lead_nurture_rescore_cold": {
-            return (0, index_js_9.scoreColdLeads)();
+            return (0, index_js_10.scoreColdLeads)();
         }
         case "lead_nurture_route_lead": {
             const leadId = String(normalized.leadId || "").trim();
@@ -1131,7 +1138,7 @@ async function executeHarveyTool(name, input) {
             const lead = await (0, db_js_1.getLeadById)(leadId);
             if (!lead)
                 return { error: "Lead not found", leadId };
-            return (0, index_js_10.handleWebsiteVisit)(leadId);
+            return (0, index_js_11.handleWebsiteVisit)(leadId);
         }
         case "update_seller_listing_status": {
             const leadId = String(normalized.leadId || normalized.lead_id || "").trim();
@@ -1148,7 +1155,7 @@ async function executeHarveyTool(name, input) {
             if (!lead)
                 return { error: "Lead not found", leadId };
             const source = normalized.source === "mls_feed" ? "mls_feed" : "manual";
-            return (0, index_js_11.handleListingStatusUpdate)(leadId, address, status, source);
+            return (0, index_js_12.handleListingStatusUpdate)(leadId, address, status, source);
         }
         default:
             return { error: `Unknown tool: ${name}` };

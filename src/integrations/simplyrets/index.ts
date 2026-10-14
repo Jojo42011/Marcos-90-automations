@@ -255,3 +255,34 @@ export async function mlsPing(): Promise<
       : null,
   };
 }
+
+/** A bounded live read for Harvey, separate from the background mirror/sync. */
+export async function searchMlsLive(input: Record<string, unknown> = {}) {
+  const cfg = simplyRetsConfig();
+  if ('ok' in cfg) return cfg;
+  const params = new URLSearchParams({limit:'25',offset:'0',sort:'-modified'});
+  const fields:Record<string,string>={q:'q',city:'cities',status:'status',minPrice:'minprice',maxPrice:'maxprice',minBeds:'minbeds',minBaths:'minbaths',limit:'limit',offset:'offset'};
+  for(const [key,value] of Object.entries(input)) {
+    if(!(key in fields))return {ok:false,error:`Unsupported MLS filter: ${key}`};
+    if(value===undefined)continue;
+    if(['q','city','status'].includes(key)) {
+      if(typeof value!=='string'||!value.trim()||value.length>200)return {ok:false,error:`Invalid ${key}`};
+      if(key==='status'&&!['Active','Pending','Closed','ActiveUnderContract','Hold','Withdrawn','Expired','Delete','Incomplete','ComingSoon'].includes(value))return {ok:false,error:'Unsupported MLS status'};
+    } else if(typeof value!=='number'||!Number.isFinite(value)||value<0||(key==='limit'&&(!Number.isInteger(value)||value<1||value>50))||(key==='offset'&&!Number.isInteger(value)))return {ok:false,error:`Invalid ${key}`};
+    params.set(fields[key],String(value));
+  }
+  if(Number(params.get('minprice')||0)>Number(params.get('maxprice')||Infinity))return {ok:false,error:'Minimum price exceeds maximum price'};
+  if(cfg.vendor)params.set('vendor',cfg.vendor);
+  const url=new URL(cfg.baseUrl+'/properties');url.search=params.toString();
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),20000);
+  try {
+    // Never follow a redirect with the configured account credentials.
+    const res=await fetch(url,{headers:{Authorization:authHeader(cfg),Accept:'application/json'},redirect:'error',signal:ctl.signal});
+    if(!res.ok)return {ok:false,error:`MLS API returned HTTP ${res.status}. No listing conclusion can be drawn.`,authenticationFailed:res.status===401||res.status===403};
+    const body:unknown=await res.json();
+    if(!Array.isArray(body)||body.length>50)return {ok:false,error:'Unexpected MLS response; no listing conclusion can be drawn.'};
+    const limit=Number(params.get('limit')),offset=Number(params.get('offset'));
+    return {ok:true,source:'SimplyRETS live API',fetchedAt:new Date().toISOString(),count:body.length,listings:body,offset,limit,nextOffset:nextLinkFrom(res.headers.get('link'))?offset+limit:null,note:'One live page, not a market total. Keep filters unchanged when paging. Availability and fields depend on the shared MLS subscription. No local CRM data is included.'};
+  } catch { return {ok:false,error:'MLS API request failed or timed out. Do not interpret this as no matching listings.'}; }
+  finally {clearTimeout(timer);}
+}

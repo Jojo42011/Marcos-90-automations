@@ -80,6 +80,7 @@
     <button class="iconbtn" id="toggleSetup" title="Pairing settings">Setup</button>
     <button class="iconbtn" id="clear" title="Clear this conversation">Clear</button>
   </header>
+  <div style="padding:12px;border-bottom:1px solid var(--line)"><a href="https://marco-90-automation.fly.dev/harvey" target="_blank" rel="noopener" style="color:var(--accent)">Open Harvey · Use my browser</a><button id="stopLocal" class="iconbtn" hidden>Stop connected tab</button><div style="color:var(--dim);font-size:11px">Connect from your signed-in Harvey chat. No pairing token is needed for this connection.</div></div>
 
   <section id="setup" hidden>
     <div class="setup-inner">
@@ -121,5 +122,6 @@
   </form>
 
   <script src="sidepanel.js"></script>
+<script src="local-panel.js"></script>
 </body>
 </html>
