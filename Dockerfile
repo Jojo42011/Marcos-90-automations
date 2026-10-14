@@ -1,3 +1,16 @@
+FROM debian:bookworm-slim AS video-tools
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl cmake make g++ \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_linux -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp
+WORKDIR /src
+# Same pinned whisper.cpp release used by Victoria's earlier local implementation.
+RUN curl -fsSL https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz | tar xz --strip-components=1 \
+    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF \
+    && cmake --build build --target whisper-cli -j2 \
+    && mkdir -p /opt/whisper \
+    && bash models/download-ggml-model.sh base /opt/whisper \
+    && cp LICENSE /opt/whisper/LICENSE
+
 # Marco Puga Realty — Automation System
 # Multi-service: Node.js (port 3000) + OpenShorts Python sidecar (port 8000)
 #
@@ -87,3 +100,9 @@ WORKDIR /app
 EXPOSE 3000
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
+COPY --from=video-tools /usr/local/bin/yt-dlp /usr/local/bin/yt-dlp
+COPY --from=video-tools /src/build/bin/whisper-cli /usr/local/bin/whisper-cli
+COPY --from=video-tools /opt/whisper /opt/whisper
+ENV VIDEO_WHISPER_MODEL=/opt/whisper/ggml-base.bin
+RUN yt-dlp --version && whisper-cli --help >/dev/null 2>&1 && test -s /opt/whisper/ggml-base.bin

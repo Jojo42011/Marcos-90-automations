@@ -16,6 +16,8 @@ swap_size_mb = 1024
   destination = "/data"
 
 [env]
+  VIDEO_KNOWLEDGE_ENABLED = "true"
+  VIDEO_KNOWLEDGE_REPLIES_ENABLED = "false"
   ACCOUNT_ISOLATION = "true"
   TZ = "America/Chicago"
   HARVEY_BROWSER_ENABLED = "true"
