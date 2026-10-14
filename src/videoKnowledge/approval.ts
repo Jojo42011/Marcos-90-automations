@@ -23,13 +23,15 @@ export function agreementKey(fact: Fact): string {
 }
 
 /** Absence of a contradiction is not agreement: retain explicit evidence from both sources. */
-export function assessApproval(notes: Notes, video: Pick<Video,'caption'|'transcript'>): Approval {
+export function assessApproval(notes: Notes, video: Pick<Video,'caption'|'transcript'>, requireCore = true): Approval {
     const reasons: string[] = [];
     if (notes.conflicts?.length) reasons.push('Resolve the source disagreements below.');
     if (notes.warnings?.length) reasons.push('Check the omitted or invalid extraction claims below.');
     if (!video.caption.trim() || !video.transcript.trim()) reasons.push('Both a caption and a complete transcript are required.');
-    if (!notes.facts.some(f => ['city','area','address'].includes(f.field))) reasons.push('Missing an undisputed property location.');
-    for (const field of ['bedrooms','bathrooms']) if (!notes.facts.some(f => f.field === field)) reasons.push(`Missing an undisputed ${field} count.`);
+    if (requireCore) {
+        if (!notes.facts.some(f => ['city','area','address'].includes(f.field))) reasons.push('Missing an undisputed property location.');
+        for (const field of ['bedrooms','bathrooms']) if (!notes.facts.some(f => f.field === field)) reasons.push(`Missing an undisputed ${field} count.`);
+    }
     if (!notes.evidence?.length) reasons.push('Separate evidence from both sources is missing; reprocess or review this video.');
     const evidence = notes.evidence || [];
     const claims = [...evidence, ...notes.facts];
@@ -69,4 +71,14 @@ export function assessApproval(notes: Notes, video: Pick<Video,'caption'|'transc
         reasons.push('A source quotation contains a negation missing from its extracted value.');
     }
     return {mode: reasons.length ? 'review_required' : 'automatic', policy:'all-details-both-sources-v1', reasons:[...new Set(reasons)]};
+}
+
+/** Each usable claim must pass on its own; unsupported details never block unrelated facts. */
+export function corroboratedFacts(notes: Notes, video: Pick<Video,'caption'|'transcript'>): Fact[] {
+    const fields = ['city','area','address','price','bedrooms','bathrooms','size','acreage','builder','features'];
+    return notes.facts.filter(fact => {
+        const evidence = (notes.evidence || []).filter(e => e.field === fact.field && (fact.field !== 'features' || agreementKey(e) === agreementKey(fact)));
+        const warnings = (notes.warnings || []).filter(w => w.includes(` ${fact.field} `) || !fields.some(field => w.includes(` ${field} `)));
+        return assessApproval({facts:[fact],keywords:[],evidence,warnings,conflicts:(notes.conflicts || []).filter(c=>c.field===fact.field)},video,false).mode === 'automatic';
+    });
 }

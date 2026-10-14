@@ -1810,3 +1810,12 @@ ${deterministicReply.trim()}`;
   }
 }
 
+
+/** Choose wording without giving the voice model authority to add listing facts. */
+export async function chooseMarcoVideoReply(options:string[],conversation:Conversation):Promise<number|null> {
+  if(!getClient())return null;
+  try {
+    const raw=await complete(`Select one supplied grounded reply in Marco's existing texting voice. Return only JSON {"choice":0}. Do not write a new reply. Use the following rules only as style references, not a source of property facts.\n`+getMarcoTikTokUnifiedPipelineSystem(),JSON.stringify({options,history:conversation.messages.slice(-6)}));
+    const parsed=JSON.parse(raw);return Number.isInteger(parsed.choice)&&parsed.choice>=0&&parsed.choice<options.length?parsed.choice:null;
+  }catch{return null;}
+}

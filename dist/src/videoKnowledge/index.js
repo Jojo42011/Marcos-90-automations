@@ -9,6 +9,7 @@ exports.hasVideoKeyword = hasVideoKeyword;
 exports.videoReply = videoReply;
 exports.videoAdmin = videoAdmin;
 exports.importOwnedVideo = importOwnedVideo;
+exports.voiceVideoReply = voiceVideoReply;
 const tenantData_js_1 = require("../core/tenantData.js");
 const node_crypto_1 = require("node:crypto");
 const store_js_1 = require("./store.js");
@@ -50,14 +51,14 @@ function hasVideoKeyword(message) {
         return false;
     try {
         const words = ` ${message.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
-        const videos = videoStore().db.prepare("SELECT notes FROM videos WHERE account=? AND state IN ('ready','needs_review','needs_confirmation')").all(account());
-        return videos.some(v => JSON.parse(v.notes).keywords.some(k => words.includes(` ${k} `)));
+        const videos = videoStore().db.prepare("SELECT notes FROM videos WHERE account=? AND state IN ('ready','unavailable','needs_review','needs_confirmation')").all(account());
+        return videos.some(v => JSON.parse(v.notes).keywords.some(k => words.includes(` ${k} `))) || videoStore().search(account(), message).length > 0;
     }
     catch {
         return false;
     }
 }
-const queries = { city: /\b(?:city|where|location|is it in)\b/i, area: /\b(?:area|neighbou?rhood|where|location)\b/i, address: /\baddress\b/i, price: /\b(?:price|pricing|cost|how much)\b/i, bedrooms: /\b(?:bedrooms?|beds?)\b/i, bathrooms: /\b(?:bathrooms?|baths?)\b/i, size: /\b(?:size|square feet|sq\.?\s?ft)\b/i, acreage: /\b(?:acreage|acres?|lot)\b/i, builder: /\bbuilder\b/i, features: /\b(?:features?|pool|garage|elevator|barn)\b/i };
+const queries = { city: /\b(?:city|where|location|is it in)\b/i, area: /\b(?:area|neighbou?rhood|where|location)\b/i, address: /\baddress\b/i, price: /\b(?:price|pricing|cost|how much)\b/i, bedrooms: /\b(?:bedrooms?|beds?)\b/i, bathrooms: /\b(?:bathrooms?|baths?)\b/i, size: /\b(?:size|square feet|sq\.?\s?ft)\b/i, acreage: /\b(?:acreage|acres?|lot)\b/i, builder: /\bbuilder\b/i, features: /\b(?:features?|pool|garage|elevator|barn|kitchen|patio|casita|fireplace|balcony)\b/i };
 function videoReply(person, message, store, accountId = account(), enabled = (0, exports.videoRepliesEnabled)()) {
     if (!enabled || !accountId)
         return null;
@@ -77,36 +78,52 @@ function videoReply(person, message, store, accountId = account(), enabled = (0,
             }
         }
         const fields = Object.keys(queries).filter(f => queries[f].test(question));
-        const general = /\b(?:info|information|details|tell me|available|availability)\b/i.test(message);
+        const general = /\b(?:info|information|details|description|describe|tell me|available|availability)\b/i.test(message);
         const propertyQuestion = /\b(?:does (?:it|this house|that house) (?:have|include)|how (?:many|big|old)|is it in)\b/i.test(message);
-        if (!fields.length && !general && !propertyQuestion && !['link', 'keyword', 'ambiguous', 'unknown'].includes(result.reason))
+        if (!fields.length && !general && !propertyQuestion && !['link', 'keyword', 'description', 'ambiguous', 'unknown'].includes(result.reason))
             return null;
         // A broad buyer question is not necessarily about the previously selected property.
         if (/\b(?:my budget|i (?:live|work)|do you (?:work|sell|cover)|buying process|closing costs|interest rate)\b/i.test(message))
             return null;
         if (result.reason === 'ambiguous')
-            return 'More than one video matches that. Which house do you mean—what was its specific keyword or location?';
+            return 'More than one house fits that. Can you give me a quick description so I can narrow it down?';
         if (result.reason === 'pending')
-            return "I found that video, but its details are still being checked. I'll need to confirm them before sharing specifics.";
+            return "I found that video, but I don't have those details confirmed yet.";
         if (!result.video) {
             if (result.reason === 'none')
                 return null; // Existing missing-info guard handles this.
-            return "I don't have confirmed details for that specific video yet. What was the house's keyword or location?";
+            return "Which house was it? A quick description or the keyword would help me find it.";
         }
         if (/\b(?:available|availability|sold|pending|current price|price now)\b/i.test(message))
             return "The video doesn't confirm today's price or availability. I'll need to verify that for you.";
         if (!notes)
             return null;
         if (propertyQuestion && !fields.length)
-            return "I found the video, but it doesn't have confirmed information for that question. I'll need to verify that detail.";
-        const requestedFeature = question.match(/\b(pool|garage|elevator|barn)\b/i)?.[1];
-        const selected = fields.length ? notes.facts.filter(f => fields.includes(f.field) && (f.field !== 'features' || !requestedFeature || f.value.toLowerCase().includes(requestedFeature.toLowerCase()))) : notes.facts.filter(f => ['city', 'bedrooms', 'bathrooms'].includes(f.field));
+            return "I'll need to verify that detail on this one.";
+        const requestedFeature = question.match(/\b(pool|garage|elevator|barn|kitchen|patio|casita|fireplace|balcony)\b/i)?.[1];
+        const selected = fields.length ? notes.facts.filter(f => fields.includes(f.field) && (f.field !== 'features' || !requestedFeature || f.value.toLowerCase().includes(requestedFeature.toLowerCase()))) : notes.facts.filter(f => ['city', 'area', 'bedrooms', 'bathrooms', 'features'].includes(f.field));
         if (!selected.length)
             return "I found the video, but it doesn't have confirmed information for that question. I'll need to verify that detail.";
         const labels = { city: 'location', area: 'area', address: 'address', price: 'advertised price', bedrooms: 'bedrooms', bathrooms: 'bathrooms', size: 'size', acreage: 'acreage', builder: 'builder', features: 'features' };
         const missing = fields.some(f => !selected.some(s => s.field === f || (['city', 'area'].includes(f) && fields.includes('city') && fields.includes('area') && ['city', 'area'].includes(s.field))));
         const shown = selected.slice(0, 3);
-        const render = () => `The video posted ${result.video.published.slice(0, 10)} lists ${shown.map(f => `${labels[f.field]}: ${f.value}`).join('; ')}.` + (shown.some(f => f.field === 'price') ? " I'll need to confirm the current price." : '') + (missing ? " I'll need to verify the other details." : shown.length < selected.length ? " I can share the other details next." : '');
+        const phrase = (f) => {
+            const value = f.value.replace(/[–—-]/g, ' ');
+            if (f.field === 'city')
+                return "It's in " + value;
+            if (f.field === 'area')
+                return "The area mentioned is " + value;
+            if (f.field === 'address')
+                return 'The address listed is ' + value;
+            if (f.field === 'bedrooms' || f.field === 'bathrooms')
+                return "It's got " + value + (/bed|bath/i.test(value) ? '' : ' ' + f.field);
+            if (f.field === 'features')
+                return "It's got " + (/^(?:a |an |the |no |\d|one |two |three |four )/i.test(value) ? '' : /s$/i.test(value) ? '' : /^[aeiou]/i.test(value) ? 'an ' : 'a ') + value;
+            if (f.field === 'price')
+                return 'The video from ' + result.video.published.slice(0, 10) + ' listed it at ' + value;
+            return 'The video lists ' + labels[f.field] + ' as ' + value;
+        };
+        const render = () => shown.map(phrase).join('. ') + '.' + (shown.some(f => f.field === 'price') ? " I'll need to confirm the current price." : '') + (missing ? " I'll need to verify the other details." : '');
         while (render().length > 320 && shown.length > 1)
             shown.pop();
         return render();
@@ -142,8 +159,8 @@ async function videoAdmin(method, body = {}, offset = 0) {
             throw new Error('Provide a TikTok video URL');
         return importOwnedVideo(videoStore(), account(), body.url);
     }
-    if (!['approve', 'disable', 'retry'].includes(body?.action) || typeof body.post !== 'string' || typeof body.revision !== 'string')
-        throw new Error('Invalid video review request');
+    if (!['disable', 'retry'].includes(body?.action) || typeof body.post !== 'string' || typeof body.revision !== 'string')
+        throw new Error('Invalid video processing request');
     return videoStore().review(account(), body.post, body.revision, body.action, body.notes, body.resolutions, body.acknowledgeWarnings === true);
 }
 /** Historical imports verify the canonical video's author against the connected account. */
@@ -163,4 +180,18 @@ async function importOwnedVideo(store, accountId, url, request = media_js_1.zern
         throw Error('Video publication date is unavailable');
     store.ingest({ account: accountId, post: String(meta.id), url: meta.webpage_url, caption: String(meta.description || ''), published: new Date(timestamp * 1000).toISOString() });
     return store.get(accountId, String(meta.id));
+}
+/** The voice model selects among grounded replies; it cannot add property facts. */
+async function voiceVideoReply(person, message, choose, voice) {
+    const reply = videoReply(person, message);
+    if (!reply)
+        return null;
+    const options = voice === 'marco' ? [reply, 'Got you. ' + reply, 'Yeah, of course. ' + reply] : [reply, 'Sure! ' + reply, 'Got you! ' + reply];
+    try {
+        const choice = await choose(options);
+        return Number.isInteger(choice) && choice !== null && choice >= 0 && choice < options.length ? options[choice] : options[0];
+    }
+    catch {
+        return options[0];
+    }
 }

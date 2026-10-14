@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const root=existsSync('dist/src/videoKnowledge')?'dist/src/videoKnowledge':'dist/videoKnowledge';
+const load=name=>import(pathToFileURL(path.resolve(root,name+'.js')));
+const {reconcileEvidence}=await load('extraction');
+const {videoStore,closeVideoStore,videoReply,voiceVideoReply,videoAdmin,hasVideoKeyword}=await load('index');
+process.env.VIDEO_KNOWLEDGE_ENABLED='true';process.env.VIDEO_KNOWLEDGE_REPLIES_ENABLED='true';
+process.env.VIDEO_KNOWLEDGE_DB_PATH=':memory:';process.env.ZERNIO_TIKTOK_ACCOUNT_ID='fixture';
+globalThis.fetch=async()=>{throw Error('No live network in backend tests');};
+const s=videoStore();let checks=0;
+const test=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
+const caption='San Antonio. 4 bedrooms. 3 bathrooms. Glass elevator. DM "TOUR".';
+const transcript='San Antonio. Five bedrooms. Three bathrooms. Glass elevator. A barn.';
+const f=(field,value,source)=>({field,value,quote:value,source});
+const notes=reconcileEvidence([f('city','San Antonio','caption'),f('features','Glass elevator','caption')],[f('city','San Antonio','transcript'),f('features','Glass elevator','transcript'),f('features','barn','transcript')],{caption,transcript});
+const video={account:'fixture',post:'123',url:'https://www.tiktok.com/@fixture/video/123',caption,published:'2026-10-01T00:00:00Z'};
+try {
+ await test('backend publishes corroborated fields and withholds disputed or single-source details',()=>{s.ingest(video);s.complete(s.claim('fixture'),transcript,notes);const row=s.get('fixture','123');assert.equal(row.state,'ready');assert.equal(JSON.parse(row.approval).mode,'partial');const facts=JSON.parse(row.notes).facts;assert(facts.some(f=>f.field==='city'));assert(facts.some(f=>f.value==='Glass elevator'));assert(!facts.some(f=>f.field==='bedrooms'||f.value==='barn'));assert(row.summary.includes('San Antonio'));assert(!row.summary.includes('Five'));assert(row.description.includes('barn'));});
+ await test('natural descriptions select a video without needing the CTA',()=>{assert.equal(s.resolve('fixture','a','the house with the glass elevator').video?.post,'123');assert(hasVideoKeyword('the house with the glass elevator'));assert.match(videoReply('b','the house with the glass elevator location?',s,'fixture',true),/San Antonio/);});
+ await test('unsupported descriptive feature identifies a source but never becomes an answer',()=>{assert.match(videoReply('b','the house with the barn',s,'fixture',true),/verify/);assert.doesNotMatch(videoReply('b','the house with the barn',s,'fixture',true),/has.*barn|got.*barn/);});
+ await test('wrong or negated descriptions never fall back to the previous home',()=>{for(const message of ['the house with the red kitchen','the house with no pool']){s.resolve('fixture','b','TOUR');assert.match(videoReply('b',message,s,'fixture',true),/quick description/);assert.doesNotMatch(videoReply('b',message,s,'fixture',true),/San Antonio/);}});
+ await test('brief descriptions use only the selected usable facts',()=>{const reply=videoReply('b','TOUR brief description?',s,'fixture',true);assert.match(reply,/San Antonio/);assert.doesNotMatch(reply,/Five|4 bedrooms|barn|posted.*lists/);});
+ await test('voice selection cannot inject facts and safely falls back on model failure',async()=>{const reply=await voiceVideoReply('v','TOUR location?',async options=>{assert(options.every(o=>!o.includes('Austin')));return 1;},'wesley');assert.match(reply,/Sure!.*San Antonio/);const bad=await voiceVideoReply('v','TOUR location?',async()=>999,'marco');assert.match(bad,/San Antonio/);const failed=await voiceVideoReply('v','TOUR location?',async()=>{throw Error('offline');},'marco');assert.equal(failed,bad);});
+ await test('multiple descriptive matches ask for clarification rather than ranking one as truth',()=>{s.ingest({...video,post:'456',url:'https://www.tiktok.com/@fixture/video/456'});s.complete(s.claim('fixture'),transcript,notes);const reply=videoReply('a','the house with the glass elevator',s,'fixture',true);assert.match(reply,/More than one.*quick description/);assert.doesNotMatch(reply,/San Antonio/);});
+ await test('description matching remains account scoped',()=>assert.equal(s.resolve('another-account','a','the house with the glass elevator').video,undefined));
+ await test('approval is no longer an exposed operator action; preview still sends nothing',async()=>{await assert.rejects(()=>videoAdmin('POST',{action:'approve',post:'123',revision:s.get('fixture','123').revision}),/Invalid/);assert.equal((await videoAdmin('POST',{action:'preview',message:'TOUR location?'})).sent,false);});
+ await test('review queue page is removed from the shipped UI',()=>assert.equal(existsSync('public/video-knowledge.html'),false));
+ console.log(`Video backend: ${checks} checks passed. No live APIs or messages.`);
+} finally {closeVideoStore();}

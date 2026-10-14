@@ -17,6 +17,7 @@ exports.sanitizePipelineReplyAgainstRecentMarco = sanitizePipelineReplyAgainstRe
 exports.generateMarcoOpeningReply = generateMarcoOpeningReply;
 exports.generateMarcoPipelineReply = generateMarcoPipelineReply;
 exports.rewriteReplyWithTone = rewriteReplyWithTone;
+exports.chooseMarcoVideoReply = chooseMarcoVideoReply;
 /**
  * Anthropic client — Claude Haiku (not Sonnet) for tone / light generation when wired in.
  */
@@ -1384,6 +1385,19 @@ ${deterministicReply.trim()}`;
     try {
         const raw = await complete(instruction, context);
         return parseReplyTextJson(raw);
+    }
+    catch {
+        return null;
+    }
+}
+/** Choose wording without giving the voice model authority to add listing facts. */
+async function chooseMarcoVideoReply(options, conversation) {
+    if (!getClient())
+        return null;
+    try {
+        const raw = await complete(`Select one supplied grounded reply in Marco's existing texting voice. Return only JSON {"choice":0}. Do not write a new reply. Use the following rules only as style references, not a source of property facts.\n` + (0, prompts_js_1.getMarcoTikTokUnifiedPipelineSystem)(), JSON.stringify({ options, history: conversation.messages.slice(-6) }));
+        const parsed = JSON.parse(raw);
+        return Number.isInteger(parsed.choice) && parsed.choice >= 0 && parsed.choice < options.length ? parsed.choice : null;
     }
     catch {
         return null;

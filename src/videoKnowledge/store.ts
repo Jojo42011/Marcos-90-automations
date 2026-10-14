@@ -2,7 +2,8 @@ import Database from "better-sqlite3";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import {assessApproval} from "./approval.js";
+import {assessApproval, corroboratedFacts} from "./approval.js";
+import {describeVideo, matchDescriptions} from "./search.js";
 export const FIELDS = ["city", "area", "address", "price", "bedrooms", "bathrooms", "size", "acreage", "builder", "features"] as const;
 export type Field = typeof FIELDS[number];
 export interface Fact {
@@ -34,6 +35,8 @@ export interface Video {
     decisions: string;
     warnings: string;
     approval: string;
+    description: string;
+    summary: string;
     revision: string;
     source_hash: string;
     attempts: number;
@@ -43,11 +46,11 @@ export interface Video {
 const normalize = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 export function validateNotes(value: unknown, video: Pick<Video, "caption" | "transcript">): Notes {
     const n = value as Notes;
-    if (!n || !Array.isArray(n.facts) || !Array.isArray(n.keywords) || n.facts.length > 12 || n.keywords.length > 8)
+    if (!n || !Array.isArray(n.facts) || !Array.isArray(n.keywords) || n.facts.length > 24 || n.keywords.length > 8)
         throw new Error("Invalid property notes");
     const used = new Set<string>();
     for (const f of n.facts) {
-        if (!FIELDS.includes(f.field) || used.has(f.field) || !["caption", "transcript"].includes(f.source))
+        if (!FIELDS.includes(f.field) || (used.has(f.field) && f.field !== 'features') || !["caption", "transcript"].includes(f.source))
             throw new Error("Invalid or conflicting property field");
         used.add(f.field);
         if (typeof f.value !== "string" || !normalize(f.value) || f.value.length > 90 || /[\n\r<>]/.test(f.value) || typeof f.quote !== "string" || !normalize(f.quote) || f.quote.length < 3 || f.quote.length > 500)
@@ -108,6 +111,7 @@ export class VideoStore {
         const columns = this.db.prepare('PRAGMA table_info(videos)').all() as {name:string}[];
         for (const name of ['conflicts','decisions','warnings']) if (!columns.some(c=>c.name===name)) this.db.exec(`ALTER TABLE videos ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`);
         if (!columns.some(c=>c.name==='approval')) this.db.exec("ALTER TABLE videos ADD COLUMN approval TEXT NOT NULL DEFAULT '{}'");
+        for (const name of ['description','summary']) if (!columns.some(c=>c.name===name)) this.db.exec(`ALTER TABLE videos ADD COLUMN ${name} TEXT NOT NULL DEFAULT ''`);
         const audit = this.db.prepare('PRAGMA table_info(video_audit)').all() as {name:string}[];
         if (!audit.some(c=>c.name==='detail')) this.db.exec("ALTER TABLE video_audit ADD COLUMN detail TEXT");
     }
@@ -126,7 +130,7 @@ export class VideoStore {
             return false;
         this.db.prepare(`INSERT INTO videos(account,post,url,caption,published,revision,source_hash) VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(account,post) DO UPDATE SET url=excluded.url,caption=excluded.caption,published=excluded.published,revision=excluded.revision,source_hash=excluded.source_hash,
-      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',approval='{}',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, randomUUID(), revision);
+      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',approval='{}',description='',summary='',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, randomUUID(), revision);
         return true;
     }
     claim(account: string, now = Date.now()): Video | undefined {
@@ -148,14 +152,16 @@ export class VideoStore {
         if (!transcript.trim() || transcript.length > 60000) throw Error('Transcript missing or too large');
         const checked = validateNotes(notes, { ...v, transcript });
         const conflicts = checked.conflicts || [];
-        const approval = assessApproval(checked,{...v,transcript});
-        const state = approval.mode === 'automatic' ? 'ready' : conflicts.length || checked.warnings?.length || checked.evidence ? 'needs_confirmation' : 'needs_review';
+        const assessment = assessApproval(checked,{...v,transcript});
+        const facts = checked.evidence ? corroboratedFacts(checked,{...v,transcript}) : [];
+        const approval = {...assessment,mode: facts.length ? (assessment.mode==='automatic'?'automatic':'partial') : 'unavailable'};
+        const state = checked.evidence ? (facts.length ? 'ready' : 'unavailable') : conflicts.length || checked.warnings?.length ? 'needs_confirmation' : 'needs_review';
         this.db.transaction(() => {
             const revision = randomUUID();
-            const updated = this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,approval=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
-                .run(state,transcript,JSON.stringify({facts:checked.facts,keywords:checked.keywords,evidence:checked.evidence}),JSON.stringify(conflicts),JSON.stringify(checked.warnings||[]),JSON.stringify(approval),revision,v.account,v.post,v.lease,v.revision);
+            const updated = this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,approval=?,description=?,summary=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
+                .run(state,transcript,JSON.stringify({facts:checked.evidence?facts:checked.facts,keywords:checked.keywords,evidence:checked.evidence}),JSON.stringify(conflicts),JSON.stringify(checked.warnings||[]),JSON.stringify(approval),describeVideo(checked),facts.map(f=>f.value).join('; ').slice(0,600),revision,v.account,v.post,v.lease,v.revision);
             if (updated.changes) this.db.prepare('INSERT INTO video_audit(account,post,revision,action,at,detail) VALUES(?,?,?,?,?,?)')
-                .run(v.account,v.post,revision,approval.mode==='automatic'?'auto_approve':'review_required',Date.now(),JSON.stringify({...approval,evidence:checked.evidence||[]}));
+                .run(v.account,v.post,revision,facts.length?'auto_approve':'details_withheld',Date.now(),JSON.stringify({...approval,evidence:checked.evidence||[]}));
         }).immediate();
     }
 
@@ -202,6 +208,9 @@ export class VideoStore {
             return;
         this.db.prepare("INSERT INTO video_comments VALUES(?,?,?,?) ON CONFLICT(account,person,post) DO UPDATE SET at=max(at,excluded.at)").run(account, person, post, at);
     }
+    search(account:string,message:string): {post:string;description:string}[] {
+        return matchDescriptions(this.db.prepare("SELECT post,description FROM videos WHERE account=? AND state IN ('ready','unavailable')").all(account) as {post:string;description:string}[],message);
+    }
     resolve(account: string, person: string, message: string, now = Date.now()): {
         video?: Video;
         reason: string;
@@ -214,12 +223,16 @@ export class VideoStore {
             reason = 'link';
         }
         else {
-            const rows = this.db.prepare("SELECT post,notes FROM videos WHERE account=? AND state IN ('ready','needs_review','needs_confirmation')").all(account) as Pick<Video, 'post' | 'notes'>[];
+            const rows = this.db.prepare("SELECT post,notes FROM videos WHERE account=? AND state IN ('ready','unavailable','needs_review','needs_confirmation')").all(account) as Pick<Video, 'post' | 'notes'>[];
             const words = ` ${normalize(message)} `;
             candidates = rows.filter(v => (JSON.parse(v.notes) as Notes).keywords.some(k => words.includes(` ${normalize(k)} `))).map(v => v.post);
             if (candidates.length)
                 reason = 'keyword';
-            else if (/\b(?:another|different|other|new)\s+(?:house|home|property|video)\b/i.test(message))
+            else if (this.search(account,message).length) {
+                candidates=this.search(account,message).map(v=>v.post);
+                reason='description';
+            }
+            else if (/\b(?:another|different|other|new)\s+(?:house|home|property|video)\b|\b(?:house|home|one|video|place)\s+(?:with|that|which|had)\b/i.test(message))
                 reason = 'switch';
             else {
                 const context = this.db.prepare("SELECT post FROM video_context WHERE account=? AND person=? AND at>?").get(account, person, now - 7 * 86400000) as {

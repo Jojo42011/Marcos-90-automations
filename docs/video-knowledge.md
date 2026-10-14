@@ -1,59 +1,43 @@
-# Video property knowledge
+# Backend video knowledge
 
-This build is local and disabled by default. Neither the default Dockerfile nor Fly deployment configuration is changed.
+Disabled by default. These local changes do not deploy, change Fly configuration, or enable replies.
 
-## Flow
+## Automatic processing
 
-1. When VIDEO_KNOWLEDGE_ENABLED=true, the worker checks the connected TikTok account through Zernio every ten minutes (after any active transcription finishes). This reads the latest 25 posts, including native uploads. It is a recent-post sweep, not a complete backfill; use Import link for older videos. An outage spanning more than 25 uploads can leave older posts undiscovered.
-2. Metadata is stored in SQLite, scoped to account and native video ID. Repeated discovery is idempotent. Changed source metadata revokes approval and requeues processing.
-3. Victoria's pinned yt-dlp route reads the public link and downloads full audio, trying audio-only first and small video formats as fallback. The paid Zernio Tools download API is no longer needed. Each connection goes through a public IPv4 DNS-pinning proxy. No app credentials, browser cookies or login profiles go to the media downloader.
-4. FFmpeg verifies full audio coverage and local whisper.cpp transcribes it. Limits: 40 MB per media file, 20-minute video, one Whisper CPU thread and 15-minute speech deadline. Temporary media is deleted. The transcript is saved before extraction so a model retry does not redownload/retranscribe it.
-5. The existing Anthropic connection extracts caption and transcript evidence separately using a structured tool. Values must appear in their source quotes. Invalid claims are omitted with review warnings. Bedroom/bathroom counts also receive independent comparison. Quoted calls to action such as JOHNSON and ELEVATOR supply matching keywords.
-6. New records are approved automatically only when every extracted property claim has matching, literal evidence in both caption and transcript, with no conflicts or extraction warnings. A property location and bedroom/bathroom totals must also be present. Single-source details, missing core information, and uncertain wording produce needs_confirmation with explicit reasons. No source is silently preferred. Even different area descriptions that may both be true are held conservatively. Number words may match numeric room counts; units, ranges and location synonyms are not guessed. The database saves the policy decision and both-source evidence atomically with approval. Agreement is not independent proof of accuracy; extraction or transcription can still miss a claim.
-7. For held records, the reviewer opens /video-knowledge.html from the dashboard, compares both sources, removes unsuitable proposed facts, and chooses a displayed value or omission for every disagreement, with a reason. Extraction omissions must be acknowledged. Approval is tied to the exact revision and audited; removing conflict or warning fields from a request cannot bypass review.
-8. Only ready records may inform DMs, and only when the separate VIDEO_KNOWLEDGE_REPLIES_ENABLED=true switch is enabled. Public comments retain existing behavior. Existing consent, escalation, phone capture and Marco MLS priority remain intact.
+The worker checks the connected TikTok account's latest 25 posts through Zernio every ten minutes, after active transcription finishes. Older videos can be imported through the authenticated backend API; import verifies ownership against the connected account. This is not a full historical backfill.
 
-## Retrieval and limits
+Victoria's pinned yt-dlp route downloads public audio without paid Zernio Tools access. FFmpeg checks full coverage and local Whisper transcribes it with one CPU thread. Limits remain 40 MB media, 20 minutes duration, and a 15-minute speech deadline. Temporary media is removed. Transcripts are cached before model extraction so retries need not repeat the download.
 
-Canonical TikTok link wins, followed by specific keyword, selected conversation video, then unique recent comment association. Ambiguous matches ask which house; unknown links and explicit property switches clear stale context. Context expires after seven days. Separate accounts never share video knowledge.
+Caption and transcript are extracted separately. Each proposed fact keeps an exact source quote. Only claims corroborated by both sources are made available; conflicting or single-source details are withheld. An extraction warning blocks the affected field; an unrecognized warning blocks all facts. Corroborated fields remain usable even if other fields disagree. A video with no usable facts stays unavailable. Decisions, reasons and evidence are retained for diagnostics. Agreement does not guarantee that speech recognition or extraction captured every statement correctly.
 
-Only up to three requested facts are rendered in a short deterministic reply; entire transcripts never enter the DM model prompt. Replies identify the dated video. Prices are historical; current price and availability always need confirmation. Missing facts receive a verification response. Keywords can be reviewed manually; generic info or price cannot identify a home. This version retains one proposed feature per video, alongside scalar facts; full source text remains available for review.
+There is no review queue or manual approval step. The former review page and dashboard links are removed. Missing facts get a short uncertainty response instead of an invented answer or a promise that someone is reviewing them. Existing historical approval records are preserved by migration; reprocessing applies the new field-level policy.
 
-The review queue is how this version asks the team for clarification. It does not send outbound notifications. A pending video cannot provide property details to a lead. Human review is needed only for held records. Matching complete records become ready without a manual click. The strict policy can still produce a substantial review queue when captions and speech cover different details. Keywords are matching metadata and may come from the caption alone; they never establish a property fact. Missing optional facts in both sources (such as price) are not invented and do not alone prevent approval. Older stored records are not automatically promoted on migration; explicitly reprocess them to evaluate the new policy.
+## Property matching
 
-Supports canonical TikTok links in message text. No OCR, DM attachment analysis, semantic guessing, automatic short-link resolution, or automatic merging of different videos into one listing. Historical import verifies the canonical video's author against the connected Zernio account username; it does not require Zernio analytics import access.
+Each video stores a compact searchable description made from its extracted evidence, plus a separate summary of usable facts. Descriptive evidence helps identify the video but is never itself authority for an answer. Transcripts are not injected into every DM prompt.
 
-## Configuration
+Canonical links take priority, then exact CTA keywords, then conservative descriptive matching, then existing conversation/comment context. For example, the house with the glass elevator can identify a unique video. All meaningful descriptive tokens must match. Unknown descriptions, conflicting numeric qualifiers and negated descriptions do not select a different house by guess. Multiple matches ask the lead for a quick description or distinguishing detail. Search is account scoped and uses stored extracted descriptions, not fuzzy semantic inference or image analysis. It can miss paraphrases; clarification is the fallback.
 
-| Variable | Purpose |
-| --- | --- |
-| VIDEO_KNOWLEDGE_ENABLED | Discovery/processing opt-in; default off |
-| VIDEO_KNOWLEDGE_REPLIES_ENABLED | Separate live reply opt-in; default off |
-| ZERNIO_DM_API_KEY | Existing account/posts access; paid Tools access unnecessary |
-| ZERNIO_TIKTOK_ACCOUNT_ID | Required account scope; never taken from review request bodies |
-| VIDEO_WHISPER_MODEL | Absolute GGML model path |
-| VIDEO_WHISPER_BIN | Optional executable; default whisper-cli |
-| VIDEO_YTDLP_BIN | Optional executable; default yt-dlp |
-| ANTHROPIC_API_KEY | Existing extraction connection; model calls are billed normally |
-| VIDEO_FACT_MODEL | Default claude-haiku-4-5 |
-| VIDEO_KNOWLEDGE_DB_PATH | Optional SQLite path; defaults to persistent app data |
+Only the selected video's usable fields are returned. Current availability is never inferred; historical price answers require current confirmation. Existing consent, escalation, contact capture, and Marco's linked MLS priority are preserved.
 
-FFmpeg, ffprobe, yt-dlp and whisper-cli must exist before processing is enabled. Dockerfile.video is an optional image extension with pinned yt-dlp 2026.08.19, whisper.cpp v1.9.5 and the base model. Build the ordinary app image first, then build Dockerfile.video with APP_IMAGE pointing to it. It does not enable either flag. The Linux container build and target Fly memory/latency still require validation before deployment; local Windows media tests cannot establish those limits. External public-video access can change or fail, in which case the record stays unusable.
+## Texting voice
 
-Failures retry with backoff up to three attempts, then require Retry processing. A database lease protects in-flight work and permits recovery after interruption. Source edits and review operations invalidate stale worker writes. Turning off live replies leaves the original DM flow active.
+Property answers use short conversational sentences instead of database labels. Wesley's existing voice profile and retrieved approved examples, and Marco's existing TikTok voice rules, select among a few grounded reply variants. The style model returns only a choice index, so it cannot add a city, price, feature, contact request or delivery promise. Failure or invalid output uses the base grounded reply. Full source transcripts and the whole video library are never sent to that voice-selection call. This offers bounded wording variations rather than unrestricted rewriting.
 
-## Review API and walkthrough
+## Configuration and backend operations
 
-GET /api/video-knowledge?offset=0 returns configuration indicators, state counts, automatic/manual approval decisions with hold reasons, and 50 account-scoped records with sources, proposed facts, warnings, conflicts and revisions. Wesley requires administrator authentication; Marco uses its existing authenticated shared automation-console access. No anonymous dashboard exception applies.
+- VIDEO_KNOWLEDGE_ENABLED: discovery/processing opt-in, default off.
+- VIDEO_KNOWLEDGE_REPLIES_ENABLED: separate live reply opt-in, default off.
+- ZERNIO_DM_API_KEY and ZERNIO_TIKTOK_ACCOUNT_ID: existing account/posts access and account scope.
+- VIDEO_WHISPER_MODEL: installed GGML model path; VIDEO_WHISPER_BIN defaults to whisper-cli.
+- VIDEO_YTDLP_BIN: defaults to yt-dlp. FFmpeg and ffprobe must also be installed.
+- ANTHROPIC_API_KEY: existing extraction/voice connection. VIDEO_FACT_MODEL defaults to claude-haiku-4-5. Local speech has no speech-API charge; model calls use the existing billed connection.
+- VIDEO_KNOWLEDGE_DB_PATH: optional override; otherwise persistent app data.
 
-POST /api/video-knowledge supports sync, import (url), retry/disable (post, revision), approve (post, revision, optional notes, resolutions, acknowledgeWarnings), and preview (message). Each resolution has field, candidate (zero-based index or null to omit), and a required reason. Notes contain facts and keywords. Server-held conflicts and warnings remain authoritative.
+GET /api/video-knowledge remains authenticated operational diagnostics with records and state counts. POST supports sync, import, retry, disable, and no-send preview. The approve action is no longer exposed. SQLite revisions and leases reject stale workers and source edits revoke earlier knowledge. Failed processing retries with backoff up to three attempts; exhausted technical failures remain visible in backend diagnostics.
 
-For the local walkthrough, enable processing only in the test environment and leave live replies off. Import an owned public link, wait for processing, inspect the transcript and proposals; matching records are approved automatically, while held records require you to resolve questions and approve the current revision. Then preview keyword/location/bedroom/price questions. Preview returns sent:false and never sends a DM. Source corrections must be supported by source evidence; don't approve guessed values.
+Dockerfile.video is the optional Linux image extension using yt-dlp 2026.08.19 and whisper.cpp v1.9.5/base. The ordinary Dockerfile and Fly config are unchanged. Linux image construction and target Fly resource usage still require validation before deployment; local Windows tests do not establish those limits.
 
-## Verification
+## Tests
 
-- npm run verify:video builds and runs storage, media, conflict, warning, migration, matching, automatic approval, and no-send regression checks.
-- npm run verify:video:ui runs the review page in headless Playwright. Install its Chromium or set VIDEO_TEST_BROWSER to an installed Chrome executable.
-- Run existing DM/comment/auth regression tests before release.
-
-Real-video validation uses the two supplied TikTok links, public downloading, local Whisper, real model extraction and isolated SQLite files. Discovery may replay already verified provider metadata rather than publish a new video. Review approval is simulated only in a separate disposable fixture, leaving real review records pending. No test sends messages or writes production knowledge.
+npm run verify:video builds and runs storage, extraction, source agreement, field withholding, descriptive matching, voice selection bounds, stale-context, persistence and no-send tests. Wesley's npm test also exercises the live DM pipeline with its injected voice client. No test requires sending a real DM. The two supplied videos' stored extraction evidence can be replayed locally without another media download or model request.

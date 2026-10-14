@@ -11,15 +11,16 @@ const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
 const node_path_1 = __importDefault(require("node:path"));
 const approval_js_1 = require("./approval.js");
+const search_js_1 = require("./search.js");
 exports.FIELDS = ["city", "area", "address", "price", "bedrooms", "bathrooms", "size", "acreage", "builder", "features"];
 const normalize = (s) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 function validateNotes(value, video) {
     const n = value;
-    if (!n || !Array.isArray(n.facts) || !Array.isArray(n.keywords) || n.facts.length > 12 || n.keywords.length > 8)
+    if (!n || !Array.isArray(n.facts) || !Array.isArray(n.keywords) || n.facts.length > 24 || n.keywords.length > 8)
         throw new Error("Invalid property notes");
     const used = new Set();
     for (const f of n.facts) {
-        if (!exports.FIELDS.includes(f.field) || used.has(f.field) || !["caption", "transcript"].includes(f.source))
+        if (!exports.FIELDS.includes(f.field) || (used.has(f.field) && f.field !== 'features') || !["caption", "transcript"].includes(f.source))
             throw new Error("Invalid or conflicting property field");
         used.add(f.field);
         if (typeof f.value !== "string" || !normalize(f.value) || f.value.length > 90 || /[\n\r<>]/.test(f.value) || typeof f.quote !== "string" || !normalize(f.quote) || f.quote.length < 3 || f.quote.length > 500)
@@ -93,6 +94,9 @@ class VideoStore {
                 this.db.exec(`ALTER TABLE videos ADD COLUMN ${name} TEXT NOT NULL DEFAULT '[]'`);
         if (!columns.some(c => c.name === 'approval'))
             this.db.exec("ALTER TABLE videos ADD COLUMN approval TEXT NOT NULL DEFAULT '{}'");
+        for (const name of ['description', 'summary'])
+            if (!columns.some(c => c.name === name))
+                this.db.exec(`ALTER TABLE videos ADD COLUMN ${name} TEXT NOT NULL DEFAULT ''`);
         const audit = this.db.prepare('PRAGMA table_info(video_audit)').all();
         if (!audit.some(c => c.name === 'detail'))
             this.db.exec("ALTER TABLE video_audit ADD COLUMN detail TEXT");
@@ -115,7 +119,7 @@ class VideoStore {
             return false;
         this.db.prepare(`INSERT INTO videos(account,post,url,caption,published,revision,source_hash) VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(account,post) DO UPDATE SET url=excluded.url,caption=excluded.caption,published=excluded.published,revision=excluded.revision,source_hash=excluded.source_hash,
-      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',approval='{}',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, (0, node_crypto_1.randomUUID)(), revision);
+      state='queued',transcript='',notes='{}',conflicts='[]',decisions='[]',warnings='[]',approval='{}',description='',summary='',attempts=0,next_attempt=0,lease=NULL,error=NULL`).run(v.account, v.post, v.url, v.caption, v.published, (0, node_crypto_1.randomUUID)(), revision);
         return true;
     }
     claim(account, now = Date.now()) {
@@ -139,15 +143,17 @@ class VideoStore {
             throw Error('Transcript missing or too large');
         const checked = validateNotes(notes, { ...v, transcript });
         const conflicts = checked.conflicts || [];
-        const approval = (0, approval_js_1.assessApproval)(checked, { ...v, transcript });
-        const state = approval.mode === 'automatic' ? 'ready' : conflicts.length || checked.warnings?.length || checked.evidence ? 'needs_confirmation' : 'needs_review';
+        const assessment = (0, approval_js_1.assessApproval)(checked, { ...v, transcript });
+        const facts = checked.evidence ? (0, approval_js_1.corroboratedFacts)(checked, { ...v, transcript }) : [];
+        const approval = { ...assessment, mode: facts.length ? (assessment.mode === 'automatic' ? 'automatic' : 'partial') : 'unavailable' };
+        const state = checked.evidence ? (facts.length ? 'ready' : 'unavailable') : conflicts.length || checked.warnings?.length ? 'needs_confirmation' : 'needs_review';
         this.db.transaction(() => {
             const revision = (0, node_crypto_1.randomUUID)();
-            const updated = this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,approval=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
-                .run(state, transcript, JSON.stringify({ facts: checked.facts, keywords: checked.keywords, evidence: checked.evidence }), JSON.stringify(conflicts), JSON.stringify(checked.warnings || []), JSON.stringify(approval), revision, v.account, v.post, v.lease, v.revision);
+            const updated = this.db.prepare("UPDATE videos SET state=?,transcript=?,notes=?,conflicts=?,warnings=?,approval=?,description=?,summary=?,decisions='[]',revision=?,lease=NULL,error=NULL WHERE account=? AND post=? AND lease=? AND revision=?")
+                .run(state, transcript, JSON.stringify({ facts: checked.evidence ? facts : checked.facts, keywords: checked.keywords, evidence: checked.evidence }), JSON.stringify(conflicts), JSON.stringify(checked.warnings || []), JSON.stringify(approval), (0, search_js_1.describeVideo)(checked), facts.map(f => f.value).join('; ').slice(0, 600), revision, v.account, v.post, v.lease, v.revision);
             if (updated.changes)
                 this.db.prepare('INSERT INTO video_audit(account,post,revision,action,at,detail) VALUES(?,?,?,?,?,?)')
-                    .run(v.account, v.post, revision, approval.mode === 'automatic' ? 'auto_approve' : 'review_required', Date.now(), JSON.stringify({ ...approval, evidence: checked.evidence || [] }));
+                    .run(v.account, v.post, revision, facts.length ? 'auto_approve' : 'details_withheld', Date.now(), JSON.stringify({ ...approval, evidence: checked.evidence || [] }));
         }).immediate();
     }
     fail(v, stage = 'transcription') {
@@ -203,6 +209,9 @@ class VideoStore {
             return;
         this.db.prepare("INSERT INTO video_comments VALUES(?,?,?,?) ON CONFLICT(account,person,post) DO UPDATE SET at=max(at,excluded.at)").run(account, person, post, at);
     }
+    search(account, message) {
+        return (0, search_js_1.matchDescriptions)(this.db.prepare("SELECT post,description FROM videos WHERE account=? AND state IN ('ready','unavailable')").all(account), message);
+    }
     resolve(account, person, message, now = Date.now()) {
         const links = message.match(/https?:\/\/[^\s<>]+/g) || [];
         const ids = [...new Set(links.map(s => postId(s.replace(/[),.!?]+$/, ''))).filter(Boolean))];
@@ -212,12 +221,16 @@ class VideoStore {
             reason = 'link';
         }
         else {
-            const rows = this.db.prepare("SELECT post,notes FROM videos WHERE account=? AND state IN ('ready','needs_review','needs_confirmation')").all(account);
+            const rows = this.db.prepare("SELECT post,notes FROM videos WHERE account=? AND state IN ('ready','unavailable','needs_review','needs_confirmation')").all(account);
             const words = ` ${normalize(message)} `;
             candidates = rows.filter(v => JSON.parse(v.notes).keywords.some(k => words.includes(` ${normalize(k)} `))).map(v => v.post);
             if (candidates.length)
                 reason = 'keyword';
-            else if (/\b(?:another|different|other|new)\s+(?:house|home|property|video)\b/i.test(message))
+            else if (this.search(account, message).length) {
+                candidates = this.search(account, message).map(v => v.post);
+                reason = 'description';
+            }
+            else if (/\b(?:another|different|other|new)\s+(?:house|home|property|video)\b|\b(?:house|home|one|video|place)\s+(?:with|that|which|had)\b/i.test(message))
                 reason = 'switch';
             else {
                 const context = this.db.prepare("SELECT post FROM video_context WHERE account=? AND person=? AND at>?").get(account, person, now - 7 * 86400000);

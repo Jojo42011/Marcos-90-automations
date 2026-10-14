@@ -2,7 +2,7 @@
  * Run modules in order by lead state. Single entry for webhook-driven flow.
  */
 import { respondsToDmInvitation } from "../integrations/zernio/history.js";
-import { hasVideoKeyword, videoReply } from "../videoKnowledge/index.js";
+import { hasVideoKeyword, voiceVideoReply } from "../videoKnowledge/index.js";
 import { asksForListingFacts, unverifiedListingReply, requestsPhoneNumber, requestsUnsupportedPropertyMedia } from "./propertyKnowledge.js";
 import * as db from "../core/db.js";
 import { getListing } from "../core/listingsStore.js";
@@ -16,6 +16,7 @@ import {
   classifyNewLeadBuyingIntent,
   failOpenCount,
   generateMarcoPipelineReply,
+  chooseMarcoVideoReply,
   preflightLeadTurnReview,
   sanitizeOpeningReplyAgainstRecentMarco,
   sanitizePipelineReplyAgainstRecentMarco,
@@ -798,7 +799,7 @@ export async function run(
 
   // Preserve linked MLS behavior. Video evidence applies only to TikTok without a linked listing.
   const propertyReply = payload.platform === "tiktok" && !(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn
-    ? videoReply(payload.userId, latestLeadText) : null;
+    ? await voiceVideoReply(payload.userId, latestLeadText, options=>chooseMarcoVideoReply(options,conversation),'marco') : null;
   if (propertyReply) {
     await db.appendMessage(lead.id, "assistant", propertyReply);
     await db.updateLead(lead);

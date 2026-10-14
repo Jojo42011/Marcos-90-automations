@@ -681,7 +681,7 @@ async function run(payload, log) {
     }
     // Preserve linked MLS behavior. Video evidence applies only to TikTok without a linked listing.
     const propertyReply = payload.platform === "tiktok" && !(lead.mlsListingKey && (0, listingsStore_js_1.getListing)(lead.mlsListingKey)) && !phoneCapturedThisTurn
-        ? (0, index_js_1.videoReply)(payload.userId, latestLeadText) : null;
+        ? await (0, index_js_1.voiceVideoReply)(payload.userId, latestLeadText, options => (0, llm_1.chooseMarcoVideoReply)(options, conversation), 'marco') : null;
     if (propertyReply) {
         await db.appendMessage(lead.id, "assistant", propertyReply);
         await db.updateLead(lead);
