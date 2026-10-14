@@ -1,8 +1,9 @@
+import { atomicJson } from "./atomicJson.js";
 import { sharedTasksEnabled, sharedTaskList, sharedTaskCreate, sharedTaskUpdate, sharedTaskDelete } from "./sharedTasks.js";
 import { dataPath } from "./tenantData.js";
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, mkdirSync, readFileSync } from "fs";
+import { dirname } from "path";
 import { channelForLead } from "./messageChannels.js";
 
 import type {
@@ -111,6 +112,11 @@ const conversationsByLeadId = new Map<string, Conversation>();
 let commandTasksStore: CommandTask[] = [];
 
 let idCounter = 1;
+
+function nextLeadId(): string {
+  while(leadsById.has(String(idCounter)))idCounter++;
+  return String(idCounter++);
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -232,6 +238,14 @@ function normalizeCommandTask(raw: unknown): CommandTask | null {
   };
 }
 
+let committed = JSON.stringify({idCounter:1,leadsById:{},leadKeyToId:{},conversationsByLeadId:{},commandTasks:[]});
+function restoreCommitted(): void {
+  const data = JSON.parse(committed);
+  idCounter=data.idCounter; commandTasksStore=data.commandTasks || [];
+  for (const [map, values] of [[leadsById,data.leadsById],[leadKeyToId,data.leadKeyToId],[conversationsByLeadId,data.conversationsByLeadId]] as [Map<string,any>,Record<string,any>][]) {
+    map.clear(); for(const [key,value] of Object.entries(values)) map.set(key,value);
+  }
+}
 function persistToFile(): void {
   try {
     mkdirSync(dirname(DB_PATH), { recursive: true });
@@ -242,9 +256,13 @@ function persistToFile(): void {
       conversationsByLeadId: Object.fromEntries(conversationsByLeadId),
       commandTasks: commandTasksStore,
     };
-    writeFileSync(DB_PATH, JSON.stringify(data), "utf8");
+    const serialized=JSON.stringify(data);
+    if(serialized===committed && existsSync(DB_PATH))return;
+    atomicJson(DB_PATH, data);
+    committed = serialized;
   } catch (err) {
-    console.error("[db] persistToFile failed:", err);
+    restoreCommitted();
+    throw err;
   }
 }
 
@@ -254,10 +272,9 @@ function loadFromFile(): void {
       return;
     }
     const raw = readFileSync(DB_PATH, "utf8");
-    if (!raw.trim()) {
-      return;
-    }
+    if (!raw.trim()) throw new Error("CRM store is empty; original file preserved for recovery");
     const data = JSON.parse(raw) as Partial<PersistedShape>;
+    if (!data || !data.leadsById || Array.isArray(data.leadsById) || typeof data.leadsById !== "object") throw new Error("Invalid CRM store; original file preserved for recovery");
 
     if (typeof data.idCounter === "number" && data.idCounter >= 1) {
       idCounter = data.idCounter;
@@ -299,11 +316,12 @@ function loadFromFile(): void {
         .filter((t): t is CommandTask => t !== null);
     }
   } catch (err) {
-    console.error("[db] loadFromFile failed, starting empty:", err);
+    throw new Error("CRM store could not be loaded; refusing to overwrite it", {cause:err});
   }
 }
 
 loadFromFile();
+committed = JSON.stringify({idCounter,leadsById:Object.fromEntries(leadsById),leadKeyToId:Object.fromEntries(leadKeyToId),conversationsByLeadId:Object.fromEntries(conversationsByLeadId),commandTasks:commandTasksStore});
 
 /** Clear all leads and conversations; persists empty state. */
 export function resetMemoryStore(): void {
@@ -523,9 +541,6 @@ function applyPhoneCaptureTransition(existing: Lead | null, lead: Lead): Lead {
       phoneCapturedAt: nowIso(),
       phoneNumberSeen: false,
     };
-    notifyNewPhoneCapture(enriched).catch((err) =>
-      console.error("[PhoneCapture] Notification error:", err),
-    );
     return enriched;
   }
 
@@ -653,7 +668,7 @@ export function pauseAutoPlansOnInboundText(lead: Lead): Lead | null {
 }
 
 export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedAt">): Promise<Lead> {
-  const id = String(idCounter++);
+  const id = nextLeadId();
   const createdAt = nowIso();
   let next = normalizeCrmDefaults({ ...lead, id, createdAt, updatedAt: createdAt });
   next = applyAutoPlanAutomations(null, next);
@@ -663,14 +678,12 @@ export async function createLead(lead: Omit<Lead, "id" | "createdAt" | "updatedA
       phoneCapturedAt: createdAt,
       phoneNumberSeen: false,
     };
-    notifyNewPhoneCapture(next).catch((err) =>
-      console.error("[PhoneCapture] Notification error:", err),
-    );
   }
   leadsById.set(id, next);
   leadKeyToId.set(leadKey(lead.platform, lead.userId), id);
   conversationsByLeadId.set(id, { messages: [] });
   persistToFile();
+  if (leadHasPhone(next.phone)) void notifyNewPhoneCapture(next).catch(err=>console.error("[PhoneCapture]",err));
   const routed = await triggerSourceRoutingIfNeeded(next);
   if (leadHasEmail(routed.email) && !routed.autoReplyEmailSentAt) {
     void triggerEmailMarketingIfNeeded(routed);
@@ -702,7 +715,7 @@ export function upsertLeadQuiet(
     persistToFile();
     return merged;
   }
-  const id = input.id && !leadsById.has(input.id) ? input.id : String(idCounter++);
+  const id = input.id && !leadsById.has(input.id) ? input.id : nextLeadId();
   const created = normalizeCrmDefaults({ ...input, id, createdAt: now, updatedAt: now } as Lead);
   leadsById.set(id, created);
   leadKeyToId.set(leadKey(created.platform, created.userId), id);
@@ -728,6 +741,7 @@ export async function updateLead(lead: Lead): Promise<Lead | undefined> {
     normalized = applyPhoneCaptureTransition(null, normalized);
     leadsById.set(lead.id, normalized);
     persistToFile();
+    if (leadHasPhone(normalized.phone)) void notifyNewPhoneCapture(normalized).catch(err=>console.error("[PhoneCapture]",err));
     return leadsById.get(lead.id);
   }
   const normalized = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
@@ -737,6 +751,7 @@ export async function updateLead(lead: Lead): Promise<Lead | undefined> {
 
   const phoneNewlyCaptured =
     existing && !leadHasPhone(existing.phone) && leadHasPhone(updated.phone);
+  if (phoneNewlyCaptured) void notifyNewPhoneCapture(updated).catch(err=>console.error("[PhoneCapture]",err));
   if (phoneNewlyCaptured && !updated.sourceRoutingCompletedAt) {
     return await triggerSourceRoutingIfNeeded(updated);
   }

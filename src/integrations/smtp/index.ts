@@ -206,7 +206,7 @@ export async function sendViaSmtp(
       response: result.response,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = smtpFailureMessage(err);
     recordError(message);
     throw new Error(explainSmtpError(message));
   }
@@ -217,6 +217,11 @@ export async function sendViaSmtp(
  * "535-5.7.8 Username and Password not accepted" sends people to reset the
  * wrong thing.
  */
+function smtpFailureMessage(error: unknown): string {
+  if (error instanceof AggregateError) return error.errors.map(smtpFailureMessage).filter(Boolean).join("; ") || error.message || "SMTP connection failed";
+  return error instanceof Error ? error.message || error.name || "SMTP request failed" : String(error || "SMTP request failed");
+}
+
 export function explainSmtpError(message: string): string {
   if (/535|Username and Password not accepted|BadCredentials/i.test(message)) {
     return `${message} — the app password was rejected. Check that 2-Step Verification is still on for this account and that the app password has not been revoked; regenerate at myaccount.google.com/apppasswords and update GMAIL_SMTP_APP_PASSWORD.`;
@@ -245,7 +250,7 @@ export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: str
     );
     return { ok: true, user: cfg.user };
   } catch (err) {
-    const message = explainSmtpError(err instanceof Error ? err.message : String(err));
+    const message = explainSmtpError(smtpFailureMessage(err));
     recordError(message);
     return { ok: false, error: message };
   }
