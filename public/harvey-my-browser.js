@@ -4,7 +4,7 @@
  const $=id=>document.getElementById(id);
  function say(text){$('localBrowserStatus').textContent=text;}
  function bridge(action,data={},timeout=5000){return new Promise((resolve,reject)=>{const id=crypto.randomUUID(),timer=setTimeout(()=>{pending.delete(id);reject(Error('Harvey extension is not responding. Install or enable it, then reload Harvey.'));},timeout);pending.set(id,{resolve,reject,timer});window.postMessage({channel,direction:'page',id,action,...data},location.origin);});}
- window.addEventListener('message',e=>{if(e.source!==window||e.origin!==location.origin||e.data?.channel!==channel||e.data.direction!=='extension')return;const data=e.data;if(data.event==='stopped'){void stop(data.reason||'Control stopped');return;}const p=pending.get(data.id);if(!p)return;pending.delete(data.id);clearTimeout(p.timer);data.ok?p.resolve(data):p.reject(Error(data.error||'Browser action failed'));});
+ window.addEventListener('message',e=>{if(e.source!==window||e.origin!==location.origin||e.data?.channel!==channel||e.data.direction!=='extension')return;const data=e.data;if(data.event==='stopped'){if(data.connectionId&&data.connectionId!==session?.connectionId)return;void stop(data.reason||'Control stopped');return;}const p=pending.get(data.id);if(!p)return;pending.delete(data.id);clearTimeout(p.timer);data.ok?p.resolve(data):p.reject(Error(data.error||'Browser action failed'));});
  async function request(chat,action,body={}){
   const r=await fetch(h.apiUrl('/api/harvey/work/browser/'+encodeURIComponent(chat)+'/local/'+action),{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json','x-harvey-browser':'1'},body:JSON.stringify(body),cache:'no-store'});
   const data=await r.json();if(!r.ok)throw Error(data.error||'Browser connection unavailable');return data;
@@ -44,15 +44,15 @@
  }
  async function start(){
   const url=new URL($('myBrowserUrl').value.includes('://')?$('myBrowserUrl').value:'https://'+$('myBrowserUrl').value);if(!['http:','https:'].includes(url.protocol)||url.origin===location.origin)throw Error('Enter the website you want Harvey to use.');
-  $('myBrowserConnect').disabled=true;let created;
+  $('myBrowserConnect').disabled=true;let created,connecting;
   try{
    const chat=await h.ensureChat();currentChat=chat;const version=++epoch;
    created=await request(chat,'connect');if(version!==epoch||h.state.conversationId!==chat){void request(chat,'stop',{token:created.token});return;}
-   const connecting={...created,chat,ready:false};session=connecting;selected=true;
+   connecting={...created,chat,ready:false};session=connecting;selected=true;
    await bridge('start',{url:url.href,connectionId:created.connectionId});
    if(session!==connecting||version!==epoch){void bridge('stop',{connectionId:created.connectionId}).catch(()=>{});return;}
    $('myBrowserDialog').close();window.HarveyComputer.show();say('Sign in in the new tab. Then return here and select “Ready — allow control”.');$('localBrowserSite').textContent=url.hostname;paint();const started=session;started.heartbeat=setInterval(()=>{if(session===started)void request(started.chat,'heartbeat',{token:started.token}).then(()=>session===started&&bridge('heartbeat',{connectionId:started.connectionId})).catch(e=>{if(session===started)void stop(e.message);});},10000);void relay(started);
-  }catch(e){await stop(e.message);throw e;}finally{$('myBrowserConnect').disabled=false;}
+  }catch(e){if(connecting&&session===connecting)await stop(e.message);else if(created)void request(created.chatId,'stop',{token:created.token}).catch(()=>{});throw e;}finally{$('myBrowserConnect').disabled=false;}
  }
  async function sync(){
   if(!h)return;const chat=h.state.conversationId;

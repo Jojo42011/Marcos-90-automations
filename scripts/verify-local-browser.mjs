@@ -51,6 +51,7 @@ try {
  const targetPromise=context.waitForEvent('page');await ui.locator('#myBrowserConnect').click();const target=await targetPromise;await target.waitForLoadState();
  assert(!local.localBrowserStatus('marco',chat.id).ready,'User must explicitly allow control after signing in');
  await ui.bringToFront();await ui.locator('#localBrowserReady').click();await ui.waitForFunction(()=>document.querySelector('#localBrowserReady').hidden);
+ await ui.evaluate(()=>window.postMessage({channel:'harvey-my-browser-v1',direction:'extension',event:'stopped',connectionId:'previous-connection',reason:'Stale notification'},location.origin));await ui.waitForTimeout(50);assert(local.localBrowserStatus('marco',chat.id).connected,'Stale stop notification must not disconnect a new session');
  const call=(name,args={})=>local.localBrowserCall('marco',chat.id,name,args);
  let snap=await call('browser_snapshot');assert(snap.frames?.length,JSON.stringify(snap));
  const find=label=>snap.frames.flatMap(f=>f.controls).find(c=>c.label===label)?.ref;

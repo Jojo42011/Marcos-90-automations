@@ -7,8 +7,8 @@ async function stopLocal(reason='Control stopped'){
  const s=localSession;localSession=null;if(!s)return;
  s.stopped=true;clearInterval(s.watchdog);
  if(s.attached)try{await chrome.debugger.detach({tabId:s.tabId});}catch{}
- try{s.port.postMessage({event:'stopped',reason});}catch{}
- await chrome.action.setBadgeText({text:''});
+ try{s.port.postMessage({event:'stopped',reason,connectionId:s.connectionId});}catch{}
+ if(!localSession)await chrome.action.setBadgeText({text:''});
 }
 function checkLocal(s){if(localSession!==s||s.stopped||Date.now()-s.lastSeen>30000)throw Error('Browser control is disconnected');}
 async function localCdp(s,method,params={}){checkLocal(s);return chrome.debugger.sendCommand({tabId:s.tabId},method,params);}
