@@ -92,7 +92,7 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
         const prompt = job.continuationCount ? job.prompt + "\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): " + job.resumeReason + ((job.stalledContinuations || 0) > 0 ? "\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail." : "") : job.prompt;
         const receipts = [];
         let segmentCost = 0;
-        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: remaining, workRequestId: job.id, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, onEvidence: r => {
+        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: remaining, workRequestId: job.id, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, checkpointAt: Date.now() + 12 * 60_000, onEvidence: r => {
                 receipts.push(r);
                 const current = (0, store_js_1.get)("job", owner, id);
                 current.safeResume = (0, exports.safeRecovery)(receipts);

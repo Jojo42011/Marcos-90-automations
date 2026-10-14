@@ -190,6 +190,7 @@ export type AgentLoopEvent =
 
 export interface AgentLoopOptions {
   allowContinuation?: boolean;
+  checkpointAt?: number;
   workRequestId?: string;
   continuationTurn?: boolean;
   actorId?: string;
@@ -535,6 +536,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let providerRetries=0;
   for (let step = 0; step < stepBudget; step++) {
     opts.signal?.throwIfAborted();
+    if(opts.allowContinuation && opts.checkpointAt && Date.now()>=opts.checkpointAt && step<stepBudget-3)step=stepBudget-3;
     /* The final round runs with tools WITHHELD. The budget then ends in an
        answer assembled from everything gathered, instead of the dead-end
        "hit the tool loop limit" that discarded the whole turn's work. */

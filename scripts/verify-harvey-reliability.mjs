@@ -197,6 +197,8 @@ try{
  const continuationTools=['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}}));
  const checkpointed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot','Checkpoint round must reject a fabricated external action');continuationReads++;return {text:'Rendering at 46%'};}}});
  ok('reserved checkpoint yields unfinished work with observed state and cannot run external actions',()=>{assert.equal(continuationReads,29);assert.equal(checkpointed.continuation.delaySeconds,30);assert.match(checkpointed.continuation.reason,/existing render/);});
+ const elapsed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async()=>{throw new Error('The elapsed segment must not execute more external actions');}}});
+ ok('elapsed segment enters checkpoint rounds before the hard task timer',()=>assert.equal(elapsed.verification?.receipts.length,0));
  if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
  for(const available of [true,false]){
    let mailDiscovery=0;
