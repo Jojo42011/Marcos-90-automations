@@ -17,7 +17,7 @@ swap_size_mb = 1024
 
 [env]
   VIDEO_KNOWLEDGE_ENABLED = "true"
-  VIDEO_KNOWLEDGE_REPLIES_ENABLED = "false"
+  VIDEO_KNOWLEDGE_REPLIES_ENABLED = "true"
   ACCOUNT_ISOLATION = "true"
   TZ = "America/Chicago"
   HARVEY_BROWSER_ENABLED = "true"

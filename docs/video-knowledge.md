@@ -1,6 +1,6 @@
 # Backend video knowledge
 
-Disabled by default. These local changes do not deploy, change Fly configuration, or enable replies.
+Feature flags default off in code. The approved Fly deployment explicitly enables video processing and grounded replies.
 
 ## Automatic processing
 
@@ -36,7 +36,7 @@ Property answers use short conversational sentences instead of database labels. 
 
 GET /api/video-knowledge remains authenticated operational diagnostics with records and state counts. POST supports sync, import, retry, disable, and no-send preview. The approve action is no longer exposed. SQLite revisions and leases reject stale workers and source edits revoke earlier knowledge. Failed processing retries with backoff up to three attempts; exhausted technical failures remain visible in backend diagnostics.
 
-Dockerfile.video is the optional Linux image extension using yt-dlp 2026.08.19 and whisper.cpp v1.9.5/base. The ordinary Dockerfile and Fly config are unchanged. Linux image construction and target Fly resource usage still require validation before deployment; local Windows tests do not establish those limits.
+The standard Dockerfile now builds yt-dlp 2026.08.19 and whisper.cpp v1.9.5/base with FFmpeg, and checks the binaries during image construction. Fly stores knowledge on the existing persistent volume. Wesley uses 1 GB RAM with 512 MB swap for local speech processing; Marco retains his existing machine allocation. Health, installed binaries, discovery and processing state are checked during rollout.
 
 ## Tests
 
