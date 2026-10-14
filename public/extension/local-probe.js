@@ -48,7 +48,7 @@ function localPageProbe(input) {
     if(el.readOnly)throw Error('Target is read-only');
     if(!el.matches('input,textarea,[contenteditable=true]'))throw Error('Target is not an editable field');
     el.focus();if(el.isContentEditable)el.textContent=String(input.value);else {const prototype=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(prototype,'value').set.call(el,String(input.value));}
-    el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return {filled:true};
+    el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));if((el.isContentEditable?el.textContent:el.value)!==String(input.value))throw Error('The field did not retain the requested text. Inspect before continuing.');return {filled:true};
   }
   if(input.action==='select'){
     if(el.tagName!=='SELECT')throw Error('Target is not a native select');
