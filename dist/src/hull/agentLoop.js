@@ -352,7 +352,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                     throw new Error("Continuation delay must be 10–120 seconds");
                 if (typeof input.reason !== "string" || !input.reason.trim() || input.reason.length > 500)
                     throw new Error("Provide a short remaining-work checkpoint, without secrets");
-                continuation = { delaySeconds, reason: input.reason };
+                continuation = { delaySeconds, reason: input.reason, progressKey: verification.continuationCheckpoint()?.progressKey };
                 return { waiting: true, note: "The saved job will resume. No external action will be replayed automatically." };
             }
             catch (e) {
@@ -370,6 +370,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if (opts.workRuntime && name === "report_verification") {
             try {
                 return verification.review(input);
+            }
+            catch (e) {
+                return { error: e.message };
+            }
+        }
+        if (opts.workRuntime && name === "work_records" && input.action === "save") {
+            try {
+                input = { ...input, _verifiedRecords: verification.projectRecords(input.records) };
             }
             catch (e) {
                 return { error: e.message };
@@ -512,7 +520,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             return { speech: "I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.", modelError: "Empty or malformed model response after bounded repair; finish reason: " + String(out.stopReason || "unknown"), verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
         }
         if (!out.toolUses.length) {
-            if (opts.allowContinuation && !summaryRound && unfinishedReminders < 2 && opts.workRuntime?.pendingWork?.()) {
+            if (opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status !== "completed" && verification.result().status !== "blocked" && (summaryRound || unfinishedReminders >= 2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))) {
+                const checkpoint = verification.continuationCheckpoint();
+                if (checkpoint)
+                    return { speech: "Continuing the remaining work automatically.", continuation: { delaySeconds: 10, reason: "Inspect the current state and saved work_records, then finish the remaining task_plan steps. Do not repeat completed actions.", progressKey: checkpoint.progressKey }, verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens };
+            }
+            if (opts.allowContinuation && !summaryRound && unfinishedReminders < 2 && opts.workRuntime?.pendingWork?.() && !["completed", "blocked"].includes(verification.result().status)) {
                 unfinishedReminders++;
                 system += "\nThe authorized task still has unfinished plan steps and no concrete blocker. A status report is not task completion. Continue the next step, or use continue_work with an exact observed progress quote while an external render runs. If targeting fails, inspect ports/geometry and change approach; do not infer an application limitation or missing credits from a failed gesture. If genuinely blocked, checkpoint the precise observed reason before answering.";
                 continue;

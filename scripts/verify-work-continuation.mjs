@@ -29,6 +29,15 @@ try{
  const limited=J.enqueueJob('alice',chat.id,{requestId:'limit',message:'Finish'});S.put('job','alice',{...S.get('job','alice',limited.id),totalCostUsd:2});await J.executeJob('alice',limited.id,executor);assert.equal(S.get('job','alice',limited.id).status,'needs_attention');assert.equal(generated,2);
  const interrupted=J.enqueueJob('alice',chat.id,{requestId:'interrupted',message:'Finish'});S.put('job','alice',{...S.get('job','alice',interrupted.id),status:'running'});J.recoverJobs();assert.equal(S.get('job','alice',interrupted.id).status,'needs_attention');
  console.log('ok stop cancels waiting; exhausted budget stops; interrupted writes are never replayed');
+ const stalled=J.enqueueJob('alice',chat.id,{requestId:'stalled',message:'Extract all records'});let changedApproach=false;
+ for(let i=0;i<4;i++){
+  let j=S.get('job','alice',stalled.id);if(i)S.put('job','alice',{...j,nextRunAt:new Date(0).toISOString()});
+  await J.executeJob('alice',stalled.id,async(_o,_c,prompt,opts)=>{assert.equal(opts.workRequestId,stalled.id);if(i>=2){assert.match(prompt,/Change the retrieval approach/);changedApproach=true;}return {speech:'Partial',continuation:{delaySeconds:10,reason:'Read remaining rows',progressKey:'unchanged'},costUsd:0};});
+ }
+ assert(changedApproach);assert.equal(S.get('job','alice',stalled.id).status,'needs_attention');assert.match(S.get('job','alice',stalled.id).result.text,/no observable progress/);
+ assert.match(S.get('job','alice',limited.id).result.text,/application limit, not proof/);
+ assert.match(S.get('job','alice',cancelled.id).result.text,/Stopped/);
+ console.log('ok unchanged observations prompt a different retrieval approach then stop with an accurate reason');
  const proof=new TurnVerification();proof.record('computer',{action:'call',tool:'browser_snapshot'},{text:'Rendering at 46%'});
  proof.continuationEvidence('e1','Rendering at 46%');assert.throws(()=>proof.continuationEvidence('e1','Render completed'),/exact/);
  proof.record('computer',{action:'call',tool:'browser_click'},{ok:true});assert.throws(()=>proof.continuationEvidence('e1','Rendering at 46%'),/after the last action/);

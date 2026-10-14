@@ -39,6 +39,9 @@ exports.runChat = runChat;
 exports.runScheduled = runScheduled;
 exports.tick = tick;
 exports.startWorker = startWorker;
+const modelAdvice_js_1 = require("./modelAdvice.js");
+const records_js_1 = require("./records.js");
+const execution_js_1 = require("./execution.js");
 const users_js_1 = require("../../core/users.js");
 const teamTraining_js_1 = require("./teamTraining.js");
 const chatRelay_js_1 = require("./chatRelay.js");
@@ -61,6 +64,8 @@ const businessTools = tools_js_1.HARVEY_TOOL_DEFINITIONS.filter(t => !t.name.sta
 function tool(name, description, properties, required = []) { return { name, description, input_schema: { type: "object", properties, required } }; }
 const str = { type: "string" }, obj = { type: "object" };
 exports.WORK_TOOLS = [
+    tool("model_advice", "Read current model options, per-model price freshness, configured Auto routing, illustrative costs and account-scoped observed response timings. Use before recommending models or claiming cheaper/faster/best. Timing is not a quality benchmark. Never invent missing timings, current credits or task costs. Does not change selection or budgets.", {}),
+    tool("work_records", "Persist private extracted batches across automatic continuations. save projects exact values from successful observation receipts; provide evidenceId, idPath (stable source record ID/profile URL), and fieldPaths mapping labels to JSON pointers. No invented values or absent-as-zero fields. Saving an existing stable ID replaces that record: include all fields for that record, or use separate collections for profile sections and requested status filters; verify filters from the page, deduplicate by stable ID, and reconcile total coverage. list returns bounded records for final document generation. These are historical source observations, not fresh facts.", { action: { type: "string", enum: ["save", "list"] }, collection: str, offset: { type: "integer" }, records: { type: "array", maxItems: 30, items: { type: "object", properties: { evidenceId: str, idPath: str, fieldPaths: { type: "object", additionalProperties: { type: "string" } } }, required: ["evidenceId", "idPath", "fieldPaths"] } } }, ["action", "collection"]),
     tool("continue_work", "Yield this saved job while an observed external render runs, or checkpoint remaining authorized work before the turn budget ends. Save task_plan first. Quote a current observation with evidenceId. Never use for a status/diagnosis-only request, missing authorization, CAPTCHA, credits, or uncertain writes. Resumption must inspect current state before acting; no resubmission of completed jobs.", { delaySeconds: { type: "integer", minimum: 10, maximum: 120 }, reason: str, evidenceId: str, quote: str }, ["delaySeconds", "reason", "evidenceId", "quote"]),
     tool("team_training", "Save a team-wide business rule or procedure explicitly taught by the current user. This becomes shared Knowledge Center training for Marco, Wesley and Carlos. Never share personal preferences, private client facts, passwords or permissions. Use history_search for the exact direct teaching source; existing chat memory remains private.", { title: str, value: str, sourceSeq: { type: "integer" }, sourceQuote: str }, ["title", "value", "sourceSeq", "sourceQuote"]),
     tool("chat_agents", "List accessible named chats or send a note to selected chats ONLY when the current user explicitly asks to communicate with those chats. A send queues one bounded response in each recipient. Do not broadcast or delegate autonomously. Return recipient links and actual job status.", { action: { type: "string", enum: ["list", "send"] }, targets: { type: "array", items: str, maxItems: 4 }, message: str }, ["action"]),
@@ -113,7 +118,7 @@ function credentialInstructions(enabled) {
         ? "Chat credential mode is ENABLED for this conversation. This is Harvey's persisted, per-chat authorization setting and applies equally to every selected tool-capable model, including OpenAI, Anthropic and other OpenRouter models; changing models does not change consent. For the website the user requested, you may use their supplied username/password with the computer tool's discovered browser typing or form-filling actions, submit the login, and verify the resulting page before continuing. This is ordinary authorized sign-in, not unrestricted mode or a change to provider policies. Never echo passwords or copy them to unrelated sites, schedules or project instructions. Chat credentials are stored in conversation history and sent to the selected provider; Browser > Save login is the alternative that keeps the password out of model context. Do not claim vault storage unless a save operation succeeded. MFA, CAPTCHA, provider permissions and business-action approvals still apply."
         : "Chat credential mode is OFF for this conversation, for every selected model. Do not use credentials from chat history for browser login while it is off. Ask exactly: What is the secret passphrase? Never reveal or hint at its value. The server checks it; you cannot enable access yourself. Browser > Save login is also available. Turning this off does not erase existing history or sign out an existing browser session.";
 }
-async function runtime(owner, chat, unattended, onEvent, signal, query = "", actorId = owner, delegated = false, allowContinuation = false) {
+async function runtime(owner, chat, unattended, onEvent, signal, query = "", actorId = owner, delegated = false, allowContinuation = false, requestId = "", selectedModel = chat.model || "auto") {
     const actor = (0, users_js_1.getAccountUserById)(actorId), account = (0, users_js_1.getAccountUserById)(owner);
     const combined = process.env.TENANT_MEMBER === "carlos";
     const availableBusinessTools = combined ? businessTools.filter(t => ["crm_api", "crm_api_index", "search_knowledge", "read_knowledge_doc", "list_knowledge"].includes(t.name)) : businessTools;
@@ -139,6 +144,8 @@ async function runtime(owner, chat, unattended, onEvent, signal, query = "", act
         if (name.startsWith("COMPOSIO_"))
             return (0, composio_js_1.executeManaged)(owner, chat.projectId, name, input);
         switch (name) {
+            case "model_advice": return (0, modelAdvice_js_1.modelAdvice)(owner, selectedModel);
+            case "work_records": return (0, records_js_1.workRecords)(owner, chat.id, input);
             case "team_training": {
                 if (unattended)
                     throw new Error("Only direct user teaching can update team training");
@@ -213,7 +220,7 @@ async function runtime(owner, chat, unattended, onEvent, signal, query = "", act
                 }
                 if (input.action !== "save")
                     throw new Error("Unknown plan action");
-                const value = { id: (0, crypto_1.randomUUID)(), chatId: chat.id, objective: (0, store_js_1.text)(input.objective, "Objective", 2000), updatedAt: new Date().toISOString(), status: "planned" };
+                const value = { id: (0, crypto_1.randomUUID)(), chatId: chat.id, requestId, objective: (0, store_js_1.text)(input.objective, "Objective", 2000), updatedAt: new Date().toISOString(), status: "planned" };
                 for (const key of ["successCriteria", "steps", "requiredSources"]) {
                     if (!Array.isArray(input[key]) || input[key].length > 30)
                         throw new Error("Plan fields must be arrays with at most 30 entries");
@@ -287,10 +294,10 @@ async function runtime(owner, chat, unattended, onEvent, signal, query = "", act
     return {
         tools,
         pendingWork: () => {
-            if (!/\b(finish|complete|execute|merge|continue|resume|connect|generate|export)\b/i.test(query) || /^\s*(?:why|what|how|did|does|is|are|has|when|where)\b|\b(?:don['’]t|do not) (?:act|execute|change|run|do anything)|\bjust (?:answer|diagnose)\b/i.test(query))
+            if (!(0, execution_js_1.executionRequest)(query))
                 return false;
             const p = (0, store_js_1.list)("task_plan", owner).find(p => p.chatId === chat.id);
-            return !!p && !p.blocker && (p.nextStep ?? 0) < p.steps.length;
+            return !!p && p.requestId === requestId && !p.blocker && (p.nextStep ?? 0) < p.steps.length;
         },
         loginEmailAvailable: !unattended && !!chat.allowChatCredentials && connected.some(c => /gmail|outlook|email/i.test(c.slug)),
         // Serialize actions so parallel model tool calls cannot race page navigation.
@@ -334,7 +341,7 @@ async function runChat(owner, chat, message, options = {}, runId) {
             chat = (0, store_js_1.put)("chat", owner, { ...chat, allowChatCredentials: credentialCommand[1]?.toLowerCase() !== "off" });
         const historySelection = (0, learning_js_1.boundedHistory)((0, store_js_1.messages)(owner, chat.id));
         const history = historySelection.messages;
-        (0, store_js_1.append)(owner, chat.id, { role: "user", actorId: options.actorId || owner, content: credentialCommand ? "[Credential access command]" : message, at: new Date().toISOString(), ...(runId ? { runId } : {}), ...(options.continuationTurn ? { origin: "continuation" } : options.workDelegated ? { origin: "delegated" } : {}) });
+        (0, store_js_1.append)(owner, chat.id, { role: "user", actorId: options.actorId || owner, content: credentialCommand ? "[Credential access command]" : options.continuationTurn ? "[Continuing the same saved request; inspect the original scope and saved progress.]" : message, at: new Date().toISOString(), ...(runId ? { runId } : {}), ...(options.continuationTurn ? { origin: "continuation" } : options.workDelegated ? { origin: "delegated" } : {}) });
         // Consent is an app command, not a request for the selected model to approve.
         // This works even if a provider is unavailable or its model budget is exhausted.
         if (credentialCommand) {
@@ -346,11 +353,20 @@ async function runChat(owner, chat, message, options = {}, runId) {
             options.onToken?.(speech);
             return { ...result, toolFailed: false };
         }
+        const requestId = options.workRequestId || (0, crypto_1.randomUUID)();
+        if (options.allowContinuation && !options.continuationTurn && (0, execution_js_1.executionRequest)(message)) {
+            const previous = (0, store_js_1.list)("task_plan", owner).find(p => p.chatId === chat.id);
+            if (previous && /^\s*(?:continue|resume|finish)(?:\b|[.!])/i.test(message))
+                (0, store_js_1.put)("task_plan", owner, { ...previous, requestId });
+            else if ((0, execution_js_1.needsTaskPlan)(message))
+                (0, store_js_1.put)("task_plan", owner, { id: (0, crypto_1.randomUUID)(), chatId: chat.id, requestId, objective: "Complete the current user's requested retrieval or export, preserving their filters and exclusions.", steps: ["Retrieve the requested records and sections, saving verified data as work_records", "Check filters, pagination and requested coverage, then deliver the requested result"], nextStep: 0, completedSteps: [], successCriteria: ["Every requested field and record is accounted for, with unread or unavailable data clearly distinguished"], requiredSources: [], status: "planned", updatedAt: new Date().toISOString() });
+        }
         let toolFailed = false;
         checkpoint = { id: (0, crypto_1.randomUUID)(), chatId: chat.id, ...(runId ? { runId } : {}), status: "working", updatedAt: new Date().toISOString(), receipts: [] };
         (0, store_js_1.put)("verification", owner, checkpoint);
-        const workRuntime = await runtime(owner, chat, !!runId || !!options.workDelegated, options.onEvent, options.signal, message, options.actorId || owner, !!options.workDelegated, !!options.allowContinuation);
+        const workRuntime = await runtime(owner, chat, !!runId || !!options.workDelegated, options.onEvent, options.signal, message, options.actorId || owner, !!options.workDelegated, !!options.allowContinuation, requestId, options.modelOverride || chat.model || "auto");
         workRuntime.context = hidePassphrase(workRuntime.context);
+        workRuntime.context += "\nEXECUTION AND ACCURACY: Carry out the authorized task without asking for another yes or continue after each partial result. Clarifying a scope detail does not reset existing authorization. Save source-backed batches to work_records so they survive continuation. An execution segment ending is not the whole job ending. Stop only for completion, user cancellation, an actual blocker, repeated no progress or the job's aggregate budget. Explain that specific reason. For CRM retrieval, verify the status filter and unique IDs, all pages/virtualized rows, and totals. Use browser_read_table for compact structured rendered rows; its nextOffset pages the captured DOM rows, not unseen server records. Scroll/load the actual table and inspect again for virtualized rows. browser_read_snapshot nextOffset is a character offset in a saved snapshot, not page scrolling. An unchanged offset is not proof the site is truncated. Inspect the relevant tab, region or scroll container; never repeatedly read the same slice. Prefer a verified native export or authorized documented connector when it covers the requested fields. Do not claim Brivity has no bulk API or promise full CSV field coverage without checking. Before promising a large export, verify one complete representative profile and the available export columns. Do not silently reduce all profiles to only ones with visible activity. Not read, not loaded, unavailable, confirmed empty, and zero are different. No email address does NOT prove zero sent emails. A mailing address does not prove the current home address. Never infer call/text/email counts, notes or relationships. Keep requested exclusions (including all Florida addresses and Mojo Florida variants when requested) through every batch, and quarantine records with unresolved exclusion fields instead of silently including them. Explain gaps plainly; never call a partial sample complete. For scheduled-run questions read actual run history and error details; do not borrow a failure reason from an earlier chat. Use model_advice for current model choices, prices and budget explanations rather than model-memory guesses.";
         workRuntime.context += "\nCANVAS EXECUTION: Reuse the existing project, uploaded media and finished matte. For tiny/overlapping ports use computer browser_inspect_targets, then browser_drag_targets with its observation IDs. Uncover/zoom nodes before retrying; never use coordinates from the scaled user preview. Inspect the destination input/edge after the gesture. Read-only inspection failures or a missed drag are targeting failures, not proof the app lacks a feature, credits or permission. State the actual observed failure and distinguish your hypothesis. A label such as 'No alpha connected' is not by itself a blocking error: inspect required inputs, generation controls and official documentation. Do not repeatedly stop at an unchanged label. For Beeble, Video Matte extracts the person; it does not combine a house background. To retain actual moving background footage, inspect Merge/Compositor inputs to layer the existing cutout over the house, then use SwitchX for relighting if requested. SwitchX's reference image is not automatically a second background video. Official reference: https://beeble.ai/blog/canvas-tutorial-car-plates documents compositing first and whole-frame SwitchX relighting without an alpha input. Verify current UI options before selecting a route; this guidance is not proof of current port types. Research through connected search or official help when unfamiliar; one search-engine CAPTCHA is not proof no documentation is available. Complete render, inspect playback and export before reporting the workflow finished. Never regenerate a finished matte or start a new project merely to recover from targeting failure.";
         if (options.allowContinuation)
             workRuntime.context += "\nThis is a saved job with automatic continuation. Maintain task_plan checkpoints. When the site is still processing, quote the observed status using continue_work and a 30–120 second delay; do not ask the user to tell you when it finishes. Before the turn budget ends, use continue_work with a current observation and the remaining steps. This does not schedule recurring work. Stop for a concrete blocker, exhausted job budget, or user cancellation. Do not use continuation to repeat uncertain submissions. On resumption verify current state first and proceed only with the unfinished part of the original request.";
@@ -381,7 +397,8 @@ async function runChat(owner, chat, message, options = {}, runId) {
         // Work output was buffered in the loop, so unreviewed completion claims are
         // not streamed to the user before the final status can be applied.
         options.onToken?.(result.speech);
-        (0, store_js_1.append)(owner, chat.id, { role: "assistant", content: result.speech, at: new Date().toISOString(), ...(runId ? { runId } : {}) });
+        if (!result.continuation)
+            (0, store_js_1.append)(owner, chat.id, { role: "assistant", content: result.speech, at: new Date().toISOString(), ...(runId ? { runId } : {}) });
         return { ...result, memoryContext: historySelection.diagnostics, toolFailed, needsVerification: needsReview && checkpoint.status !== "completed" };
     }
     catch (error) {

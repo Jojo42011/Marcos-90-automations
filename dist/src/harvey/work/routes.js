@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkRouter = createWorkRouter;
 exports.handleWorkChat = handleWorkChat;
+const modelAdvice_js_1 = require("./modelAdvice.js");
 const learning_js_1 = require("./learning.js");
 const coordination_js_1 = require("./coordination.js");
 const composio_js_1 = require("./composio.js");
@@ -39,6 +40,12 @@ function createWorkRouter(authorize, owner) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     } next(); });
+    r.get("/work/model-advice", async (req, res) => { try {
+        res.json(await (0, modelAdvice_js_1.modelAdvice)(owner(req)));
+    }
+    catch (e) {
+        error(res, e);
+    } });
     r.get("/work/jobs/:id", (req, res) => { try {
         const o = owner(req), job = (0, store_js_1.get)("job", o, String(req.params.id));
         (0, store_js_1.get)("chat", o, job.chatId);

@@ -365,6 +365,7 @@
       outPerM: outPerM,
       context: firstNum(m.contextTokens, m.contextWindow, m.context, m.maxInputTokens),
       vision: !!(m.supportsVision || m.vision || (m.capabilities && m.capabilities.vision)),
+      advice:m,
       note: m.note || m.description || ""
     };
   }
@@ -424,7 +425,7 @@
     var autoSel = state.selectedModel === "auto";
     html += '<button type="button" class="pop-item" role="option" data-model="auto" aria-selected="' + (autoSel ? "true" : "false") + '">' +
       '<span class="pi-main"><span class="pi-label">Auto</span>' +
-      '<span class="pi-sub">Harvey routes each job to the model it picks</span></span>' +
+      '<span class="pi-sub">Start here if unsure. Uses configured routing; can switch to vision when needed.</span></span>' +
       checkSvg() + "</button>";
 
     if (state.modelsWired === false) {
@@ -446,7 +447,7 @@
           html += '<button type="button" class="pop-item" role="option" data-model="' + esc(m.id) + '" aria-selected="' + (sel ? "true" : "false") + '">' +
             '<span class="pi-main"><span class="pi-label">' + esc(m.label) +
             (m.tier ? ' <span class="tier">' + esc(m.tier) + "</span>" : "") + "</span>" +
-            (priceText(m) ? '<span class="pi-sub">' + esc(priceText(m)) + "</span>" : '<span class="pi-sub">no price reported</span>') +
+            (priceText(m) ? '<span class="pi-sub">' + esc(priceText(m)) + " · " + (m.vision?"Images + text":"Text only") + " · " + (m.advice.pricing?.fresh?"recent catalog prices":"estimated prices") + "</span>" : '<span class="pi-sub">no price reported</span>') +
             "</span>" + checkSvg() + "</button>";
         });
       });
@@ -464,6 +465,8 @@
     if (!r.ok || !r.data) { state.modelsWired = false; paintProviderPill(); return; }
     state.modelsWired = true;
     state.models = (r.data.models || []).map(normModel).filter(function (m) { return m.id; });
+    var advice=await api('/api/harvey/work/model-advice');
+    if(advice.ok&&advice.data){state.modelAdvice=advice.data;state.models=(advice.data.models||[]).map(normModel);}
     state.routing = r.data.routing || null;
     state.provider = r.data.provider || null;
     state.budget = r.data.budget || null;
@@ -1328,6 +1331,15 @@
     }
 
     var html = "";
+    var guide=state.modelAdvice;
+    html += '<div class="panel"><h2>Choose a model for the job</h2><div class="sub">Start with Auto if you are unsure. For routine counts, copying records, and summaries, try a lower-cost model on a small sample. For a visual canvas, choose one that can see images. A premium model is usually unnecessary for copying rows; it does not fix missing source data.</div>';
+    if(guide){
+      var picks=[['routine','Lower-cost routine work'],['visual','Lower-cost images and browser work'],['multiStep','Configured multi-step model']];
+      html += '<div class="sub">'+picks.map(function(item){var m=modelById(guide.recommendations[item[0]]);return m?'<button type="button" class="btn sm" data-advice-model="'+esc(m.id)+'">'+esc(item[1])+': '+esc(m.label)+'</button>':'';}).join(' ')+'</div>';
+      html += '<div class="sub">Prices below estimate one response using 10,000 input and 2,000 output tokens. A full task can require many responses, images and retries. Recent timing is observed in your account, not a controlled speed or quality ranking.</div><table class="data"><thead><tr><th>Model / use</th><th>Example cost</th><th>Recent response time</th></tr></thead><tbody>';
+      html += guide.models.map(function(m){return '<tr><td><b>'+esc(m.label)+'</b><div class="sub">'+esc(m.fit)+' '+esc(m.visualUse)+'</div></td><td>$'+Number(m.exampleCostUsd).toFixed(4)+'<div class="sub">'+(m.pricing.fresh?'Recent catalog price':'Estimated price')+'</div></td><td>'+(m.recentSpeed?Number(m.recentSpeed.averageResponseSeconds).toFixed(1)+' seconds ('+m.recentSpeed.samples+' responses)':'Not enough observations')+'</td></tr>';}).join('')+'</tbody></table>';
+    }
+    html += '<div class="sub">Ask Harvey: “Compare model costs for this task and explain your recommendation.” Auto follows the configured routing; it is not guaranteed to be the cheapest choice.</div></div>';
     var p = state.provider || {};
     html += '<div class="panel"><h2>Providers</h2><div class="sub">Keys live only as server secrets. This page never sees one.</div>' +
       '<table class="data"><tbody>' +
@@ -1706,6 +1718,7 @@
       renderModelsView();
     });
     $("modelsBody").addEventListener("click", async function (e) {
+      var pick=e.target.closest("[data-advice-model]");if(pick){selectModel(pick.getAttribute("data-advice-model"));showView("chat");toast("Model selected for this chat.");return;}
       var btn = e.target.closest("[data-route-reset]");
       if (!btn) return;
       var r = await api("/api/harvey/models/route/" + encodeURIComponent(btn.getAttribute("data-route-reset")), { method: "DELETE" });

@@ -37,3 +37,13 @@ These checks do not measure live model reasoning accuracy, CRM extraction comple
 - [Playwright actionability](https://playwright.dev/docs/actionability) and [locators](https://playwright.dev/docs/locators): inspect current targets and verify outcomes instead of assuming a click succeeded.
 
 For future changes, use a copied dataset and test account to evaluate representative multi-page CRM searches, expired sessions, ambiguous listings, calendar gaps and CapCut tasks. Measure false completion, unsupported facts, task success and intervention counts. Verify a backup restore before any future migration.
+
+## Retrieval continuation and retained records
+
+Interactive saved jobs seed request-scoped plans for counts and bulk retrieval. On premature final answers or a reserved summary round, a successful current observation can yield the job automatically. Status/planning/stop requests cannot resume old plans. Completed or blocked reviews do not yield. Unknown writes still require a fresh observation before any continuation. Three unchanged continuation checkpoints stop with a no-progress reason; earlier repetitions tell the agent to change approach. Existing aggregate limits remain $2, one hour and 12 continuations, and are reported separately from provider credit failures.
+
+The fixed DOM-only browser_read_table probe returns rendered rows, IDs, bounded cells, truncation, scroll metrics and observed ARIA totals. Its offset is within current DOM rows, not server pagination. End-of-DOM never proves complete coverage. Oversized rows require a smaller observation rather than an unchanged-offset loop.
+
+work_records projects JSON pointers from successful current receipts server-side; missing paths cannot become invented values. Collections are private to owner/chat and deduplicate stable source IDs across continuations and restarts. Save replaces a record, so all its fields must be included or sections stored in separate collections. Stored records are historical observations: current filters, exclusions, field meanings and full coverage still need verification. They are work product, not reusable memory or authorization.
+
+Regression: verify-work-continuation.mjs, verify-harvey-onboarding.mjs and verify-harvey-reliability.mjs use isolated fixture stores and local services. Onboarding additionally exercises real Chromium pagination and source projection. The opt-in deployment check runs this same isolated fixture in the image, not a live customer CRM export.

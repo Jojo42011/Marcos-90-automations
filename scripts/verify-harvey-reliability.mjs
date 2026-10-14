@@ -66,6 +66,9 @@ const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);re
    const rewrite=JSON.stringify(b.messages).includes('Rewrite the draft below into 2–4 short, plain sentences for Marco.');
    response=!rewrite&&n===0?tc('workspace_files',{}):rewrite?(JSON.stringify(b.messages).includes('PLAIN_STATUS_CALL_FIXTURE')?tc('workspace_files',{}):{role:'assistant',content:'Both videos are ready. They still need to be combined, and I have not started that step.'}):{role:'assistant',content:'## Technical status\n'+('The source files are prepared; combining them is still pending. '.repeat(14))};
  }
+ else if(user.includes('AUTO_YIELD_RUNTIME_FIXTURE')){
+   response=n===0?tc('workspace_files',{}):{role:'assistant',content:'I reached the execution limit. Just say continue and I will finish.'};
+ }
  else if(user.includes('CONTINUATION_RUNTIME_FIXTURE')){
    const steps=[['task_plan',{action:'save',objective:'Existing project composite',steps:['Inspect saved render','Export'],successCriteria:['Verified output'],requiredSources:[]}],['task_plan',{action:'get'}],['continue_work',{delaySeconds:30,reason:'Inspect existing render, then export.',evidenceId:'e2',quote:'Existing project composite'}]];
    response=n<steps.length?tc(...steps[n]):{role:'assistant',content:'The saved render is still pending.'};
@@ -154,6 +157,7 @@ const express=require('express'),routes=require(join(root,'harvey/work/routes.js
 const app=express();app.use(express.json());app.use(express.static(resolve('public')));
 const owner=req=>String(req.headers['x-test-owner']||'alice'),authorized=req=>req.headers.authorization==='Bearer fixture';
 app.get('/api/harvey/models',(_req,res)=>res.json({models:[{id:'openai/fixture',name:'Fixture One'},{id:'openai/fixture-two',name:'Fixture Two'}]}));
+app.get('/api/harvey/work/model-advice',(_req,res)=>res.json({models:[{id:'openai/fixture',name:'Fixture One',label:'Fixture One',inputPerM:1,outputPerM:2,exampleCostUsd:.014,pricing:{fresh:true},recentSpeed:{averageResponseSeconds:2,samples:3},fit:'Routine fixture work',visualUse:'Text only'},{id:'openai/fixture-two',name:'Fixture Two',label:'Fixture Two',inputPerM:2,outputPerM:4,exampleCostUsd:.028,pricing:{fresh:false},recentSpeed:null}],recommendations:{routine:'openai/fixture',multiStep:'openai/fixture-two'}}));
 app.use('/api/harvey',routes.createWorkRouter(authorized,owner));
 app.post('/api/harvey/chat',(req,res)=>{if(!authorized(req))return res.sendStatus(401);return routes.handleWorkChat(req,res,owner(req));});
 const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port+'/api/harvey';
@@ -175,6 +179,9 @@ try{
    const result=await require(join(root,'harvey/work/runtime.js')).runChat('continuation-fixture',continuationChat,(execution?'Finish':'Did you finish')+' CONTINUATION_RUNTIME_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
    ok('real runtime continuation requires an execution request and unfinished plan '+execution,()=>assert.equal(!!result.continuation,execution));
  }
+ const autoChat=store.createChat('auto-yield-fixture',{});
+ const automatic=await require(join(root,'harvey/work/runtime.js')).runChat('auto-yield-fixture',autoChat,'How many records are in each group? AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'auto-job',modelOverride:'openai/fixture'});
+ ok('counting task seeds its plan and continues even when the model asks the user to continue',()=>{assert(automatic.continuation);assert(automatic.continuation.progressKey);assert(!/say continue/i.test(automatic.speech));assert(!store.messages('auto-yield-fixture',autoChat.id).some(m=>m.role==='assistant'&&/continue/i.test(m.content)));});
  const oldAgent=process.env.HARVEY_MODEL_AGENT;
  process.env.HARVEY_MODEL_AGENT='inception/mercury-2.5';
  let autoVisualExecutions=0;
@@ -289,6 +296,11 @@ try{
    await page.locator('[data-conv="'+detached.chatId+'"] .title').click();await page.getByText('Detached fixture completed.',{exact:true}).waitFor();
    checks++;console.log('ok detached job finishes in cloud, never renders in another chat, and its result survives refresh');
    const paused=store.createSchedule('alice',{chatId:slow.id,title:'Failure pause fixture',prompt:'Fixture only',cron:'0 9 * * *',timezone:'America/Chicago'});store.put('schedule','alice',{...paused,enabled:false,pauseReason:'Repeated runs need attention; inspect before resuming.'});
+   await page.getByRole('button',{name:'Explore models',exact:true}).click();
+   await page.getByText('Choose a model for the job',{exact:true}).waitFor();
+   assert.match(await page.locator('#modelsBody').innerText(),/0.0140/);assert.match(await page.locator('#modelsBody').innerText(),/2.0 seconds/);assert.match(await page.locator('#modelsBody').innerText(),/Estimated price/);
+   await page.locator('[data-advice-model="openai/fixture"]').first().click();assert.equal(await page.locator('#modelPillLabel').textContent(),'Fixture One');
+   checks++;console.log('ok onboarding guide renders real costs, measured timing and model selection');
    await page.getByRole('button',{name:'Scheduled',exact:true}).click();await page.getByText('Repeated runs need attention; inspect before resuming.',{exact:true}).waitFor({timeout:10000});checks++;console.log('ok paused schedule explains why it stopped in the real UI');
    store.remove('schedule','alice',paused.id);
   }finally{await browser.close();}

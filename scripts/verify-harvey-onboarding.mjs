@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {mkdtempSync,chmodSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import http from 'node:http';
+const require=createRequire(import.meta.url),dir=mkdtempSync(join(tmpdir(),'harvey-onboarding-'));chmodSync(dir,0o755);
+for(const key of Object.keys(process.env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|HARVEY_WORK_DIR|AI_USAGE_DB_PATH|TENANT_OWNER_ID|DB_JSON_PATH/.test(key))delete process.env[key];
+Object.assign(process.env,{TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),DOTENV_CONFIG_PATH:join(dir,'no-env'),HARVEY_BROWSER_ENABLED:'true',OPENROUTER_API_KEY:'fixture'});
+const S=require('../dist/src/harvey/work/store.js'),B=require('../dist/src/harvey/work/browser.js'),R=require('../dist/src/harvey/work/records.js'),{TurnVerification}=require('../dist/src/harvey/reliability.js');
+const {modelAdvice}=require('../dist/src/harvey/work/modelAdvice.js'),catalog=require('../dist/src/hull/providers/catalog.js'),usage=require('../dist/src/core/aiUsageStore.js');
+const {executionRequest,needsTaskPlan}=require('../dist/src/harvey/work/execution.js');
+const alice=S.createChat('alice',{}),bob=S.createChat('bob',{});
+const original=global.fetch;
+global.fetch=async(url,...args)=>{
+ if(String(url)==='https://openrouter.ai/api/v1/models')return new Response(JSON.stringify({data:[{id:'inception/mercury-2.5',pricing:{prompt:'0.000001',completion:'0.000002'},architecture:{input_modalities:['text']},supported_parameters:['tools']},{id:'z-ai/glm-5.3-flash',pricing:{prompt:null,completion:null}}]}));
+ assert.equal(new URL(String(url)).hostname,'127.0.0.1','No real services in fixture');return original(url,...args);
+};
+const server=http.createServer((req,res)=>{res.setHeader('content-type','text/html');res.end(`<h1>Hot: 4 total</h1><table aria-rowcount="4"><thead><tr><th>Name</th><th>Email</th></tr></thead><tbody id="rows"><tr><td><a href="/people/a">Alex One</a></td><td></td></tr><tr><td><a href="/people/b">Alex Two</a></td><td>b@example.test</td></tr></tbody></table><button onclick="document.querySelector('#rows').innerHTML='<tr><td><a href=/people/c>Alex Three</a></td><td></td></tr><tr><td><a href=/people/d>Alex Four</a></td><td></td></tr>'">Next page</button>`);});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+try{
+ for(const q of ['How many hot leads do I have?','Find the names of every past client','Extract each eligible profile'])assert(needsTaskPlan(q));
+ for(const q of ['Did you finish the task?','What is the progress?','Give me two options of plans','Do not extract anything','Stop'])assert(!executionRequest(q));
+ const call=(tool,arguments_={})=>B.browserCall('alice',alice.id,tool,arguments_);
+ await call('browser_navigate',{url:'http://127.0.0.1:'+server.address().port});
+ const v=new TurnVerification();let table=await call('browser_read_table');assert(!table.error,JSON.stringify(table));assert.equal(table.rows.length,2);assert.equal(table.totalFromAria,'4');assert.equal(table.nextOffset,null);assert.match(table.coverage,/NOT proof/);assert.equal(table.rows[0].cells[1],'');
+ v.record('computer',{action:'call',tool:'browser_read_table'},table);
+ const project=id=>table.rows.map((_r,i)=>({evidenceId:id,idPath:`/rows/${i}/id`,fieldPaths:{name:`/rows/${i}/cells/0`,email:`/rows/${i}/cells/1`}}));
+ let records=v.projectRecords(project('e1'));R.workRecords('alice',alice.id,{action:'save',collection:'hot',_verifiedRecords:records});R.workRecords('alice',alice.id,{action:'save',collection:'hot',_verifiedRecords:records});
+ assert.equal(R.workRecords('alice',alice.id,{action:'list',collection:'hot'}).total,2,'Stable IDs deduplicate retries');
+ assert.throws(()=>v.projectRecords([{evidenceId:'e1',idPath:'/rows/0/id',fieldPaths:{emailsSent:'/rows/0/emailsSent'}}]),/missing/,'Missing email cannot become zero sent emails');
+ assert.throws(()=>R.workRecords('bob',alice.id,{action:'list',collection:'hot'}));
+ await call('browser_click',{target:'button'});table=await call('browser_read_table');v.record('computer',{action:'call',tool:'browser_read_table'},table);
+ R.workRecords('alice',alice.id,{action:'save',collection:'hot',_verifiedRecords:v.projectRecords(project('e2'))});S.closeStore();assert.equal(R.workRecords('alice',alice.id,{action:'list',collection:'hot'}).total,4);
+ console.log('ok real rendered table pagination, observed projections, duplicate protection, missing-data honesty, restart and owner isolation');
+ for(let i=0;i<3;i++)usage.recordUsage({provider:'openrouter',model:'inception/mercury-2.5',job:'agent',promptTokens:100,completionTokens:20,cachedTokens:0,costUsd:0.001,costEstimated:false,latencyMs:2000,ok:true,sessionId:alice.sessionId});
+ usage.recordUsage({provider:'openrouter',model:'inception/mercury-2.5',job:'agent',promptTokens:100,completionTokens:20,cachedTokens:0,costUsd:0.001,costEstimated:false,latencyMs:90000,ok:true,sessionId:bob.sessionId});
+ const advice=await modelAdvice('alice'),m=advice.models.find(m=>m.id==='inception/mercury-2.5');assert.equal(m.exampleCostUsd,.014);assert.equal(m.recentSpeed.averageResponseSeconds,2);assert.equal(m.recentSpeed.samples,3);assert(m.pricing.fresh);assert(!m.supportsVision);
+ const missing=advice.models.find(m=>m.id==='z-ai/glm-5.3-flash');assert(!missing.pricing.fresh);assert(missing.inputPerM>0,'Null provider prices must not become free');assert.equal((await modelAdvice('bob')).models.find(m=>m.id==='inception/mercury-2.5')?.recentSpeed,null);
+ assert.match(advice.guidance.join(' '),/not a speed benchmark/);assert.match(advice.example.unit,/not per finished task/);
+ console.log('ok live versus estimated prices, arithmetic, capability guidance and account-scoped measured speed; no invented speed ranking');
+}finally{await B.closeBrowsers();S.closeStore();server.closeAllConnections();await new Promise(r=>server.close(r));global.fetch=original;}

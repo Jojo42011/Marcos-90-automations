@@ -1,3 +1,4 @@
+import { tableCode } from "./tables.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createHash, randomUUID } from "crypto";
@@ -15,6 +16,7 @@ const canvasObservations = new Map<string,{id:string;at:number;targets:CanvasTar
 const ALLOWED = new Set(["browser_navigate", "browser_navigate_back", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_hover", "browser_drag", "browser_tabs", "browser_wait_for", "browser_handle_dialog", "browser_file_upload", "browser_take_screenshot", "browser_close", "browser_mouse_click_xy", "browser_mouse_drag_xy", "browser_mouse_wheel"]);
 const TARGETED = new Set(["browser_click","browser_type","browser_fill_form","browser_select_option","browser_hover","browser_drag"]);
 const EXTRA_TOOLS = [
+  {name:"browser_read_table",description:"Read compact structured currently rendered table/grid rows, headers, stable links and scroll metrics. Optional target is a unique observed table selector. offset/nextOffset page DOM rows only: use actual UI pagination or scrolling for unseen/virtualized records. Verify filters and total separately; save sourced rows with work_records before continuing.",inputSchema:{type:"object",properties:{target:{type:"string"},offset:{type:"integer",minimum:0}}}},
   {name:"browser_inspect_targets",description:"Inspect visible canvas nodes, ports, controls and exposed graph edges with precise viewport rectangles and a screenshot. Optionally focus on observed nodeIds when the graph is large. Use before connecting overlapping nodes; missing DOM edges require destination read-back, not guesswork.",inputSchema:{type:"object",properties:{nodeIds:{type:"array",items:{type:"string"},maxItems:4}}}},
   {name:"browser_drag_targets",description:"Connect two freshly observed port targets with a controlled mouse gesture. Requires observationId and target IDs from browser_inspect_targets. Rejects moved/obscured targets before pressing. Returns fresh graph and pixels; verify the intended input, not just gesture completion.",inputSchema:{type:"object",properties:{observationId:{type:"string"},start:{type:"string"},end:{type:"string"}},required:["observationId","start","end"]}},
   {name:"browser_read_snapshot",description:"Read another bounded page of the most recent full snapshot without recapturing it. Use snapshotId and nextOffset returned by the previous result. For a new state or a specific region use browser_snapshot with target/depth instead.",inputSchema:{type:"object",properties:{snapshotId:{type:"string"},offset:{type:"integer",minimum:0}},required:["snapshotId","offset"]}},
@@ -173,6 +175,11 @@ export function validateActionReferences(snapshot:string,args:any){
 }
 export async function browserCall(owner:string,chat:string,name:string,args:any,signal?:AbortSignal):Promise<any>{
   signal?.throwIfAborted();args={...(args||{})};
+  if(name==="browser_read_table"){
+    if(args.target!==undefined&&(typeof args.target!=="string"||args.target.length>2000)||args.offset!==undefined&&(!Number.isInteger(args.offset)||args.offset<0))return {error:"Use a bounded selector and nonnegative offset"};
+    const s=await session(owner,chat);
+    return observedAction(s,name,async()=>{try{return parseBrowserJson(checked(await call(s,"browser_evaluate",{function:tableCode({target:args.target,offset:args.offset})},15000,signal)));}catch(e){return {error:"Table observation failed: "+(e as Error).message,note:"This does not prove the site has no records. Inspect the relevant tab or a focused snapshot."};}});
+  }
   if(name==="browser_inspect_targets"||name==="browser_drag_targets"){
     if(args.nodeIds!==undefined&&(!Array.isArray(args.nodeIds)||args.nodeIds.length>4||args.nodeIds.some((id:any)=>typeof id!=="string"||id.length>200)))return {error:"nodeIds must contain up to four observed node IDs"};
     const s=await session(owner,chat),key=owner+":"+chat;
