@@ -41,6 +41,7 @@ function tenantEnvironment(owner, parent = process.env) {
         if (SHARED_ENV.test(key))
             env[key] = value;
     // Identity is shared; business stores and in-memory state are not.
+    env.SHARED_OPENROUTER_BUDGET_DB_PATH = parent.SHARED_OPENROUTER_BUDGET_DB_PATH || (0, tenantData_js_1.dataPath)("openrouter-budget.db");
     env.SHARED_KNOWLEDGE_DB_PATH = parent.SHARED_KNOWLEDGE_DB_PATH || (0, tenantData_js_1.dataPath)("shared-knowledge.db");
     env.LISTINGS_DB_PATH = parent.LISTINGS_DB_PATH || (0, tenantData_js_1.dataPath)("listings.db");
     env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || (0, tenantData_js_1.dataPath)("shared-tasks.db");
@@ -78,6 +79,7 @@ function ensureWorker(owner) {
 function startTenantWorkers() {
     if (!(0, tenantData_js_1.isTenantGateway)())
         return;
+    process.env.SHARED_OPENROUTER_BUDGET_DB_PATH ||= (0, tenantData_js_1.dataPath)("openrouter-budget.db");
     process.env.SHARED_KNOWLEDGE_DB_PATH ||= (0, tenantData_js_1.dataPath)("shared-knowledge.db");
     (0, sharedKnowledge_js_1.importSharedKnowledge)((0, tenantData_js_1.dataPath)());
     (0, knowledgeStore_js_1.listDocs)();

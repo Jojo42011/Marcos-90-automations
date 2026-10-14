@@ -31,6 +31,7 @@ export function tenantEnvironment(owner: string, parent = process.env): NodeJS.P
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) if (SHARED_ENV.test(key)) env[key] = value;
   // Identity is shared; business stores and in-memory state are not.
+  env.SHARED_OPENROUTER_BUDGET_DB_PATH = parent.SHARED_OPENROUTER_BUDGET_DB_PATH || dataPath("openrouter-budget.db");
   env.SHARED_KNOWLEDGE_DB_PATH = parent.SHARED_KNOWLEDGE_DB_PATH || dataPath("shared-knowledge.db");
   env.LISTINGS_DB_PATH = parent.LISTINGS_DB_PATH || dataPath("listings.db");
   env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db");
@@ -65,6 +66,7 @@ function ensureWorker(owner: string): Promise<number> {
 
 export function startTenantWorkers(): void {
   if (!isTenantGateway()) return;
+  process.env.SHARED_OPENROUTER_BUDGET_DB_PATH ||= dataPath("openrouter-budget.db");
   process.env.SHARED_KNOWLEDGE_DB_PATH ||= dataPath("shared-knowledge.db");
   importSharedKnowledge(dataPath());
   listDocs();

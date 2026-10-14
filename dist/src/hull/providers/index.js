@@ -42,9 +42,11 @@ exports.describeModel = describeModel;
  * can reach SQLite, a log line or the browser.
  */
 const aiUsageStore_js_1 = require("../../core/aiUsageStore.js");
+const openRouterBudget_js_1 = require("../../core/openRouterBudget.js");
+const catalog_js_1 = require("./catalog.js");
 const anthropicDirect_js_1 = require("./anthropicDirect.js");
 const budget_js_1 = require("./budget.js");
-const catalog_js_1 = require("./catalog.js");
+const catalog_js_2 = require("./catalog.js");
 const contextBudget_js_1 = require("./contextBudget.js");
 const internal_js_1 = require("./internal.js");
 const openrouter_js_1 = require("./openrouter.js");
@@ -53,14 +55,14 @@ __exportStar(require("./types.js"), exports);
 var internal_js_2 = require("./internal.js");
 Object.defineProperty(exports, "ModelLayerError", { enumerable: true, get: function () { return internal_js_2.ModelLayerError; } });
 Object.defineProperty(exports, "redactSecrets", { enumerable: true, get: function () { return internal_js_2.redactSecrets; } });
-var catalog_js_2 = require("./catalog.js");
-Object.defineProperty(exports, "availableModels", { enumerable: true, get: function () { return catalog_js_2.availableModels; } });
-Object.defineProperty(exports, "cheapestModel", { enumerable: true, get: function () { return catalog_js_2.cheapestModel; } });
-Object.defineProperty(exports, "getCatalog", { enumerable: true, get: function () { return catalog_js_2.getCatalog; } });
-Object.defineProperty(exports, "getModelInfo", { enumerable: true, get: function () { return catalog_js_2.getModelInfo; } });
-Object.defineProperty(exports, "refreshCatalog", { enumerable: true, get: function () { return catalog_js_2.refreshCatalog; } });
-Object.defineProperty(exports, "toSlug", { enumerable: true, get: function () { return catalog_js_2.toSlug; } });
-Object.defineProperty(exports, "toAnthropicId", { enumerable: true, get: function () { return catalog_js_2.toAnthropicId; } });
+var catalog_js_3 = require("./catalog.js");
+Object.defineProperty(exports, "availableModels", { enumerable: true, get: function () { return catalog_js_3.availableModels; } });
+Object.defineProperty(exports, "cheapestModel", { enumerable: true, get: function () { return catalog_js_3.cheapestModel; } });
+Object.defineProperty(exports, "getCatalog", { enumerable: true, get: function () { return catalog_js_3.getCatalog; } });
+Object.defineProperty(exports, "getModelInfo", { enumerable: true, get: function () { return catalog_js_3.getModelInfo; } });
+Object.defineProperty(exports, "refreshCatalog", { enumerable: true, get: function () { return catalog_js_3.refreshCatalog; } });
+Object.defineProperty(exports, "toSlug", { enumerable: true, get: function () { return catalog_js_3.toSlug; } });
+Object.defineProperty(exports, "toAnthropicId", { enumerable: true, get: function () { return catalog_js_3.toAnthropicId; } });
 var contextBudget_js_2 = require("./contextBudget.js");
 Object.defineProperty(exports, "planContext", { enumerable: true, get: function () { return contextBudget_js_2.planContext; } });
 Object.defineProperty(exports, "estimateTokens", { enumerable: true, get: function () { return contextBudget_js_2.estimateTokens; } });
@@ -108,7 +110,7 @@ function providerChainFor(model) {
     /* Direct Anthropic can only serve Anthropic models, but for those it is a
        genuinely independent path — a different key, a different network route —
        which is exactly what a fallback should be. */
-    if ((0, anthropicDirect_js_1.anthropicConfigured)() && (0, catalog_js_1.toSlug)(model).startsWith("anthropic/"))
+    if ((0, anthropicDirect_js_1.anthropicConfigured)() && (0, catalog_js_2.toSlug)(model).startsWith("anthropic/"))
         chain.push("anthropic");
     return chain;
 }
@@ -151,6 +153,8 @@ async function complete(req) {
         tools: req.tools,
         maxTokens,
     });
+    if ((0, openrouter_js_1.openRouterConfigured)())
+        await (0, openRouterBudget_js_1.refreshOpenRouterBilling)();
     const verdict = (0, budget_js_1.checkBudget)({
         job,
         model: resolved.model,
@@ -216,12 +220,36 @@ async function complete(req) {
             maxTokens,
             temperature: req.temperature,
             onToken: req.onToken,
-            maxCostUsd: req.maxCostUsd,
+            maxCostUsd: (0, openrouter_js_1.openRouterConfigured)() ? undefined : req.maxCostUsd,
         };
         for (const provider of providers) {
+            let reservation;
+            if (provider === "openrouter") {
+                try {
+                    const prices = [model, ...providerRequest.fallbacks].map(candidate => {
+                        if (!(0, catalog_js_2.getModelInfo)(candidate))
+                            throw new Error("OpenRouter model pricing is unavailable; no request was sent.");
+                        return (0, catalog_js_1.estimateCostUsd)(candidate, planned.plan.estimatedTokens, maxTokens);
+                    });
+                    reservation = (0, openRouterBudget_js_1.reserveOpenRouterSpend)(Math.max(...prices));
+                }
+                catch (error) {
+                    // Budget/storage failures must not trigger a paid provider fallback.
+                    throw new BudgetRefusedError({ ...verdict, allowed: false, reason: error instanceof Error ? error.message : "Shared OpenRouter budget unavailable" });
+                }
+            }
             const startedAt = Date.now();
+            let res;
             try {
-                const res = await callProvider(provider, providerRequest);
+                res = await callProvider(provider, providerRequest);
+                if (reservation) {
+                    try {
+                        (0, openRouterBudget_js_1.settleOpenRouterSpend)(reservation, res.costUsd);
+                    }
+                    catch {
+                        throw new BudgetRefusedError({ ...verdict, allowed: false, reason: "Could not record shared OpenRouter usage. The reservation is retained; no fallback request was sent." });
+                    }
+                }
                 const latencyMs = Date.now() - startedAt;
                 const usage = usageRow({ provider, model, job, sessionId: req.sessionId, latencyMs }, res);
                 (0, aiUsageStore_js_1.recordUsage)(usage);
@@ -240,6 +268,18 @@ async function complete(req) {
                 };
             }
             catch (err) {
+                if (err instanceof BudgetRefusedError)
+                    throw err;
+                // Explicit pre-inference rejection did not purchase tokens. Unknown network,
+                // streaming or server failures retain their reservation conservatively.
+                if (reservation && err instanceof internal_js_1.ModelLayerError && [400, 401, 402, 403, 404, 413, 422, 429].includes(err.status || 0)) {
+                    try {
+                        (0, openRouterBudget_js_1.settleOpenRouterSpend)(reservation, 0);
+                    }
+                    catch {
+                        throw new BudgetRefusedError({ ...verdict, allowed: false, reason: "Shared OpenRouter accounting is unavailable; no fallback request was sent." });
+                    }
+                }
                 const latencyMs = Date.now() - startedAt;
                 const wrapped = err instanceof internal_js_1.ModelLayerError
                     ? err
@@ -266,12 +306,12 @@ async function complete(req) {
 }
 /** Which keys exist, and therefore who actually runs the tokens. */
 function providerStatus() {
-    const { openrouter, anthropic } = (0, catalog_js_1.configuredProviders)();
+    const { openrouter, anthropic } = (0, catalog_js_2.configuredProviders)();
     return {
         openrouter,
         anthropic,
         primary: openrouter ? "openrouter" : anthropic ? "anthropic" : null,
-        catalogLive: (0, catalog_js_1.catalogIsLive)(),
+        catalogLive: (0, catalog_js_2.catalogIsLive)(),
     };
 }
 /**
@@ -280,12 +320,12 @@ function providerStatus() {
  * which is why the refresh lives here and not in `complete()`.
  */
 function listModelsForUi() {
-    (0, catalog_js_1.refreshCatalogInBackground)();
-    return { models: (0, catalog_js_1.availableModels)(), routing: (0, routing_js_1.routingTable)(), provider: providerStatus() };
+    (0, catalog_js_2.refreshCatalogInBackground)();
+    return { models: (0, catalog_js_2.availableModels)(), routing: (0, routing_js_1.routingTable)(), provider: providerStatus() };
 }
 /** Everything the models endpoint needs about one model, resolved. */
 function describeModel(model) {
-    return (0, catalog_js_1.getModelInfo)(model);
+    return (0, catalog_js_2.getModelInfo)(model);
 }
 function safeBool(fn) {
     try {

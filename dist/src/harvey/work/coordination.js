@@ -80,5 +80,5 @@ async function dispatchTeam(owner, headChatId, input) {
     const brief = (0, learning_js_1.safeNote)(input.brief, "Task brief", 6000);
     const { enqueueJob } = await Promise.resolve().then(() => __importStar(require("./jobs.js")));
     // A delegated worker cannot dispatch children, create schedules or alter memory.
-    return enqueueJob(owner, chatId, { message: brief, requestId: `team:${headChatId}:${(0, store_js_1.text)(input.requestId, "Request ID", 80)}` }, { originChatId: headChatId, maxCostUsd: 0.5 });
+    return enqueueJob(owner, chatId, { message: brief, requestId: `team:${headChatId}:${(0, store_js_1.text)(input.requestId, "Request ID", 80)}` }, { originChatId: headChatId });
 }

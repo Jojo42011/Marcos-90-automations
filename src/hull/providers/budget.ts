@@ -1,25 +1,5 @@
-/**
- * The spend gate, checked BEFORE the network call.
- *
- * A request that has been made is money that has been spent; there is no
- * refund path and no way to un-send it. So every dollar decision happens here,
- * on numbers read from `/data/ai-usage.db`, and the only enforcement mechanism
- * is refusing to call.
- *
- * THREE DIALS, THREE BEHAVIOURS:
- *   · Over the daily or monthly cap → refuse, with a sentence an operator can
- *     read on a card in the chat. Not a stack trace, not a 500.
- *   · Within 80% of either cap → keep working but DEGRADE: cheap-eligible jobs
- *     drop to the cheapest model instead of failing. Harvey getting dumber near
- *     the cap is a far better failure than Harvey going silent.
- *   · A single call whose pre-flight estimate exceeds the per-call ceiling →
- *     refuse, and say the number. This is the runaway-loop guard: one enormous
- *     context or a 100k-token completion cannot quietly eat the day's budget.
- *
- * The estimate uses the catalog's prices, so it is approximate on purpose —
- * the RECORDED cost is whatever the provider reports. An estimate is the only
- * number available before the call, which is the only time it matters.
- */
+/** OpenRouter uses the shared monthly allowance. Direct-only installations retain legacy caps. */
+import { openRouterBudgetStatus } from "../../core/openRouterBudget.js";
 import { getCaps, spentThisMonth, spentToday } from "../../core/aiUsageStore.js";
 import { estimateCostUsd } from "./catalog.js";
 import type { BudgetVerdict, ModelJob } from "./types.js";
@@ -50,6 +30,14 @@ export interface CheckBudgetInput {
 const usd = (n: number) => `$${n.toFixed(n < 0.01 ? 4 : 2)}`;
 
 export function checkBudget(input: CheckBudgetInput): BudgetVerdict {
+  if (process.env.OPENROUTER_API_KEY?.trim()) {
+    const shared = openRouterBudgetStatus();
+    const estimate = estimateCostUsd(input.model, Math.max(0, input.estimatedInputTokens || 0), Math.max(0, input.maxTokens ?? 1024));
+    const allowed = shared.remainingUsd > 0 && estimate <= shared.remainingUsd;
+    return { allowed, spentTodayUsd: 0, spentMonthUsd: shared.spentUsd + shared.reservedUsd,
+      dailyCapUsd: 0, monthlyCapUsd: shared.limitUsd,
+      ...(!allowed ? { reason: "The shared $150 monthly OpenRouter allowance cannot cover this request. It resets next month (UTC). Completed work is retained." } : {}) };
+  }
   const caps = safe(() => getCaps(), {
     dailyCapUsd: 10,
     monthlyCapUsd: 150,
