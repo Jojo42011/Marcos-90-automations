@@ -4,6 +4,7 @@ exports.TurnVerification = exports.SOURCE_CHECK_TOOL = exports.VERIFICATION_TOOL
 exports.stableCallKey = stableCallKey;
 exports.isDiscovery = isDiscovery;
 exports.isObservation = isObservation;
+exports.canResumeFromReceipts = canResumeFromReceipts;
 const crypto_1 = require("crypto");
 exports.RELIABILITY_RULES = `RELIABILITY CONTRACT:
 Before an unfamiliar task, identify required sources, scope and an observable success condition. Start with a small reversible step. Available tools and connected accounts are not proof that a workflow works.
@@ -87,6 +88,15 @@ function errorResult(value, depth = 0) {
     if (value.isError === true || value.ok === false || value.success === false || value.successful === false || value.error)
         return true;
     return [value.data, value.result, value.results].some(v => errorResult(v, depth + 1));
+}
+// Recovery may re-enter reasoning only after all possible external actions have read-backs.
+// Empty/read-only segments are safe to reason through again; no action is replayed here.
+function canResumeFromReceipts(receipts, allowEmpty = false) {
+    const relevant = receipts.filter(r => !r.discovery && !['task_plan', 'continuity', 'work_records'].includes(r.tool));
+    if (!relevant.length)
+        return allowEmpty;
+    const last = relevant.at(-1);
+    return last.observation && last.outcome === 'returned' && !last.limitation && relevant.every((r, i) => r.observation || r.outcome === 'returned' && relevant.slice(i + 1).some(next => next.observation && next.scope === r.scope && next.outcome === 'returned' && !next.limitation && !next.truncated));
 }
 class TurnVerification {
     receipts = [];

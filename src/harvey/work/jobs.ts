@@ -1,14 +1,17 @@
 import { createHash, randomUUID } from "crypto";
 import { Chat, get, list, owners, put, text, workDb } from "./store.js";
+import { canResumeFromReceipts, type Receipt } from "../reliability.js";
 import { runChat } from "./runtime.js";
 
 export interface WorkJob {
   actorId?: string; id: string; chatId: string; requestId: string; fingerprint: string; prompt: string; model?: string;
   status: "queued" | "running" | "waiting" | "cancelling" | "cancelled" | "completed" | "needs_attention" | "failed";
+  safeResume?: boolean; recoveryCount?: number; modelRecoveryCount?: number;
   lastProgressKey?:string; stalledContinuations?:number; continuationCount?:number; nextRunAt?:string; resumeReason?:string; totalCostUsd?:number;
   createdAt: string; updatedAt: string; result?: any; originChatId?: string; maxCostUsd?: number;
   events: {seq:number;type:string;name?:string;status?:string;at:string}[];
 }
+export const safeRecovery = (receipts:Receipt[]) => canResumeFromReceipts(receipts);
 const controllers = new Map<string, AbortController>();
 const key = (owner:string,id:string) => owner+":"+id;
 export const activeJob = (j: WorkJob) => ["queued","running","waiting","cancelling"].includes(j.status);
@@ -54,29 +57,39 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
   const approvals:unknown[]=[...(job.result?.approvals||[])],schedules:unknown[]=[...(job.result?.schedules||[])];
   try {
     const ceiling=job.maxCostUsd??2, remaining=ceiling-(job.totalCostUsd||0);
-    if(remaining<=0||(job.continuationCount||0)>=12||Date.now()-Date.parse(job.createdAt)>60*60_000){
-      job.status="needs_attention";job.result={text:"The saved task reached its "+(remaining<=0?"total model-spend limit":(job.continuationCount||0)>=12?"continuation limit":"one-hour time limit")+". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.",needsAttention:true};return;
+    if(remaining<=0||(job.continuationCount||0)>=256||Date.now()-Date.parse(job.createdAt)>24*60*60_000){
+      job.status="needs_attention";job.result={text:"The saved task reached its "+(remaining<=0?"total model-spend limit":(job.continuationCount||0)>=256?"continuation limit":"24-hour time limit")+". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.",needsAttention:true};return;
     }
     const prompt=job.continuationCount ? job.prompt+"\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): "+job.resumeReason+((job.stalledContinuations||0)>0?"\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail.":"") : job.prompt;
-    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,maxCostUsd:remaining,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,onEvent:e=>{
+    const receipts:Receipt[]=[];
+    let segmentCost=0;
+    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,maxCostUsd:remaining,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,onEvidence:r=>{
+      receipts.push(r);const current=get<WorkJob>("job",owner,id);current.safeResume=safeRecovery(receipts);put("job",owner,current);
+    },onEvent:e=>{
+      if(e.type==="usage"){const current=get<WorkJob>("job",owner,id);segmentCost+=e.costUsd;current.totalCostUsd=(current.totalCostUsd||0)+e.costUsd;put("job",owner,current);return;}
       // Persist progress without tool arguments, passwords or raw response data.
       if(e.type==="approval"){approvals.push(e.approval);return;}
       if(e.type==="schedule"){schedules.push(e.schedule);return;}
       if(e.type!=="tool")return;
       const current=get<WorkJob>("job",owner,id);
+      if(e.status==="running")current.safeResume=false;
       current.events.push({seq:(current.events.at(-1)?.seq||0)+1,type:e.type,name:e.name,status:e.status,at:new Date().toISOString()});
       current.events=current.events.slice(-200);current.updatedAt=new Date().toISOString();put("job",owner,current);
     }});
     job=get<WorkJob>("job",owner,id);
-    job.totalCostUsd=(job.totalCostUsd||0)+(result.costUsd||0);
+    job.totalCostUsd=(job.totalCostUsd||0)+Math.max(0,(result.costUsd||0)-segmentCost);
     const attention=result.toolFailed||!!result.modelError||!!result.budgetRefused||("needsVerification" in result&&result.needsVerification);
     job.status=controller.signal.aborted?"needs_attention":result.modelError||result.budgetRefused?"failed":attention?"needs_attention":"completed";
     job.result={text:result.speech,conversationId:job.chatId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,needsAttention:attention||controller.signal.aborted,approvals,schedules,
       ...(result.modelError?{failure:{kind:/402|credits|afford/i.test(result.modelError)?"provider_credit_limit":/Empty or malformed/i.test(result.modelError)?"invalid_model_response":"provider_error",model:result.modelUsed||result.model}}:{}),
       usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0}};
     if(result.continuation&&!controller.signal.aborted&&!result.modelError&&!result.budgetRefused&&!job.originChatId){
+      if(result.continuation.recovery==='model_response'){
+        job.modelRecoveryCount=(job.modelRecoveryCount||0)+1;
+        if(job.modelRecoveryCount>3){job.status="needs_attention";job.result={...job.result,text:"The AI service repeatedly returned unusable responses after automatic recovery. Saved work is retained; no uncertain action was replayed.",needsAttention:true,failure:{kind:"invalid_model_response",model:result.modelUsed||result.model}};return;}
+      }else job.modelRecoveryCount=0;
       const progressKey=result.continuation.progressKey;
-      job.stalledContinuations=progressKey&&progressKey===job.lastProgressKey?(job.stalledContinuations||0)+1:0;
+      job.stalledContinuations=result.continuation.recovery?0:progressKey&&progressKey===job.lastProgressKey?(job.stalledContinuations||0)+1:0;
       job.lastProgressKey=progressKey;
       if((job.stalledContinuations||0)>=3){job.status="needs_attention";job.result.text="The last three continuation checks made no observable progress. Your completed work is saved. I need to change the retrieval approach before continuing; this does not prove the source has no data.";job.result.needsAttention=true;return;}
       job.status="waiting";job.continuationCount=(job.continuationCount||0)+1;
@@ -93,6 +106,12 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
 export function recoverJobs() {
   for(const owner of owners("job"))for(const job of list<WorkJob>("job",owner)) {
     if(process.env.TENANT_OWNER_ID && process.env.TENANT_OWNER_ID!==owner)continue;
+    const plan=list<any>("task_plan",owner).find(p=>p.chatId===job.chatId&&p.requestId===job.id);
+    const unfinished=!!plan&&!plan.blocker&&(plan.nextStep??0)<plan.steps.length;
+    if(job.status==="running"&&unfinished&&job.safeResume&&!job.originChatId&&(job.recoveryCount||0)<3){
+      put("job",owner,{...job,status:"waiting",safeResume:false,recoveryCount:(job.recoveryCount||0)+1,continuationCount:(job.continuationCount||0)+1,nextRunAt:new Date().toISOString(),updatedAt:new Date().toISOString(),resumeReason:"Server restarted after a successful observation checkpoint. Inspect the current state before continuing unfinished work. Do not repeat completed actions.",result:{text:"Reconnecting to saved progress after a server restart.",needsAttention:false}});
+      continue;
+    }
     if(["running","cancelling"].includes(job.status))put("job",owner,{...job,status:"needs_attention",updatedAt:new Date().toISOString(),result:{text:"Server restarted during this task. Inspect completed actions before retrying. The task was not replayed.",needsAttention:true}});
   }
 }

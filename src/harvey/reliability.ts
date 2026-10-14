@@ -68,6 +68,15 @@ function errorResult(value: any, depth = 0): boolean {
   if (value.isError === true || value.ok === false || value.success === false || value.successful === false || value.error) return true;
   return [value.data, value.result, value.results].some(v => errorResult(v, depth + 1));
 }
+// Recovery may re-enter reasoning only after all possible external actions have read-backs.
+// Empty/read-only segments are safe to reason through again; no action is replayed here.
+export function canResumeFromReceipts(receipts: Receipt[], allowEmpty = false) {
+  const relevant=receipts.filter(r=>!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool));
+  if(!relevant.length)return allowEmpty;
+  const last=relevant.at(-1)!;
+  return last.observation && last.outcome==='returned' && !last.limitation && relevant.every((r,i)=>
+    r.observation || r.outcome==='returned' && relevant.slice(i+1).some(next=>next.observation&&next.scope===r.scope&&next.outcome==='returned'&&!next.limitation&&!next.truncated));
+}
 export class TurnVerification {
   private receipts: Receipt[] = [];
   private sources = new Map<string,unknown>();

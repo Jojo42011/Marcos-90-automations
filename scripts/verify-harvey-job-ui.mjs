@@ -28,3 +28,11 @@ const linkSource=readFileSync('dist/src/harvey/work/files.js','utf8');const link
 assert.equal(linkContext.publicFileLinks('owner','chat','[clip](/workspace/harvey-work/browsers/own/files/clip.mp4)'),'[clip](/api/harvey/work/files/chat/clip.mp4)');
 assert.equal(linkContext.publicFileLinks('owner','chat','[clip](/workspace/harvey-work/browsers/other/files/clip.mp4)'),'[clip](/workspace/harvey-work/browsers/other/files/clip.mp4)');
 console.log('ok existing-file download links are normalized and rendered, while foreign paths and unsafe schemes are not promoted');
+
+const syncSource=source.slice(source.indexOf('  var conversationRefresh ='),source.indexOf('  function paintConversations('));
+const input={value:'Unsent draft'};let resets=0;
+Object.assign(context,{viewEpoch:1,state:{conversationId:'deleted',convsWired:true},$:()=>input,newChat:()=>{resets++;context.viewEpoch++;context.state.conversationId=null;input.value='';},autosize(){},toast(){},paintConversations(){},api:async()=>({ok:true,data:{conversations:[]}})});
+vm.runInContext(syncSource,context);await context.loadConversations();assert.equal(resets,1);assert.equal(input.value,'Unsent draft');
+context.state.conversationId='retained';context.api=async()=>({ok:false,status:503});await context.loadConversations();assert.equal(resets,1,'Network failure is not deletion');
+let resolveOld;context.api=()=>new Promise(r=>resolveOld=r);const pendingSync=context.loadConversations();context.viewEpoch++;context.state.conversationId='new-selection';resolveOld({ok:true,data:{conversations:[]}});await pendingSync;assert.equal(context.state.conversationId,'new-selection');
+console.log('ok remote deletion clears stale selection, preserves draft, ignores network failure and stale response after navigation');

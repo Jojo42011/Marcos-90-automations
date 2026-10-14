@@ -540,7 +540,9 @@
     writeLocalConvs(list);
   }
 
+  var conversationRefresh = 0;
   async function loadConversations() {
+    var refresh = ++conversationRefresh, epoch = viewEpoch, selected = state.conversationId;
     if (state.convsWired === false) { state.conversations = readLocalConvs(); paintConversations(); return; }
     var r = await api("/api/harvey/conversations");
     if (r.status === 404) {
@@ -550,8 +552,15 @@
       return;
     }
     if (!r.ok || !r.data) { paintConversations(); return; }
+    if(refresh !== conversationRefresh || epoch !== viewEpoch)return;
     state.convsWired = true;
     state.conversations = r.data.conversations || [];
+    if(selected && selected === state.conversationId && !state.conversations.some(function(c){return c.id === selected;})){
+      var draft = $("input").value;
+      newChat();
+      $("input").value = draft;autosize();
+      toast("This conversation was deleted in another session. Your unsent message is preserved.");
+    }
     paintConversations();
   }
 
@@ -602,7 +611,7 @@
     var r = await api("/api/harvey/conversations/" + encodeURIComponent(id));
     if(opening!==viewEpoch)return;
     state.loadingConversation=false;setBusy(false);
-    if (r.status === 404) { toast("That conversation is gone."); loadConversations(); return; }
+    if (r.status === 404) { if(state.conversationId === id)newChat(); toast("That conversation is gone."); loadConversations(); return; }
     if (!r.ok || !r.data) { toast(r.error || "Could not open that conversation."); return; }
     state.conversationId = id; if(window.HarveyComputer)window.HarveyComputer.sync();
     rememberChat(id);
@@ -934,6 +943,15 @@
   async function send(text) {
     text = String(text || "").trim();
     if (!text || state.busy || state.loadingConversation) return;
+    if(state.conversationId && state.convsWired !== false){
+      var selected=state.conversationId, epoch=viewEpoch;
+      state.loadingConversation=true;
+      var exists=await api("/api/harvey/conversations/"+encodeURIComponent(selected));
+      if(epoch!==viewEpoch)return;
+      state.loadingConversation=false;
+      if(exists.status===404){newChat();$("input").value=text;autosize();toast("That conversation was deleted. Your message is preserved; send it in a new chat when ready.");loadConversations();return;}
+      if(!exists.ok){toast(exists.error||"Could not verify this conversation. Your message has not been sent.");return;}
+    }
     showView("chat");
     var emptyEl = thread.querySelector(".empty");
     if (emptyEl) emptyEl.remove();
@@ -1748,6 +1766,11 @@
     if(window.HarveyComputer) window.HarveyComputer.init({state:state,apiUrl:apiUrl});
     if(window.HarveyMyBrowser) window.HarveyMyBrowser.init({state:state,apiUrl:apiUrl,ensureChat:ensureWorkChat});
     if(window.HarveyWork) window.HarveyWork.init({api:api,apiUrl:apiUrl,state:state,toast:toast,showView:showView,newChat:newChat,refresh:loadConversations,openChat:openConversation,ensureChat:ensureWorkChat});
+
+    // Refresh through the authenticated account endpoint, including across devices.
+    window.addEventListener("focus", function(){loadConversations();});
+    document.addEventListener("visibilitychange", function(){if(!document.hidden)loadConversations();});
+    setInterval(function(){if(!document.hidden)loadConversations();}, 10000);
 
     /* first load */
     loadModels().then(function () { return loadConversations(); }).then(function () {
