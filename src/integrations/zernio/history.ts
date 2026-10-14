@@ -1,3 +1,4 @@
+import { messageWithVideoReference } from "../../videoKnowledge/references.js";
 /** Read-only, bounded history recovery. Never executes or replays old turns. */
 export interface HistoryMessage {
   id: string;
@@ -43,7 +44,7 @@ export async function readConversationHistory(
   for (const row of rows) {
     const id = string(row.platformMessageId) || string(row.id);
     const at = string(row.createdAt) || string(row.sentAt);
-    const text = string(row.message) || string(row.text);
+    const text = messageWithVideoReference(row);
     if (!id || seen.has(id) || !text || !Number.isFinite(Date.parse(at))) continue;
     if (row.isDeleted === true || !["incoming", "outgoing"].includes(string(row.direction))) continue;
     // Without a trustworthy boundary, do not import a possibly future message.

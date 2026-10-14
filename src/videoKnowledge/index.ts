@@ -1,3 +1,4 @@
+import { SHARED_VIDEO, referenceId, expandVideoLinks } from "./references.js";
 import { dataPath } from "../core/tenantData.js";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -42,6 +43,7 @@ export function hasVideoKeyword(message: string): boolean {
     if (!videoRepliesEnabled() || !account())
         return false;
     try {
+        if (message.includes(SHARED_VIDEO) || (message.match(/https?:\/\/[^\s<>]+/g)||[]).some(url=>referenceId(url)||/^https:\/\/(?:vm|vt)\.tiktok\.com\//.test(url))) return true;
         const words = ` ${message.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
         const videos = videoStore().db.prepare("SELECT notes FROM videos WHERE account=? AND state IN ('ready','unavailable','needs_review','needs_confirmation')").all(account()) as {
             notes: string;
@@ -57,10 +59,22 @@ export function videoReply(person: string, message: string, store?: VideoStore, 
     if (!enabled || !accountId)
         return null;
     try {
-        const result = (store || videoStore()).resolve(accountId, person, message);
+        const database=store || videoStore();
+        const waiting=database.lookup(accountId,person);
+        if (/^(?:thanks|thank you|bye|have a good day|stop|never mind|nevermind|no thanks)[.! ]*$/i.test(message.trim())) {
+            database.clearLookup(accountId,person);return null;
+        }
+        const shared=message.includes(SHARED_VIDEO);
+        const result = database.resolve(accountId, person, message);
+        // An inaccessible new attachment cannot silently reuse the previous house.
+        if(shared) {
+            database.db.prepare('DELETE FROM video_context WHERE account=? AND person=?').run(accountId,person);
+            database.clarify(accountId,person,message);
+            return "That shared preview doesn't give me a usable video link. Can you paste the TikTok URL using Share, then Copy link?";
+        }
         const notes = result.video ? JSON.parse(result.video.notes) as Notes : undefined;
         // A leading CTA identifies the video; it isn't itself a requested feature.
-        let question = message;
+        let question = result.reason==='link' && waiting ? waiting.question : message;
         for (const keyword of notes?.keywords || []) {
             const normalized = question.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
             if (normalized === keyword) question = '';
@@ -71,21 +85,33 @@ export function videoReply(person: string, message: string, store?: VideoStore, 
             }
         }
         const fields = (Object.keys(queries) as Field[]).filter(f => queries[f].test(question));
-        const general = /\b(?:info|information|details|description|describe|tell me|available|availability)\b/i.test(message);
+        const general = /\b(?:info|information|details|description|describe|tell me|available|availability|(?:you|u) see it)\b/i.test(message);
+        const unmatchedKeyword=/^[A-Z][A-Z ]{2,40}$/.test(message.trim())&&!/^(?:HEY|HELLO|THANKS|YES|NO|OK|OKAY)$/.test(message.trim());
         const propertyQuestion = /\b(?:does (?:it|this house|that house) (?:have|include)|how (?:many|big|old)|is it in)\b/i.test(message);
-        if (!fields.length && !general && !propertyQuestion && !['link', 'keyword', 'description', 'ambiguous', 'unknown'].includes(result.reason))
+        const followup=!!waiting && message.length<200 && !/\b(?:thanks|thank you|bye|good day|stop|never mind|nevermind|no thanks)\b/i.test(message);
+        if (!fields.length && !general && !propertyQuestion && !unmatchedKeyword && !followup && !['link', 'keyword', 'description', 'ambiguous', 'unknown','unknown_link'].includes(result.reason))
             return null;
         // A broad buyer question is not necessarily about the previously selected property.
         if (/\b(?:my budget|i (?:live|work)|do you (?:work|sell|cover)|buying process|closing costs|interest rate)\b/i.test(message))
             return null;
-        if (result.reason === 'ambiguous')
-            return 'More than one house fits that. Can you give me a quick description so I can narrow it down?';
-        if (result.reason === 'pending') return "I found that video, but I don't have those details confirmed yet.";
-        if (!result.video) {
-            if (result.reason === 'none')
-                return null; // Existing missing-info guard handles this.
-            return "Which house was it? A quick description or the keyword would help me find it.";
+        if (result.reason === 'pending') {
+            database.clearLookup(accountId,person);
+            return "I found that video, but I don't have those details confirmed yet.";
         }
+        if (!result.video) {
+            const suppliedLink=/https?:\/\//i.test(message);
+            if (suppliedLink) {
+                database.clearLookup(accountId,person);
+                return "I couldn't match that link to a video with usable details in my records yet. I don't want to give you the wrong information.";
+            }
+            const attempt=database.clarify(accountId,person,question);
+            if(attempt===1)return result.reason==='ambiguous'
+                ? 'More than one house fits that. Can you give me a quick description so I can narrow it down?'
+                : 'Which house was it? A quick description or the keyword would help me find it.';
+            if(attempt===2)return "I couldn't narrow it down from that. Can you paste the TikTok video URL? Tap Share, then Copy link.";
+            return "I still can't identify the house from what came through. A pasted TikTok link is what I can check against my video records.";
+        }
+        database.clearLookup(accountId,person);
         if (/\b(?:available|availability|sold|pending|current price|price now)\b/i.test(message))
             return "The video doesn't confirm today's price or availability. I'll need to verify that for you.";
         if (!notes) return null;
@@ -134,6 +160,7 @@ export async function videoAdmin(method: string, body: any = {}, offset = 0): Pr
             return { reply: videoReply(person, body.message, videoStore(), account(), true), sent: false };
         }
         finally {
+            videoStore().clearLookup(account(),person);
             videoStore().db.prepare('DELETE FROM video_context WHERE account=? AND person=?').run(account(), person);
         }
     }
@@ -168,7 +195,8 @@ export async function importOwnedVideo(store: VideoStore, accountId: string, url
 
 /** The voice model selects among grounded replies; it cannot add property facts. */
 export async function voiceVideoReply(person:string,message:string,choose:(options:string[])=>Promise<number|null>,voice:'marco'|'wesley'):Promise<string|null> {
-    const reply=videoReply(person,message);if(!reply)return null;
+    const resolved=videoRepliesEnabled()?await expandVideoLinks(message):message;
+    const reply=videoReply(person,resolved);if(!reply)return null;
     const options=voice==='marco'?[reply,'Got you. '+reply,'Yeah, of course. '+reply]:[reply,'Sure! '+reply,'Got you! '+reply];
     try{const choice=await choose(options);return Number.isInteger(choice)&&choice!==null&&choice>=0&&choice<options.length?options[choice]!:options[0]!;}catch{return options[0]!;}
 }

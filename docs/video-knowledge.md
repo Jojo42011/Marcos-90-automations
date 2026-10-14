@@ -41,3 +41,9 @@ Dockerfile.video is the optional Linux image extension using yt-dlp 2026.08.19 a
 ## Tests
 
 npm run verify:video builds and runs storage, extraction, source agreement, field withholding, descriptive matching, voice selection bounds, stale-context, persistence and no-send tests. Wesley's npm test also exercises the live DM pipeline with its injected voice client. No test requires sending a real DM. The two supplied videos' stored extraction evidence can be replayed locally without another media download or model request.
+
+## DM link fallback
+
+An unmatched property question or uppercase keyword first asks for a description. A failed follow-up asks for Share > Copy link. Clarification state and the original question persist for 24 hours, scoped by account and person. A supplied TikTok link resolves only against the connected account’s stored videos; it does not initiate an arbitrary download or promise immediate details. Known videos with withheld facts still receive an uncertainty reply. Unknown links never reuse the previous home.
+
+Zernio shared attachments preserve their payload.videoId or recognized TikTok embed/canonical URL in both live intake and recovered history. A preview without a usable reference requests the copied URL without claiming to see its contents. TikTok vm/vt and /t/ short links use bounded HTTPS redirects restricted to TikTok hosts, without credentials. Failed resolution falls back honestly. Exact production attachment delivery remains dependent on the provider; local fixtures validate the documented payload shape.

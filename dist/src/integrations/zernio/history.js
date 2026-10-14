@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.readConversationHistory = readConversationHistory;
 exports.respondsToDmInvitation = respondsToDmInvitation;
+const references_js_1 = require("../../videoKnowledge/references.js");
 const string = (v) => typeof v === "string" ? v.trim() : "";
 async function readConversationHistory(input, getPage) {
     const rows = [];
@@ -38,7 +39,7 @@ async function readConversationHistory(input, getPage) {
     for (const row of rows) {
         const id = string(row.platformMessageId) || string(row.id);
         const at = string(row.createdAt) || string(row.sentAt);
-        const text = string(row.message) || string(row.text);
+        const text = (0, references_js_1.messageWithVideoReference)(row);
         if (!id || seen.has(id) || !text || !Number.isFinite(Date.parse(at)))
             continue;
         if (row.isDeleted === true || !["incoming", "outgoing"].includes(string(row.direction)))

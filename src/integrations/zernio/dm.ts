@@ -1,3 +1,4 @@
+import { messageWithVideoReference } from "../../videoKnowledge/references.js";
 /**
  * Zernio DM transport — TikTok direct messages, replacing ManyChat on that channel.
  *
@@ -198,10 +199,8 @@ export function parseZernioInboundMessage(body: unknown): ZernioInboundMessage |
     senderId,
     senderName: str(sender.name) ?? str(conversation.participantName),
     senderUsername: str(sender.username) ?? str(conversation.participantUsername),
-    /* Attachment-only messages arrive with a null text. Kept rather than
-       dropped so the pipeline still sees a turn; it already treats an empty
-       message as "no reply" instead of inventing one. */
-    text: str(message.text) ?? "",
+    /* Preserve supported shared-post identifiers; never infer facts from attachment previews. */
+    text: messageWithVideoReference(message),
     platformMessageId: str(message.platformMessageId) ?? str(message.id),
     sentAt: str(message.sentAt) ?? str(message.createdAt),
   };

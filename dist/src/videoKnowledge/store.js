@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.VideoStore = exports.FIELDS = void 0;
 exports.validateNotes = validateNotes;
 exports.postId = postId;
+const references_js_1 = require("./references.js");
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const node_crypto_1 = require("node:crypto");
 const node_fs_1 = require("node:fs");
@@ -85,6 +86,7 @@ class VideoStore {
       CREATE TABLE IF NOT EXISTS video_audit (id INTEGER PRIMARY KEY, account TEXT, post TEXT, revision TEXT, action TEXT, at INTEGER);
       CREATE TABLE IF NOT EXISTS video_context (account TEXT, person TEXT, post TEXT, at INTEGER, PRIMARY KEY(account,person));
       CREATE TABLE IF NOT EXISTS video_comments (account TEXT, person TEXT, post TEXT, at INTEGER, PRIMARY KEY(account,person,post));`);
+        this.db.exec("CREATE TABLE IF NOT EXISTS video_lookup (account TEXT, person TEXT, attempts INTEGER, question TEXT, at INTEGER, PRIMARY KEY(account,person))");
         this.migrateReviewColumns();
     }
     migrateReviewColumns() {
@@ -209,12 +211,22 @@ class VideoStore {
             return;
         this.db.prepare("INSERT INTO video_comments VALUES(?,?,?,?) ON CONFLICT(account,person,post) DO UPDATE SET at=max(at,excluded.at)").run(account, person, post, at);
     }
+    lookup(account, person) {
+        return this.db.prepare('SELECT attempts,question FROM video_lookup WHERE account=? AND person=? AND at>?').get(account, person, Date.now() - 86400000);
+    }
+    clarify(account, person, question) {
+        const prior = this.lookup(account, person);
+        const attempts = Math.min(3, (prior?.attempts || 0) + 1);
+        this.db.prepare('INSERT INTO video_lookup VALUES(?,?,?,?,?) ON CONFLICT(account,person) DO UPDATE SET attempts=excluded.attempts,question=excluded.question,at=excluded.at').run(account, person, attempts, prior?.question || question, Date.now());
+        return attempts;
+    }
+    clearLookup(account, person) { this.db.prepare('DELETE FROM video_lookup WHERE account=? AND person=?').run(account, person); }
     search(account, message) {
         return (0, search_js_1.matchDescriptions)(this.db.prepare("SELECT post,description FROM videos WHERE account=? AND state IN ('ready','unavailable')").all(account), message);
     }
     resolve(account, person, message, now = Date.now()) {
         const links = message.match(/https?:\/\/[^\s<>]+/g) || [];
-        const ids = [...new Set(links.map(s => postId(s.replace(/[),.!?]+$/, ''))).filter(Boolean))];
+        const ids = [...new Set(links.map(s => (0, references_js_1.referenceId)(s.replace(/[),.!?]+$/, ''))).filter(Boolean))];
         let candidates = [], reason = 'none';
         if (links.some(l => /tiktok\.com/i.test(l))) {
             candidates = ids;
@@ -234,7 +246,7 @@ class VideoStore {
                 reason = 'switch';
             else {
                 const context = this.db.prepare("SELECT post FROM video_context WHERE account=? AND person=? AND at>?").get(account, person, now - 7 * 86400000);
-                if (context) {
+                if (context && context.post !== 'unresolved') {
                     candidates = [context.post];
                     reason = 'conversation';
                 }
@@ -253,7 +265,7 @@ class VideoStore {
         const video = this.get(account, candidates[0]);
         // Unknown explicit references never fall back to a previously discussed home.
         this.db.prepare("INSERT INTO video_context VALUES(?,?,?,?) ON CONFLICT(account,person) DO UPDATE SET post=excluded.post,at=excluded.at").run(account, person, candidates[0], now);
-        return video?.state === 'ready' ? { video, reason } : { reason: 'pending' };
+        return video?.state === 'ready' ? { video, reason } : video ? { reason: 'pending' } : { reason: 'unknown_link' };
     }
     close() { this.db.close(); }
 }
