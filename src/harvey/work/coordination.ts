@@ -29,5 +29,5 @@ export async function dispatchTeam(owner:string,headChatId:string,input:any) {
   const brief=safeNote(input.brief,"Task brief",6000);
   const {enqueueJob}=await import("./jobs.js");
   // A delegated worker cannot dispatch children, create schedules or alter memory.
-  return enqueueJob(owner,chatId,{message:brief,requestId:`team:${headChatId}:${text(input.requestId,"Request ID",80)}`},{originChatId:headChatId,maxCostUsd:0.5});
+  return enqueueJob(owner,chatId,{message:brief,requestId:`team:${headChatId}:${text(input.requestId,"Request ID",80)}`},{originChatId:headChatId});
 }

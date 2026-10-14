@@ -40,7 +40,7 @@ For future changes, use a copied dataset and test account to evaluate representa
 
 ## Retrieval continuation and retained records
 
-Interactive saved jobs seed request-scoped plans for counts and bulk retrieval. On premature final answers or a reserved summary round, a successful current observation can yield the job automatically. Status/planning/stop requests cannot resume old plans. Completed or blocked reviews do not yield. Unknown writes still require a fresh observation before any continuation. Three unchanged continuation checkpoints stop with a no-progress reason; earlier repetitions tell the agent to change approach. Existing aggregate limits remain $2, 24 hours and 256 continuations, and are reported separately from provider credit failures.
+Interactive saved jobs seed request-scoped plans for counts and bulk retrieval. On premature final answers or a reserved summary round, a successful current observation can yield the job automatically. Status/planning/stop requests cannot resume old plans. Completed or blocked reviews do not yield. Unknown writes still require a fresh observation before any continuation. Three unchanged continuation checkpoints stop with a no-progress reason; earlier repetitions tell the agent to change approach. Existing execution limits remain 24 hours and 256 continuations, and are reported separately from provider credit failures.
 
 The fixed DOM-only browser_read_table probe returns rendered rows, IDs, bounded cells, truncation, scroll metrics and observed ARIA totals. Its offset is within current DOM rows, not server pagination. End-of-DOM never proves complete coverage. Oversized rows require a smaller observation rather than an unchanged-offset loop.
 

@@ -39,7 +39,7 @@ function relayChats(actor, input) {
         }
         const deliveries = targets.map(target => {
             const prompt = `${actor.name} sent this note from chat "${source.title}" (${source.id}). This is a delegated message, not permission to contact additional chats or external recipients. Respond in this chat using its account context.\n\n${message}`;
-            const job = (0, jobs_js_1.enqueueJob)(target.accountOwnerId, target.id, { requestId: `relay:${requestId}:${target.id}`.slice(0, 100), message: prompt, actorId: actor.id }, { originChatId: source.id, maxCostUsd: 0.5 });
+            const job = (0, jobs_js_1.enqueueJob)(target.accountOwnerId, target.id, { requestId: `relay:${requestId}:${target.id}`.slice(0, 100), message: prompt, actorId: actor.id }, { originChatId: source.id });
             return { chatId: target.id, title: target.title, ownerName: target.accountOwnerName, jobId: job.id, status: job.status };
         });
         return (0, store_js_1.put)("relay", actor.id, { id: requestId, fingerprint, deliveries, at: new Date().toISOString() });

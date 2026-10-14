@@ -26,6 +26,8 @@ import {
   noteSuccess,
   recordUsage,
 } from "../../core/aiUsageStore.js";
+import { reserveOpenRouterSpend, settleOpenRouterSpend, refreshOpenRouterBilling } from "../../core/openRouterBudget.js";
+import { estimateCostUsd } from "./catalog.js";
 import { anthropicConfigured, callAnthropic } from "./anthropicDirect.js";
 import { checkBudget } from "./budget.js";
 import {
@@ -178,6 +180,7 @@ export async function complete(req: CompletionRequest): Promise<CompletionOutcom
     maxTokens,
   });
 
+  if (openRouterConfigured()) await refreshOpenRouterBilling();
   const verdict = checkBudget({
     job,
     model: resolved.model,
@@ -259,13 +262,31 @@ export async function complete(req: CompletionRequest): Promise<CompletionOutcom
       maxTokens,
       temperature: req.temperature,
       onToken: req.onToken,
-      maxCostUsd: req.maxCostUsd,
+      maxCostUsd: openRouterConfigured() ? undefined : req.maxCostUsd,
     };
 
     for (const provider of providers) {
+      let reservation: string | undefined;
+      if (provider === "openrouter") {
+        try {
+          const prices = [model, ...providerRequest.fallbacks].map(candidate => {
+            if (!getModelInfo(candidate)) throw new Error("OpenRouter model pricing is unavailable; no request was sent.");
+            return estimateCostUsd(candidate, planned.plan.estimatedTokens, maxTokens);
+          });
+          reservation = reserveOpenRouterSpend(Math.max(...prices));
+        } catch (error) {
+          // Budget/storage failures must not trigger a paid provider fallback.
+          throw new BudgetRefusedError({ ...verdict, allowed: false, reason: error instanceof Error ? error.message : "Shared OpenRouter budget unavailable" });
+        }
+      }
       const startedAt = Date.now();
+      let res: ProviderResponse;
       try {
-        const res = await callProvider(provider, providerRequest);
+        res = await callProvider(provider, providerRequest);
+        if (reservation) {
+          try { settleOpenRouterSpend(reservation, res.costUsd); }
+          catch { throw new BudgetRefusedError({ ...verdict, allowed: false, reason: "Could not record shared OpenRouter usage. The reservation is retained; no fallback request was sent." }); }
+        }
         const latencyMs = Date.now() - startedAt;
         const usage = usageRow({ provider, model, job, sessionId: req.sessionId, latencyMs }, res);
         recordUsage(usage);
@@ -283,6 +304,13 @@ export async function complete(req: CompletionRequest): Promise<CompletionOutcom
           substituted: ran !== model ? { asked: model, ran } : undefined,
         };
       } catch (err) {
+        if (err instanceof BudgetRefusedError) throw err;
+        // Explicit pre-inference rejection did not purchase tokens. Unknown network,
+        // streaming or server failures retain their reservation conservatively.
+        if (reservation && err instanceof ModelLayerError && [400,401,402,403,404,413,422,429].includes(err.status || 0)) {
+          try { settleOpenRouterSpend(reservation, 0); }
+          catch { throw new BudgetRefusedError({ ...verdict, allowed: false, reason: "Shared OpenRouter accounting is unavailable; no fallback request was sent." }); }
+        }
         const latencyMs = Date.now() - startedAt;
         const wrapped =
           err instanceof ModelLayerError

@@ -497,7 +497,7 @@
     pill.className = "pill-status " + (st === "over" ? "bad" : st === "near" ? "warn" : "ok");
     pill.innerHTML = '<span class="dot"></span>' + esc(primary);
     pill.title = st === "over" ? "Over the spend cap — calls are being refused."
-      : st === "near" ? "Near the spend cap — cheap jobs are degrading to the cheapest model."
+      : st === "near" ? "The monthly spend allowance is running low."
       : "Primary provider: " + primary;
   }
 
@@ -1228,8 +1228,8 @@
 
     var html = "";
     html += '<div class="grid-2">' +
-      spendCard("Today", todayCost, dailyCap, d.today) +
-      spendCard("This month", monthCost, monthlyCap, d.month) +
+      spendCard("Your account today", todayCost, d.sharedOpenRouterBudget ? null : dailyCap, d.today) +
+      spendCard("Your account this month", monthCost, d.sharedOpenRouterBudget ? null : monthlyCap, d.month) +
       "</div>";
 
     html += '<div class="panel"><h2>Daily spend</h2><div class="sub">Measured cost per day, most recent on the right.</div>' +
@@ -1258,7 +1258,11 @@
         }).join("") + "</tbody></table>"
       : '<div class="empty-note">No errors recorded.</div>') + "</div>";
 
-    html += '<div class="panel"><h2>Spend caps</h2><div class="sub">Enforced before the call is made, so an over-cap request is refused rather than billed.</div>' +
+    if (d.sharedOpenRouterBudget) {
+      var shared = d.sharedOpenRouterBudget;
+      html += '<div class="panel"><h2>Shared OpenRouter allowance</h2><div class="sub">$150 per calendar month (UTC), across all accounts. No per-task or daily dollar caps.</div><p>' +
+        esc(costText(shared.spentUsd)) + ' recorded · ' + esc(costText(shared.reservedUsd)) + ' reserved · ' + esc(costText(shared.remainingUsd)) + ' remaining</p><div class="sub">Reservations cover in-flight requests and failed requests whose final charge is unknown. Provider billing can differ from estimates.</div></div>';
+    } else html += '<div class="panel"><h2>Spend caps</h2><div class="sub">Enforced before the call is made, so an over-cap request is refused rather than billed.</div>' +
       '<form id="capsForm" class="inline-form">' +
       '<div class="field"><label for="capDaily">Daily cap (USD)</label><input id="capDaily" type="number" step="0.01" min="0" value="' +
       (dailyCap == null ? "" : esc(dailyCap)) + '" /></div>' +

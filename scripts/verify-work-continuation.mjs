@@ -13,7 +13,7 @@ let generated=0,checks=0;
 const executor=async(owner,c,prompt,opts)=>{
  assert.equal(owner,'alice');assert.equal(c.id,chat.id);assert(opts.allowContinuation);
  if(!opts.continuationTurn){generated++;return {speech:'Rendering at 46%.',costUsd:.15,continuation:{delaySeconds:30,reason:'Inspect existing render; then export.'}};}
- assert.match(prompt,/Do not repeat submissions/);assert.equal(opts.maxCostUsd,1.85);checks++;
+ assert.match(prompt,/Do not repeat submissions/);assert.equal(opts.maxCostUsd,undefined);checks++;
  return {speech:'Existing render exported.',costUsd:.1,verification:{status:'completed'}};
 };
 try{
@@ -23,19 +23,19 @@ try{
  S.closeStore();J.recoverJobs();saved=S.get('job','alice',job.id);assert.equal(saved.status,'waiting','Safe waiting checkpoints survive restart');
  S.put('job','alice',{...saved,nextRunAt:new Date(0).toISOString()});await J.executeJob('alice',job.id,executor);
  saved=S.get('job','alice',job.id);assert.equal(saved.status,'completed');assert.equal(saved.totalCostUsd,.25);assert.equal(generated,1);assert.equal(checks,1);
- console.log('ok saved wait resumes after restart without repeating generation; aggregate budget enforced');
+ console.log('ok saved wait resumes after restart without repeating generation; cost tracking preserved');
  const cancelled=J.enqueueJob('alice',chat.id,{requestId:'cancel-wait',message:'Finish'});await J.executeJob('alice',cancelled.id,executor);assert.equal(J.cancelJob('alice',cancelled.id).status,'cancelled');
  await J.executeJob('alice',cancelled.id,executor);assert.equal(generated,2);
- const limited=J.enqueueJob('alice',chat.id,{requestId:'limit',message:'Finish'});S.put('job','alice',{...S.get('job','alice',limited.id),totalCostUsd:2});await J.executeJob('alice',limited.id,executor);assert.equal(S.get('job','alice',limited.id).status,'needs_attention');assert.equal(generated,2);
+ const limited=J.enqueueJob('alice',chat.id,{requestId:'limit',message:'Finish'});S.put('job','alice',{...S.get('job','alice',limited.id),totalCostUsd:25,maxCostUsd:.5});await J.executeJob('alice',limited.id,async(_o,_c,_p,opts)=>{assert.equal(opts.maxCostUsd,undefined);return {speech:'Finished beyond old task cap',costUsd:1};});assert.equal(S.get('job','alice',limited.id).status,'completed');assert.equal(S.get('job','alice',limited.id).totalCostUsd,26);
  const interrupted=J.enqueueJob('alice',chat.id,{requestId:'interrupted',message:'Finish'});S.put('job','alice',{...S.get('job','alice',interrupted.id),status:'running'});J.recoverJobs();assert.equal(S.get('job','alice',interrupted.id).status,'needs_attention');
- console.log('ok stop cancels waiting; exhausted budget stops; interrupted writes are never replayed');
+ console.log('ok stop cancels waiting; old task budget does not stop work; interrupted writes are never replayed');
  const stalled=J.enqueueJob('alice',chat.id,{requestId:'stalled',message:'Extract all records'});let changedApproach=false;
  for(let i=0;i<4;i++){
   let j=S.get('job','alice',stalled.id);if(i)S.put('job','alice',{...j,nextRunAt:new Date(0).toISOString()});
   await J.executeJob('alice',stalled.id,async(_o,_c,prompt,opts)=>{assert.equal(opts.workRequestId,stalled.id);if(i>=2){assert.match(prompt,/Change the retrieval approach/);changedApproach=true;}return {speech:'Partial',continuation:{delaySeconds:10,reason:'Read remaining rows',progressKey:'unchanged'},costUsd:0};});
  }
  assert(changedApproach);assert.equal(S.get('job','alice',stalled.id).status,'needs_attention');assert.match(S.get('job','alice',stalled.id).result.text,/no observable progress/);
- assert.match(S.get('job','alice',limited.id).result.text,/application limit, not proof/);
+
  assert.match(S.get('job','alice',cancelled.id).result.text,/Stopped/);
  console.log('ok unchanged observations prompt a different retrieval approach then stop with an accurate reason');
  const proof=new TurnVerification();proof.record('computer',{action:'call',tool:'browser_snapshot'},{text:'Rendering at 46%'});
@@ -57,7 +57,7 @@ S.put('task_plan','alice',{id:'recovery-plan',chatId:recoveryChat.id,requestId:r
 S.put('job','alice',{...S.get('job','alice',recovery.id),status:'running',safeResume:true,totalCostUsd:.25});
 J.recoverJobs();assert.equal(S.get('job','alice',recovery.id).status,'waiting');
 let recovered=0;
-await J.executeJob('alice',recovery.id,async(_o,_c,prompt,opts)=>{recovered++;assert(opts.continuationTurn);assert.equal(opts.maxCostUsd,1.75);assert.match(prompt,/Inspect current state/);opts.onEvent({type:'usage',costUsd:.1});return {speech:'Verified existing batch; finished remaining records.',costUsd:.1,verification:{status:'completed'}};});
+await J.executeJob('alice',recovery.id,async(_o,_c,prompt,opts)=>{recovered++;assert(opts.continuationTurn);assert.equal(opts.maxCostUsd,undefined);assert.match(prompt,/Inspect current state/);opts.onEvent({type:'usage',costUsd:.1});return {speech:'Verified existing batch; finished remaining records.',costUsd:.1,verification:{status:'completed'}};});
 assert.equal(recovered,1);assert.equal(S.get('job','alice',recovery.id).totalCostUsd,.35,'Persisted step cost must not be double counted');
 const longChat=S.createChat('alice',{}),long=J.enqueueJob('alice',longChat.id,{requestId:'long',message:'Transfer all authorized records'});
 S.put('job','alice',{...S.get('job','alice',long.id),continuationCount:20,createdAt:new Date(Date.now()-2*60*60_000).toISOString()});

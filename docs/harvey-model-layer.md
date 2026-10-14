@@ -12,7 +12,7 @@ A chat can persist its own model selection. Jobs inherit that selection unless e
 
 contextBudget.ts budgets system context, history, tool schemas/results and output space. Provider limits and application ceilings both matter. Work also bounds recent history and retrieves archived messages or lessons on demand.
 
-Usage is recorded in aiUsageStore.ts with model/job/token/cost/error information. Budget checks, configured daily/monthly/per-call caps and circuit breakers run before provider requests. Recorded cost and preflight estimates do not guarantee a total cap on third-party plugin or infrastructure charges.
+Usage is recorded in aiUsageStore.ts with model/job/token/cost/error information. OpenRouter uses one shared $150 calendar-month (UTC) allowance across all accounts, with atomic reservations before requests and no per-task, daily or per-call dollar caps. Private usage logs remain account-local. Existing spend is imported once; unresolved requests retain conservative reservations. Provider-reported costs can differ from preflight estimates, so the matching OpenRouter key monthly limit should also be configured. Direct-provider-only installations retain their existing configurable caps. Circuit breakers still run before requests. Recorded cost and preflight estimates do not guarantee a total cap on third-party plugin or infrastructure charges.
 
 ## Approvals and evidence
 

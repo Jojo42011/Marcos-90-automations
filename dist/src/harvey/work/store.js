@@ -109,16 +109,13 @@ function nextRun(cron, tz, from = new Date()) {
 function createSchedule(owner, input) {
     const chat = get("chat", owner, text(input.chatId, "Chat"));
     const cron = text(input.cron, "Schedule", 100), tz = timezone(input.timezone || "America/Chicago");
-    const maxCostUsd = Number(input.maxCostUsd ?? 1);
-    if (!Number.isFinite(maxCostUsd) || maxCostUsd < 0.01 || maxCostUsd > 25)
-        throw new Error("Run budget must be between $0.01 and $25");
     const workflowId = input.workflowId ? text(input.workflowId, "Workflow ID", 100) : undefined;
     if (workflowId && get("workflow", owner, workflowId).chatId !== chat.id)
         throw new Error("Workflow belongs to another chat");
     const pauseAfterFailures = Number(input.pauseAfterFailures ?? 3);
     if (!Number.isInteger(pauseAfterFailures) || pauseAfterFailures < 1 || pauseAfterFailures > 10)
         throw new Error("Failure limit must be 1–10");
-    return put("schedule", owner, { id: (0, crypto_1.randomUUID)(), ...(workflowId ? { workflowId } : {}), pauseAfterFailures, consecutiveFailures: 0, chatId: chat.id, title: text(input.title, "Task name", 120), prompt: text(input.prompt, "Instructions", 20000), cron, timezone: tz, enabled: true, nextRunAt: nextRun(cron, tz), maxCostUsd });
+    return put("schedule", owner, { id: (0, crypto_1.randomUUID)(), ...(workflowId ? { workflowId } : {}), pauseAfterFailures, consecutiveFailures: 0, chatId: chat.id, title: text(input.title, "Task name", 120), prompt: text(input.prompt, "Instructions", 20000), cron, timezone: tz, enabled: true, nextRunAt: nextRun(cron, tz) });
 }
 function lockChat(owner, chat) {
     const token = (0, crypto_1.randomUUID)();

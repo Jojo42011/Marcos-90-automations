@@ -49,7 +49,7 @@ ok('CRM GET receipts are observations and writes still require read-back',()=>{
 const repairAttempts=new Map();
 const calls=[];let releaseSlow,slowStarted,transientCalls=0;
 const slowReady=new Promise(r=>slowStarted=r),slowHold=new Promise(r=>releaseSlow=r);
-const model=http.createServer((req,res)=>{let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{
+const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:{usage_monthly:0}}));return;}let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{
  const b=JSON.parse(raw);calls.push(b);
  const user=b.messages.filter(m=>m.role==='user').at(-1)?.content||'';
  const toolMessages=b.messages.filter(m=>m.role==='tool');const n=toolMessages.length;

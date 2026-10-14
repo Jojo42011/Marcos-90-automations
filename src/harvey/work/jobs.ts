@@ -22,7 +22,7 @@ export function chatJob(owner:string,chatId:string) {
   get<Chat>("chat",owner,chatId);
   return list<WorkJob>("job",owner).find(j=>j.chatId===chatId&&activeJob(j));
 }
-export function enqueueJob(owner:string,chatId:string,input:any,delegation?:{originChatId:string;maxCostUsd:number}) {
+export function enqueueJob(owner:string,chatId:string,input:any,delegation?:{originChatId:string;maxCostUsd?:number}) {
   const chat=get<Chat>("chat",owner,chatId);
   const requestId=text(input.requestId,"Request ID",100),prompt=text(input.message,"Message",50000);
   const model=text(input.model === undefined ? chat.model || "auto" : input.model,"Model",150);
@@ -56,14 +56,13 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
   const timer=setTimeout(()=>controller.abort(),15*60_000);timer.unref();
   const approvals:unknown[]=[...(job.result?.approvals||[])],schedules:unknown[]=[...(job.result?.schedules||[])];
   try {
-    const ceiling=job.maxCostUsd??2, remaining=ceiling-(job.totalCostUsd||0);
-    if(remaining<=0||(job.continuationCount||0)>=256||Date.now()-Date.parse(job.createdAt)>24*60*60_000){
-      job.status="needs_attention";job.result={text:"The saved task reached its "+(remaining<=0?"total model-spend limit":(job.continuationCount||0)>=256?"continuation limit":"24-hour time limit")+". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.",needsAttention:true};return;
+    if((job.continuationCount||0)>=256||Date.now()-Date.parse(job.createdAt)>24*60*60_000){
+      job.status="needs_attention";job.result={text:"The saved task reached its "+((job.continuationCount||0)>=256?"continuation limit":"24-hour time limit")+". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.",needsAttention:true};return;
     }
     const prompt=job.continuationCount ? job.prompt+"\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): "+job.resumeReason+((job.stalledContinuations||0)>0?"\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail.":"") : job.prompt;
     const receipts:Receipt[]=[];
     let segmentCost=0;
-    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,maxCostUsd:remaining,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,checkpointAt:Date.now()+12*60_000,onEvidence:r=>{
+    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,checkpointAt:Date.now()+12*60_000,onEvidence:r=>{
       receipts.push(r);const current=get<WorkJob>("job",owner,id);current.safeResume=safeRecovery(receipts);put("job",owner,current);
     },onEvent:e=>{
       if(e.type==="usage"){const current=get<WorkJob>("job",owner,id);segmentCost+=e.costUsd;current.totalCostUsd=(current.totalCostUsd||0)+e.costUsd;put("job",owner,current);return;}

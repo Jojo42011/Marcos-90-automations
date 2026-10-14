@@ -2208,6 +2208,12 @@ app.get("/api/harvey/workspace", async (req, res) => {
 /** Spend as the pill and the usage page read it, against the live caps. */
 async function harveyBudgetBlock() {
     const { getCaps, spentToday, spentThisMonth } = await Promise.resolve().then(() => __importStar(require("./core/aiUsageStore.js")));
+    if (process.env.OPENROUTER_API_KEY?.trim()) {
+        const { openRouterBudgetStatus } = await Promise.resolve().then(() => __importStar(require("./core/openRouterBudget.js")));
+        const budget = openRouterBudgetStatus(), used = budget.spentUsd + budget.reservedUsd;
+        return { spentTodayUsd: spentToday(), spentMonthUsd: used, dailyCapUsd: 0, monthlyCapUsd: budget.limitUsd,
+            state: used >= budget.limitUsd ? "over" : used >= .8 * budget.limitUsd ? "near" : "ok" };
+    }
     const caps = getCaps();
     const spentTodayUsd = spentToday();
     const spentMonthUsd = spentThisMonth();
@@ -2498,7 +2504,8 @@ app.get("/api/harvey/usage", async (req, res) => {
         res.json({
             ...usageSummary(days),
             recentErrors: recentErrors(20),
-            caps: getCaps(),
+            caps: process.env.OPENROUTER_API_KEY?.trim() ? { dailyCapUsd: 0, monthlyCapUsd: 150, maxCostPerCallUsd: null, scope: "all_accounts" } : getCaps(),
+            sharedOpenRouterBudget: process.env.OPENROUTER_API_KEY?.trim() ? (await Promise.resolve().then(() => __importStar(require("./core/openRouterBudget.js")))).openRouterBudgetStatus() : null,
             /* A parked model is why a reply came back from something other than the
                model the operator picked, so it belongs next to the errors. */
             breakers: breakerStates(),
@@ -2515,6 +2522,10 @@ app.get("/api/harvey/usage", async (req, res) => {
 app.post("/api/harvey/usage/caps", express_1.default.json({ limit: "8kb" }), async (req, res) => {
     if (!dashboardTokenOk(req)) {
         res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    if (process.env.OPENROUTER_API_KEY?.trim()) {
+        res.status(409).json({ error: "OpenRouter uses one shared $150 monthly allowance across all accounts. Per-account caps do not apply." });
         return;
     }
     const body = (req.body && typeof req.body === "object" ? req.body : {});
