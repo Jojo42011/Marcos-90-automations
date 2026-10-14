@@ -223,11 +223,18 @@ try {
       await chrome.storage.local.set({ harveyTabIds: [] });
       const a = await openAdditionalTab(urls[0], false);
       const b = await openAdditionalTab(urls[1], false);
-      const list = await listWorkTabs();
+      // chrome.tabs.create resolves before navigation commits on slower CI hosts.
+      // Wait for the expected destinations, rather than accepting a blank/pending URL.
+      let list = [];
+      for (let attempt = 0; attempt < 100; attempt++) {
+        list = await listWorkTabs();
+        if (urls.every(url => list.some(tab => tab.url === url))) break;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
       return { opened: [a.id, b.id], count: list.length, urls: list.map((t) => t.url) };
     }, [null, [U("shadow.html"), U("longpage.html")]]);
     ok("Harvey can hold SEVERAL tabs at once", res.count === 2, JSON.stringify(res));
-    ok("and both are the ones he opened", res.urls.filter(Boolean).length === 2, JSON.stringify(res.urls));
+    ok("and both are the ones he opened", [U("shadow.html"), U("longpage.html")].every(url => res.urls.includes(url)), JSON.stringify(res.urls));
 
     const grouped = await sw.evaluate(async () => {
       const tabs = await listWorkTabs();

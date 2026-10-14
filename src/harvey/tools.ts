@@ -17,6 +17,7 @@ import { execMode } from "../core/codeExec.js";
 import { getThreadForLead } from "../core/smsStore.js";
 import { getNotes, searchNotes } from "../core/harveyNotes.js";
 import { searchListings, getListing } from "../core/listingsStore.js";
+import { searchMlsLive } from "../integrations/simplyrets/index.js";
 import { mlsStatus } from "../agents/mlsSync/index.js";
 import { getConversation, listAllLeads, getLeadById } from "../core/db.js";
 import { getSocialSummaryForHarvey, getSocialVideos, getPendingCommentReplies } from "../core/socialStore.js";
@@ -192,9 +193,14 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
     },
   },
   {
+    name: "search_mls_live",
+    description: "Read one page directly from the shared MLS API using server-side credentials. Available to all three accounts. Prefer this for current listing checks; search_listings searches the local mirror. Never treat a failed request as no matches or a page count as the market total. Follow nextOffset with unchanged filters. Defaults to Active status on the provider.",
+    input_schema: {type:"object",properties:{q:{type:"string"},city:{type:"string"},status:{type:"string"},minPrice:{type:"number"},maxPrice:{type:"number"},minBeds:{type:"number"},minBaths:{type:"number"},limit:{type:"integer",minimum:1,maximum:50},offset:{type:"integer",minimum:0}},additionalProperties:false},
+  },
+  {
     name: "search_listings",
     description:
-      "Search live MLS listings from the SABOR MLS feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
+      "Search the local mirror of MLS listings from the SABOR MLS feed: price, beds, baths, city, status, property type. Use for any question about what is on the market, comps, or a property a lead asked about. " +
       "Returns totalMatching alongside the page, so say how many exist and not just how many you listed. " +
       "If it reports notConfigured or stale, SAY SO — an empty result from a disconnected feed is not a quiet market.",
     input_schema: {
@@ -708,6 +714,7 @@ export async function executeHarveyTool(
       });
     case "get_conversation":
       return getConversationForLead(String(normalized.leadId ?? ""));
+    case "search_mls_live": return searchMlsLive(normalized);
     case "search_listings": {
       const st = mlsStatus();
       if (!st.configured) {

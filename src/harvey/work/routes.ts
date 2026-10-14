@@ -1,3 +1,4 @@
+import {touchLocalBrowser,readyLocalBrowser,connectLocalBrowser,localBrowserStatus,pollLocalBrowser,completeLocalBrowser,stopLocalBrowser,selectHostedBrowser} from "./localBrowser.js";
 import { modelAdvice } from "./modelAdvice.js";
 import { historySearch, learningContext, workflows } from "./learning.js";
 import { teamStatus } from "./coordination.js";
@@ -14,8 +15,9 @@ import { enqueueJob, cancelJob, chatJob, publicJob, WorkJob } from "./jobs.js";
 
 type Owner = (req: Request) => string;
 const error = (res: Response, e: any) => res.status(e.message === "Not found" ? 404 : 400).json({ error: e.message || "Request failed" });
-export function createWorkRouter(authorize: (req: Request) => boolean, owner: Owner) {
-  const r = express.Router(); r.use(express.json({ limit: "256kb" }));
+export function createWorkRouter(authorize: (req: Request) => boolean, owner: Owner, actor: Owner = () => "") {
+  const r = express.Router();
+  r.use("/work/browser/:chat/local",express.json({limit:"6mb"})); r.use(express.json({ limit: "256kb" }));
   r.get("/work/oauth/callback", async (req, res) => {
     res.setHeader("Referrer-Policy", "no-referrer");
     try { const state = String(req.query.state || ""), cookie = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith("harvey_oauth_state="))?.split("=")[1] || "";
@@ -24,6 +26,26 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
     } catch (e) { res.status(400).type("text/plain").send((e as Error).message); }
   });
   r.use((req,res,next) => { if (!authorize(req)) { res.status(401).json({ error: "Unauthorized" }); return; } next(); });
+  r.post("/work/browser/:chat/local/:action", async(req,res)=>{
+    res.setHeader("Cache-Control","no-store");
+    try {
+      const o=owner(req), c=String(req.params.chat), who=actor(req);
+      if(!who || who!==o){res.status(403).json({error:"Only the chat owner can connect or control their local browser"});return;}
+      if(req.get("x-harvey-browser")!=="1" || !req.get("origin") || new URL(req.get("origin")!).host!==req.get("host")){res.status(403).json({error:"Open this control from Harvey"});return;}
+      get("chat",o,c);
+      switch(req.params.action){
+        case "connect":res.json(connectLocalBrowser(o,c));break;
+        case "heartbeat":res.json(touchLocalBrowser(o,c,String(req.body.token||"")));break;
+        case "ready":res.json(readyLocalBrowser(o,c,String(req.body.token||"")));break;
+        case "status":res.json(localBrowserStatus(o,c));break;
+        case "stop":res.json(stopLocalBrowser(o,c,req.body.token));break;
+        case "hosted":res.json(selectHostedBrowser(o,c));break;
+        case "poll": {const controller=new AbortController();res.on("close",()=>controller.abort());const result=await pollLocalBrowser(o,c,String(req.body.token||""),req.body.ready===true,controller.signal);if(actor(req)!==o){stopLocalBrowser(o,c);res.status(403).json({error:"Account session changed"});return;}res.json(result);break;}
+        case "result":res.json(completeLocalBrowser(o,c,String(req.body.token||""),String(req.body.id||""),req.body.result));break;
+        default:res.status(404).json({error:"Unknown browser action"});
+      }
+    }catch(e){error(res,e);}
+  });
   r.get("/work/model-advice", async(req,res)=>{try{res.json(await modelAdvice(owner(req)));}catch(e){error(res,e);}});
   r.get("/work/jobs/:id", (req,res)=>{try{const o=owner(req),job=get<WorkJob>("job",o,String(req.params.id));get("chat",o,job.chatId);res.json(publicJob(job));}catch(e){error(res,e);}});
   r.post("/work/jobs/:id/cancel", (req,res)=>{try{res.json(cancelJob(owner(req),String(req.params.id)));}catch(e){error(res,e);}});
@@ -59,6 +81,7 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
     if (workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,id)) throw new Error("Wait for this chat's running task to finish");
     for (const s of list<Schedule>("schedule",o).filter(s=>s.chatId===id)) remove("schedule",o,s.id);
     for (const run of list<Run>("run",o).filter(s=>s.chatId===id)) remove("run",o,run.id);
+    stopLocalBrowser(o,id);
     workDb().prepare("DELETE FROM messages WHERE owner=? AND chat=?").run(o,id); remove("chat",o,id); await closeBrowser(o,id); res.json({ok:true});
   });
   route("get", "/work/managed", async(q,res,o)=>res.json(await managedCatalog(o,q.query.projectId?String(q.query.projectId):null,String(q.query.search||""),q.query.cursor?String(q.query.cursor):undefined)));
@@ -72,10 +95,11 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
   route("get", "/work/logins", (_q,res,o) => res.json({logins:logins(o)}));
   route("post", "/work/logins", (q,res,o) => { const {secret,...login}=saveLogin(o,q.body); res.status(201).json(login); });
   route("delete", "/work/logins/:id", (q,res,o) => {remove("login",o,String(q.params.id)); res.json({ok:true});});
-  route("post", "/work/browser/:chat/snapshot", async (q,res,o) => { const c=get<Chat>("chat",o,String(q.params.chat)); res.json(await browserCall(o,c.id,"browser_snapshot",{})); });
+  route("post", "/work/browser/:chat/snapshot", async (q,res,o) => { const c=get<Chat>("chat",o,String(q.params.chat)); if(c.browserTarget==="local")throw Error("Use the connected local browser in this chat");res.json(await browserCall(o,c.id,"browser_snapshot",{})); });
   route("get", "/work/browser/:chat/preview", async (q,res,o) => {
     res.setHeader("Cache-Control","no-store");
     const c=get<Chat>("chat",o,String(q.params.chat));
+    if(c.browserTarget==="local"){res.json({chatId:c.id,state:"local"});return;}
     const job=chatJob(o,c.id);
     const running=!!workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o,c.id);
     res.json({chatId:c.id,...await browserPreview(o,c.id),phase:job?.status || (running?"running":"idle")});

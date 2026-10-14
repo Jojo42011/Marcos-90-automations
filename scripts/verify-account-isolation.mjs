@@ -164,6 +164,15 @@ try {
  assert.equal((await request('/api/harvey/conversations/'+preserved.id,delegated)).data.messages[0].content,'Preserved private message');
  assert((await request('/api/harvey/work/schedules',delegated)).data.schedules.some(s=>s.id===schedules.marco));
  assert.equal((await request('/api/harvey/work/status',delegated)).status,200);
+ const browserHeaders={origin:'http://127.0.0.1:'+port,'x-harvey-browser':'1'};
+ const browserRoute='/api/harvey/work/browser/'+preserved.id+'/local/';
+ const connected=await request(browserRoute+'connect',cookies.marco,'POST',{},browserHeaders);assert.equal(connected.status,200,JSON.stringify(connected.data));
+ assert.equal((await request(browserRoute+'status',delegated,'POST',{},browserHeaders)).status,403);
+ assert.equal((await request(browserRoute+'ready',cookies.wesley,'POST',{token:connected.data.token},browserHeaders)).status,404);
+ assert.equal((await request(browserRoute+'ready',cookies.marco,'POST',{token:connected.data.token},browserHeaders)).status,200);
+ assert.equal((await request(browserRoute+'stop',cookies.marco,'POST',{token:connected.data.token},browserHeaders)).status,200);
+ assert.equal((await request(browserRoute+'hosted',cookies.marco,'POST',{},browserHeaders)).status,200);
+ check('real gateway isolates local browser tokens and refuses Carlos control of another owner’s tab',()=>assert.ok(true));
  assert.equal((await request('/api/harvey/work/browser/'+preserved.id+'/preview',delegated)).status,200);
  assert.equal((await request('/api/harvey/work/browser/'+preserved.id+'/preview',cookies.wesley)).status,404);
  await request('/api/harvey/conversations/'+chats.marco+'/title',delegated,'POST',{title:'Marco chat edited by Carlos'});

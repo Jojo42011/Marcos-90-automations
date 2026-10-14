@@ -2494,7 +2494,7 @@ function harveyToolResultForUi(result: unknown): unknown {
  * Streamed or not, the turn is the same: the full agent loop with every tool,
  * the operator's model pick, and session history shared with voice.
  */
-app.use("/api/harvey", createWorkRouter(dashboardTokenOk, req => String(tenantOwner() || sessionUserSync(req)?.id || "operator")));
+app.use("/api/harvey", createWorkRouter(dashboardTokenOk, req => String(tenantOwner() || sessionUserSync(req)?.id || "operator"), req => sessionUserSync(req)?.id || ""));
 
 app.post("/api/harvey/chat", express.json({ limit: "256kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }

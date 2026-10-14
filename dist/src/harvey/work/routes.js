@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createWorkRouter = createWorkRouter;
 exports.handleWorkChat = handleWorkChat;
+const localBrowser_js_1 = require("./localBrowser.js");
 const modelAdvice_js_1 = require("./modelAdvice.js");
 const learning_js_1 = require("./learning.js");
 const coordination_js_1 = require("./coordination.js");
@@ -19,8 +20,9 @@ const browser_js_1 = require("./browser.js");
 const runtime_js_1 = require("./runtime.js");
 const jobs_js_1 = require("./jobs.js");
 const error = (res, e) => res.status(e.message === "Not found" ? 404 : 400).json({ error: e.message || "Request failed" });
-function createWorkRouter(authorize, owner) {
+function createWorkRouter(authorize, owner, actor = () => "") {
     const r = express_1.default.Router();
+    r.use("/work/browser/:chat/local", express_1.default.json({ limit: "6mb" }));
     r.use(express_1.default.json({ limit: "256kb" }));
     r.get("/work/oauth/callback", async (req, res) => {
         res.setHeader("Referrer-Policy", "no-referrer");
@@ -40,6 +42,60 @@ function createWorkRouter(authorize, owner) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     } next(); });
+    r.post("/work/browser/:chat/local/:action", async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        try {
+            const o = owner(req), c = String(req.params.chat), who = actor(req);
+            if (!who || who !== o) {
+                res.status(403).json({ error: "Only the chat owner can connect or control their local browser" });
+                return;
+            }
+            if (req.get("x-harvey-browser") !== "1" || !req.get("origin") || new URL(req.get("origin")).host !== req.get("host")) {
+                res.status(403).json({ error: "Open this control from Harvey" });
+                return;
+            }
+            (0, store_js_1.get)("chat", o, c);
+            switch (req.params.action) {
+                case "connect":
+                    res.json((0, localBrowser_js_1.connectLocalBrowser)(o, c));
+                    break;
+                case "heartbeat":
+                    res.json((0, localBrowser_js_1.touchLocalBrowser)(o, c, String(req.body.token || "")));
+                    break;
+                case "ready":
+                    res.json((0, localBrowser_js_1.readyLocalBrowser)(o, c, String(req.body.token || "")));
+                    break;
+                case "status":
+                    res.json((0, localBrowser_js_1.localBrowserStatus)(o, c));
+                    break;
+                case "stop":
+                    res.json((0, localBrowser_js_1.stopLocalBrowser)(o, c, req.body.token));
+                    break;
+                case "hosted":
+                    res.json((0, localBrowser_js_1.selectHostedBrowser)(o, c));
+                    break;
+                case "poll": {
+                    const controller = new AbortController();
+                    res.on("close", () => controller.abort());
+                    const result = await (0, localBrowser_js_1.pollLocalBrowser)(o, c, String(req.body.token || ""), req.body.ready === true, controller.signal);
+                    if (actor(req) !== o) {
+                        (0, localBrowser_js_1.stopLocalBrowser)(o, c);
+                        res.status(403).json({ error: "Account session changed" });
+                        return;
+                    }
+                    res.json(result);
+                    break;
+                }
+                case "result":
+                    res.json((0, localBrowser_js_1.completeLocalBrowser)(o, c, String(req.body.token || ""), String(req.body.id || ""), req.body.result));
+                    break;
+                default: res.status(404).json({ error: "Unknown browser action" });
+            }
+        }
+        catch (e) {
+            error(res, e);
+        }
+    });
     r.get("/work/model-advice", async (req, res) => { try {
         res.json(await (0, modelAdvice_js_1.modelAdvice)(owner(req)));
     }
@@ -143,6 +199,7 @@ function createWorkRouter(authorize, owner) {
             (0, store_js_1.remove)("schedule", o, s.id);
         for (const run of (0, store_js_1.list)("run", o).filter(s => s.chatId === id))
             (0, store_js_1.remove)("run", o, run.id);
+        (0, localBrowser_js_1.stopLocalBrowser)(o, id);
         (0, store_js_1.workDb)().prepare("DELETE FROM messages WHERE owner=? AND chat=?").run(o, id);
         (0, store_js_1.remove)("chat", o, id);
         await (0, browser_js_1.closeBrowser)(o, id);
@@ -160,10 +217,15 @@ function createWorkRouter(authorize, owner) {
     route("get", "/work/logins", (_q, res, o) => res.json({ logins: (0, browser_js_1.logins)(o) }));
     route("post", "/work/logins", (q, res, o) => { const { secret, ...login } = (0, browser_js_1.saveLogin)(o, q.body); res.status(201).json(login); });
     route("delete", "/work/logins/:id", (q, res, o) => { (0, store_js_1.remove)("login", o, String(q.params.id)); res.json({ ok: true }); });
-    route("post", "/work/browser/:chat/snapshot", async (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.chat)); res.json(await (0, browser_js_1.browserCall)(o, c.id, "browser_snapshot", {})); });
+    route("post", "/work/browser/:chat/snapshot", async (q, res, o) => { const c = (0, store_js_1.get)("chat", o, String(q.params.chat)); if (c.browserTarget === "local")
+        throw Error("Use the connected local browser in this chat"); res.json(await (0, browser_js_1.browserCall)(o, c.id, "browser_snapshot", {})); });
     route("get", "/work/browser/:chat/preview", async (q, res, o) => {
         res.setHeader("Cache-Control", "no-store");
         const c = (0, store_js_1.get)("chat", o, String(q.params.chat));
+        if (c.browserTarget === "local") {
+            res.json({ chatId: c.id, state: "local" });
+            return;
+        }
         const job = (0, jobs_js_1.chatJob)(o, c.id);
         const running = !!(0, store_js_1.workDb)().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(o, c.id);
         res.json({ chatId: c.id, ...await (0, browser_js_1.browserPreview)(o, c.id), phase: job?.status || (running ? "running" : "idle") });

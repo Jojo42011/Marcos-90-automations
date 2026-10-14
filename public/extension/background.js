@@ -1447,6 +1447,7 @@ function startKeepalive() {
 }
 
 async function pollOnce() {
+  if(self.harveyLocalSessionActive?.())return IDLE_POLL_MS;
   const cfg = await config();
   const { serverUrl, token, enabled } = cfg;
   if (!serverUrl || !token) { await setBadge("off"); return IDLE_POLL_MS; }
@@ -1489,6 +1490,7 @@ async function pollOnce() {
     if (!res.ok) { await setBadge("err"); return IDLE_POLL_MS; }
     const body = await res.json();
 
+    if(self.harveyLocalSessionActive?.())return IDLE_POLL_MS;
     // The server may ask us to switch OFF at any time. It may ask us to switch
     // ON only because the operator asked for that — and never past the local
     // lock, which is the human's override.
@@ -1513,6 +1515,8 @@ async function pollOnce() {
   await setBadge(enabled ? "on" : "off");
 
   for (const cmd of commands) {
+    if(self.harveyLocalSessionActive?.())return IDLE_POLL_MS;
+    self.harveyLegacyBusy=true;
     const guard = startKeepalive();   // a slow page must not get the worker killed
     let result;
     try {
@@ -1520,6 +1524,7 @@ async function pollOnce() {
     } catch (err) {
       result = { ok: false, error: String((err && err.message) || err) };
     } finally {
+      self.harveyLegacyBusy=false;
       clearInterval(guard);
     }
     let page = {};
@@ -1664,3 +1669,5 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
   return false;
 });
+
+importScripts("local-probe.js", "local-control.js");

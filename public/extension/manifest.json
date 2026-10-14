@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Harvey Browser Control",
-  "version": "1.8.0",
-  "description": "Talk to Harvey in a side panel beside any page, and let him see and read the tab you are on, scroll, click, fill forms and work across several tabs on sites that have no API — on your machine, only while you switch it on.",
+  "version": "1.9.0",
+  "description": "Connect a chosen Chrome tab to Harvey, sign in yourself, and let Harvey work while you watch. Stop control anytime.",
   "permissions": [
     "activeTab",
     "alarms",
@@ -10,7 +10,8 @@
     "sidePanel",
     "storage",
     "tabGroups",
-    "tabs"
+    "tabs",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -27,5 +28,18 @@
   "options_page": "popup.html",
   "icons": {
     "128": "icons/icon128.png"
-  }
+  },
+  "minimum_chrome_version": "125",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://marco-90-automation.fly.dev/*"
+      ],
+      "js": [
+        "local-bridge.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ]
 }
