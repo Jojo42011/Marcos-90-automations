@@ -241,6 +241,8 @@ try {
          const other=user.id==='marco'?'wesley':'marco';
          assert.equal(await accountPage.locator('[data-col-member="'+other+'"]').count(),0);
          await accountPage.setViewportSize({width:390,height:844});
+         // The resize listener recalculates the board scrollbar thumb on the next frame.
+         await accountPage.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth,undefined,{timeout:5000});
          const mobile=await accountPage.evaluate(()=>{const a=document.querySelector('#left').getBoundingClientRect(),b=document.querySelector('#rightcol').getBoundingClientRect(),t=document.querySelector('#showCarlosTasks').getBoundingClientRect();return {stacked:b.top>=a.bottom,toggleFits:t.right<=innerWidth,noOverflow:document.documentElement.scrollWidth<=innerWidth};});
          assert.deepEqual(mobile,{stacked:true,toggleFits:true,noOverflow:true});
          await accountPage.setViewportSize({width:1440,height:900});

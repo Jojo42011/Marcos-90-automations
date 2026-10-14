@@ -16,7 +16,7 @@ const key = (owner, id) => owner + ":" + id;
 const activeJob = (j) => ["queued", "running", "waiting", "cancelling"].includes(j.status);
 exports.activeJob = activeJob;
 function publicJob(j) {
-    const { prompt, fingerprint, requestId, resumeReason, ...visible } = j;
+    const { prompt, fingerprint, requestId, resumeReason, lastProgressKey, ...visible } = j;
     return visible;
 }
 function chatJob(owner, chatId) {
@@ -52,6 +52,10 @@ function cancelJob(owner, id) {
     job.status = ["queued", "waiting"].includes(job.status) ? "cancelled" : "cancelling";
     job.updatedAt = new Date().toISOString();
     (0, store_js_1.put)("job", owner, job);
+    if (job.status === "cancelled") {
+        job.result = { ...job.result, text: "Stopped. Saved records and completed work are retained.", needsAttention: false };
+        (0, store_js_1.put)("job", owner, job);
+    }
     controllers.get(key(owner, id))?.abort();
     return publicJob(job);
 }
@@ -79,11 +83,11 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
         const ceiling = job.maxCostUsd ?? 2, remaining = ceiling - (job.totalCostUsd || 0);
         if (remaining <= 0 || (job.continuationCount || 0) >= 12 || Date.now() - Date.parse(job.createdAt) > 60 * 60_000) {
             job.status = "needs_attention";
-            job.result = { text: "The saved task reached its time, continuation or model-spend limit. Completed work is retained; inspect it before resuming.", needsAttention: true };
+            job.result = { text: "The saved task reached its " + (remaining <= 0 ? "total model-spend limit" : (job.continuationCount || 0) >= 12 ? "continuation limit" : "one-hour time limit") + ". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.", needsAttention: true };
             return;
         }
-        const prompt = job.continuationCount ? job.prompt + "\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): " + job.resumeReason : job.prompt;
-        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: remaining, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, onEvent: e => {
+        const prompt = job.continuationCount ? job.prompt + "\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): " + job.resumeReason + ((job.stalledContinuations || 0) > 0 ? "\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail." : "") : job.prompt;
+        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, maxCostUsd: remaining, workRequestId: job.id, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, onEvent: e => {
                 // Persist progress without tool arguments, passwords or raw response data.
                 if (e.type === "approval") {
                     approvals.push(e.approval);
@@ -109,6 +113,15 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
             ...(result.modelError ? { failure: { kind: /402|credits|afford/i.test(result.modelError) ? "provider_credit_limit" : /Empty or malformed/i.test(result.modelError) ? "invalid_model_response" : "provider_error", model: result.modelUsed || result.model } } : {}),
             usage: { model: result.modelUsed || result.model, costUsd: result.costUsd || 0, promptTokens: result.promptTokens || 0, completionTokens: result.completionTokens || 0, cachedTokens: result.cachedTokens || 0 } };
         if (result.continuation && !controller.signal.aborted && !result.modelError && !result.budgetRefused && !job.originChatId) {
+            const progressKey = result.continuation.progressKey;
+            job.stalledContinuations = progressKey && progressKey === job.lastProgressKey ? (job.stalledContinuations || 0) + 1 : 0;
+            job.lastProgressKey = progressKey;
+            if ((job.stalledContinuations || 0) >= 3) {
+                job.status = "needs_attention";
+                job.result.text = "The last three continuation checks made no observable progress. Your completed work is saved. I need to change the retrieval approach before continuing; this does not prove the source has no data.";
+                job.result.needsAttention = true;
+                return;
+            }
             job.status = "waiting";
             job.continuationCount = (job.continuationCount || 0) + 1;
             job.nextRunAt = new Date(Date.now() + Math.max(10, Math.min(120, result.continuation.delaySeconds)) * 1000).toISOString();

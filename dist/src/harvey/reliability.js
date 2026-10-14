@@ -52,7 +52,7 @@ function isObservation(name, input) {
         return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
     }
     if (name === "computer")
-        return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
+        return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_read_table|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
     if (name === "plugin_request")
         return String(input.method || "GET").toUpperCase() === "GET";
     if (name === "business_call" && input.tool === "crm_api")
@@ -69,6 +69,10 @@ function isObservation(name, input) {
         return ["list", "get"].includes(input.action);
     if (name === "agent_team")
         return input.action === "status";
+    if (name === "model_advice")
+        return true;
+    if (name === "work_records")
+        return input.action === "list";
     if (name === "continuity" || name === "task_plan")
         return input.action === "get";
     if (["schedule_agent", "projects"].includes(name))
@@ -88,13 +92,54 @@ class TurnVerification {
     receipts = [];
     sources = new Map();
     report;
+    projectRecords(records) {
+        if (!Array.isArray(records) || !records.length || records.length > 30)
+            throw Error("Provide 1–30 records with observed IDs and field paths");
+        return records.map((record) => {
+            const receipt = this.receipts.find(r => r.id === record.evidenceId);
+            if (!receipt?.observation || receipt.outcome !== "returned" || receipt.limitation)
+                throw Error("Records require successful readable observation evidence");
+            const read = (path) => {
+                if (typeof path !== "string" || !path.startsWith("/") || path.length > 1000)
+                    throw Error("Use a JSON pointer into observed structured data");
+                let value = this.sources.get(receipt.id);
+                for (const key of path.slice(1).split("/").map((s) => s.replace(/~1/g, "/").replace(/~0/g, "~"))) {
+                    if (!value || typeof value !== "object" || !Object.prototype.hasOwnProperty.call(value, key))
+                        throw Error("Record path is missing from source");
+                    value = value[key];
+                }
+                return value;
+            };
+            const key = read(record.idPath);
+            if (!['string', 'number'].includes(typeof key) || !String(key).trim() || String(key).length > 1000)
+                throw Error("Use a stable observed record ID or profile link");
+            if (!record.fieldPaths || Array.isArray(record.fieldPaths) || typeof record.fieldPaths !== "object" || !Object.keys(record.fieldPaths).length || Object.keys(record.fieldPaths).length > 30)
+                throw Error("Provide 1–30 field paths");
+            const fields = Object.fromEntries(Object.entries(record.fieldPaths).map(([name, path]) => { if (name.length > 80)
+                throw Error("Field label too long"); return [name, read(path)]; }));
+            if (JSON.stringify(fields).length > 8000)
+                throw Error("Record too large; save its sections separately with observed stable IDs");
+            return { key: String(key), fields, source: { tool: receipt.tool, observedAt: receipt.at, paths: record.fieldPaths }, updatedAt: new Date().toISOString() };
+        });
+    }
+    continuationCheckpoint() {
+        const relevant = this.receipts.filter(r => !r.discovery && !['task_plan', 'continuity', 'work_records'].includes(r.tool));
+        const last = relevant.at(-1);
+        if (!last || !last.observation || last.outcome !== "returned" || last.limitation)
+            return null;
+        const source = this.sources.get(last.id);
+        if (!source)
+            return null;
+        const clean = (v) => Array.isArray(v) ? v.map(clean) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => !['snapshotId', 'observationId', 'capturedAt', '_harveyEvidence'].includes(k)).map(([k, x]) => [k, clean(x)])) : v;
+        return { progressKey: stableCallKey(last.tool, clean(source)) };
+    }
     continuationEvidence(id, quote) {
         const receipt = this.receipts.find(r => r.id === id);
         if (!receipt || !receipt.observation || receipt.outcome !== "returned" || receipt.limitation)
             throw new Error("Continuation needs a successful current observation");
         if (typeof quote !== "string" || quote.length < 4 || quote.length > 500 || !JSON.stringify(this.sources.get(receipt.id)).includes(quote))
             throw new Error("Quote the exact observed progress/state before continuing; no invented job status");
-        if (this.receipts.slice(this.receipts.indexOf(receipt) + 1).some(r => !r.observation && !r.discovery))
+        if (this.receipts.slice(this.receipts.indexOf(receipt) + 1).some(r => !r.observation && !r.discovery && !['task_plan', 'continuity', 'work_records'].includes(r.tool)))
             throw new Error("Observe again after the last action before yielding");
     }
     record(name, input, result) {

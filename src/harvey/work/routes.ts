@@ -1,3 +1,4 @@
+import { modelAdvice } from "./modelAdvice.js";
 import { historySearch, learningContext, workflows } from "./learning.js";
 import { teamStatus } from "./coordination.js";
 import { managedCatalog, connectManaged, disconnectManaged } from "./composio.js";
@@ -23,6 +24,7 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
     } catch (e) { res.status(400).type("text/plain").send((e as Error).message); }
   });
   r.use((req,res,next) => { if (!authorize(req)) { res.status(401).json({ error: "Unauthorized" }); return; } next(); });
+  r.get("/work/model-advice", async(req,res)=>{try{res.json(await modelAdvice(owner(req)));}catch(e){error(res,e);}});
   r.get("/work/jobs/:id", (req,res)=>{try{const o=owner(req),job=get<WorkJob>("job",o,String(req.params.id));get("chat",o,job.chatId);res.json(publicJob(job));}catch(e){error(res,e);}});
   r.post("/work/jobs/:id/cancel", (req,res)=>{try{res.json(cancelJob(owner(req),String(req.params.id)));}catch(e){error(res,e);}});
   r.get("/work/chats/:id/job", (req,res)=>{try{const job=chatJob(owner(req),String(req.params.id));res.json({job:job?publicJob(job):null});}catch(e){error(res,e);}});

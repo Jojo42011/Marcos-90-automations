@@ -14,8 +14,8 @@
  * `refreshCatalog()` pulls live pricing and context windows from OpenRouter's
  * own `/models` endpoint when it is reachable.
  *
- * THE REFRESH IS NEVER ON THE CHAT PATH. It is called from the models UI
- * endpoint, in the background, and every failure mode — no key, network down,
+ * Ordinary chat generation does not wait for a refresh. The model-advice tool
+ * and onboarding endpoint may await the bounded lookup. Every failure mode — no key, network down,
  * malformed body, timeout — degrades silently to the static table. A pricing
  * lookup must never be the reason a chat turn fails.
  */
@@ -348,6 +348,7 @@ let inFlight: Promise<boolean> | null = null;
 
 /** USD-per-token string from OpenRouter → USD per million, or null if unusable. */
 function perMillion(raw: unknown): number | null {
+  if(raw===null||raw===undefined||raw==="")return null;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return null;
   /* Rounded to six decimals: the multiply lands on values like
@@ -415,6 +416,12 @@ export async function refreshCatalog(opts: { force?: boolean } = {}): Promise<bo
   })();
 
   return inFlight;
+}
+
+export function pricingStatus(modelId:string) {
+  const patch=liveOverlay.get(toSlug(modelId));
+  const quoted=patch?.inputPerM!==undefined&&patch?.outputPerM!==undefined;
+  return {source:quoted?"OpenRouter catalog":"static estimate",checkedAt:quoted?new Date(lastRefreshAt).toISOString():null,fresh:!!quoted&&Date.now()-lastRefreshAt<REFRESH_TTL_MS};
 }
 
 /** Kick a refresh without waiting for it. Safe to call from a request handler. */

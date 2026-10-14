@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.toSlug = toSlug;
 exports.toAnthropicId = toAnthropicId;
 exports.refreshCatalog = refreshCatalog;
+exports.pricingStatus = pricingStatus;
 exports.refreshCatalogInBackground = refreshCatalogInBackground;
 exports.catalogIsLive = catalogIsLive;
 exports.configuredProviders = configuredProviders;
@@ -333,6 +334,8 @@ let lastRefreshAt = 0;
 let inFlight = null;
 /** USD-per-token string from OpenRouter → USD per million, or null if unusable. */
 function perMillion(raw) {
+    if (raw === null || raw === undefined || raw === "")
+        return null;
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0)
         return null;
@@ -411,6 +414,11 @@ async function refreshCatalog(opts = {}) {
         }
     })();
     return inFlight;
+}
+function pricingStatus(modelId) {
+    const patch = liveOverlay.get(toSlug(modelId));
+    const quoted = patch?.inputPerM !== undefined && patch?.outputPerM !== undefined;
+    return { source: quoted ? "OpenRouter catalog" : "static estimate", checkedAt: quoted ? new Date(lastRefreshAt).toISOString() : null, fresh: !!quoted && Date.now() - lastRefreshAt < REFRESH_TTL_MS };
 }
 /** Kick a refresh without waiting for it. Safe to call from a request handler. */
 function refreshCatalogInBackground() {

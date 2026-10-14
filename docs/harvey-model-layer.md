@@ -46,3 +46,9 @@ Provider keys are OPENROUTER_API_KEY and ANTHROPIC_API_KEY. Model overrides, con
 ## Verification
 
 scripts/verify-harvey-model-layer.mjs, verify-harvey-approval.mjs, verify-harvey-routes.mjs, verify-harvey-work.mjs and verify-harvey-reliability.mjs cover relevant contracts. See CI configuration for which checks run automatically. Fixture results do not establish live provider availability or task accuracy.
+
+## Task guidance and onboarding
+
+The authenticated /api/harvey/work/model-advice endpoint and model_advice tool share available configured models, routing, image capability and an illustrative uncached 10,000-input/2,000-output-token cost. Each price is labeled with catalog provenance/freshness; null provider prices retain static estimates instead of becoming zero. A model response estimate is not an entire-task quote.
+
+The Models screen provides lower-cost routine/visual candidates and the configured multi-step option. Selection preserves the existing per-chat pinning behavior. Auto follows routing and is not guaranteed cheapest. Cost tier is not evidence of quality or speed: successful call latency is aggregated over seven days for the current owner's latest 200 chat sessions only, with at least three samples. These observations are not controlled benchmarks. Missing timings remain unknown. Model advice cannot inspect provider balances and does not change limits or settings.
