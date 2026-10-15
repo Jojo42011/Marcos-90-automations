@@ -85,4 +85,9 @@ for(let i=0;i<4;i++){
 }
 assert.equal(S.get('job','alice',broken.id).status,'needs_attention');assert.equal(S.get('job','alice',broken.id).result.failure.kind,'invalid_model_response');
 console.log('ok 30 batches retain distinct source/destination and job identity without duplicate records; persistent malformed service responses stop after bounded automatic recovery');
+const oldChat=S.createChat('alice',{}),old=J.enqueueJob('alice',oldChat.id,{requestId:'uncapped-age',message:'Finish all remaining profiles'});
+S.put('job','alice',{...S.get('job','alice',old.id),createdAt:new Date(Date.now()-72*60*60_000).toISOString(),continuationCount:1000});
+await J.executeJob('alice',old.id,async(_o,_c,_p,opts)=>{assert.equal(opts.checkpointAt,undefined);assert(!opts.signal.aborted);return {speech:'Remaining profiles completed',verification:{status:'completed'}};});
+assert.equal(S.get('job','alice',old.id).status,'completed');
+console.log('ok interactive jobs continue beyond 24 hours and 256 yields without an elapsed-task checkpoint');
 S.closeStore();

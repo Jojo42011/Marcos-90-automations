@@ -79,19 +79,16 @@ async function executeJob(owner, id, executor = runtime_js_1.runChat) {
         return;
     const controller = new AbortController();
     controllers.set(key(owner, id), controller);
-    const timer = setTimeout(() => controller.abort(), 15 * 60_000);
-    timer.unref();
+    // Interactive jobs run until their outcome, cancellation or a real failure.
+    // Individual browser/provider operations retain their own hang timeouts.
+    const timer = job.originChatId ? setTimeout(() => controller.abort(), 15 * 60_000) : undefined;
+    timer?.unref();
     const approvals = [...(job.result?.approvals || [])], schedules = [...(job.result?.schedules || [])];
     try {
-        if ((job.continuationCount || 0) >= 256 || Date.now() - Date.parse(job.createdAt) > 24 * 60 * 60_000) {
-            job.status = "needs_attention";
-            job.result = { text: "The saved task reached its " + ((job.continuationCount || 0) >= 256 ? "continuation limit" : "24-hour time limit") + ". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.", needsAttention: true };
-            return;
-        }
         const prompt = job.continuationCount ? job.prompt + "\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): " + job.resumeReason + ((job.stalledContinuations || 0) > 0 ? "\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail." : "") : job.prompt;
         const receipts = [];
         let segmentCost = 0;
-        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, workRequestId: job.id, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, checkpointAt: Date.now() + 12 * 60_000, onEvidence: r => {
+        const result = await executor(owner, (0, store_js_1.get)("chat", owner, job.chatId), prompt, { actorId: job.actorId || owner, modelOverride: job.model, workRequestId: job.id, allowContinuation: !job.originChatId, continuationTurn: !!job.continuationCount, workDelegated: !!job.originChatId, signal: controller.signal, onEvidence: r => {
                 receipts.push(r);
                 const current = (0, store_js_1.get)("job", owner, id);
                 current.safeResume = (0, exports.safeRecovery)(receipts);

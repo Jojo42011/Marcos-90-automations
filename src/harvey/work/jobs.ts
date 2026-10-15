@@ -53,16 +53,15 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
   job=workDb().transaction(()=>{const current=get<WorkJob>("job",owner,id);if(!due(current))return null;return put("job",owner,{...current,status:"running" as const,updatedAt:new Date().toISOString()});}).immediate();
   if(!job)return;
   const controller=new AbortController();controllers.set(key(owner,id),controller);
-  const timer=setTimeout(()=>controller.abort(),15*60_000);timer.unref();
+  // Interactive jobs run until their outcome, cancellation or a real failure.
+  // Individual browser/provider operations retain their own hang timeouts.
+  const timer=job.originChatId?setTimeout(()=>controller.abort(),15*60_000):undefined;timer?.unref();
   const approvals:unknown[]=[...(job.result?.approvals||[])],schedules:unknown[]=[...(job.result?.schedules||[])];
   try {
-    if((job.continuationCount||0)>=256||Date.now()-Date.parse(job.createdAt)>24*60*60_000){
-      job.status="needs_attention";job.result={text:"The saved task reached its "+((job.continuationCount||0)>=256?"continuation limit":"24-hour time limit")+". Completed work is retained. This is an application limit, not proof that provider credits or source data are missing.",needsAttention:true};return;
-    }
     const prompt=job.continuationCount ? job.prompt+"\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): "+job.resumeReason+((job.stalledContinuations||0)>0?"\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail.":"") : job.prompt;
     const receipts:Receipt[]=[];
     let segmentCost=0;
-    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,checkpointAt:Date.now()+12*60_000,onEvidence:r=>{
+    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,onEvidence:r=>{
       receipts.push(r);const current=get<WorkJob>("job",owner,id);current.safeResume=safeRecovery(receipts);put("job",owner,current);
     },onEvent:e=>{
       if(e.type==="usage"){const current=get<WorkJob>("job",owner,id);segmentCost+=e.costUsd;current.totalCostUsd=(current.totalCostUsd||0)+e.costUsd;put("job",owner,current);return;}
