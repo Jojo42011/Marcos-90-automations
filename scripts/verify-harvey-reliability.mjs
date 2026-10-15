@@ -47,6 +47,7 @@ ok('CRM GET receipts are observations and writes still require read-back',()=>{
 });
 
 const repairAttempts=new Map();
+let bulkCalls=0;
 const calls=[];let releaseSlow,slowStarted,transientCalls=0;
 const slowReady=new Promise(r=>slowStarted=r),slowHold=new Promise(r=>releaseSlow=r);
 const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:{usage_monthly:0}}));return;}let raw='';req.on('data',b=>raw+=b);req.on('end',async()=>{
@@ -55,7 +56,12 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
  const toolMessages=b.messages.filter(m=>m.role==='tool');const n=toolMessages.length;
  let response={role:'assistant',content:'A conversational fixture answer.'};
  const tc=(name,args)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+n,type:'function',function:{name,arguments:JSON.stringify(args)}}]});
- if(JSON.stringify(b.messages).includes('AUTO_BROWSER_VISION_FIXTURE')){
+ if(user.includes('SIX_HUNDRED_ACTIONS_FIXTURE')){
+   const k=bulkCalls++;
+   assert(b.tools?.some(t=>t.function.name==='computer'),'Tools must remain available beyond the old round limit');
+   response=k<600?tc('computer',{action:'call',tool:k%2?'browser_snapshot':'browser_click',arguments:k%2?{depth:k+1}:{target:'#profile-'+Math.floor(k/12)+'-section-'+Math.floor(k%12/2)}}):k===600?tc('report_verification',{status:'completed',evidenceIds:['e600'],checks:['All 50 fixture profiles have six observed sections'],limitations:[]}):{role:'assistant',content:'All 50 fixture profiles are complete.'};
+ }
+ else if(JSON.stringify(b.messages).includes('AUTO_BROWSER_VISION_FIXTURE')){
    if(n===1){assert.notEqual(b.model,'inception/mercury-2.5');assert(JSON.stringify(b.messages).includes('image_url'));}
    response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):{role:'assistant',content:'The visual step is done.'};
  }
@@ -90,11 +96,7 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
    response=n<steps.length?tc(...steps[n]):{role:'assistant',content:'The saved render is still pending.'};
  }
  else if(user.includes('CONTINUATION_CHECKPOINT_FIXTURE')){
-   const checkpoint=b.tools?.some(t=>t.function.name==='continue_work')&&!b.tools?.some(t=>t.function.name==='computer');
-   response=checkpoint?{role:'assistant',content:'',tool_calls:[
-     {id:'forbidden',type:'function',function:{name:'computer',arguments:JSON.stringify({action:'call',tool:'browser_click',arguments:{target:'#generate'}})}},
-     {id:'checkpoint',type:'function',function:{name:'continue_work',arguments:JSON.stringify({delaySeconds:30,reason:'Inspect existing render then export.',evidenceId:'e29',quote:'Rendering at 46%'})}}
-   ]}:b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):{role:'assistant',content:'Stopped.'};
+   response=n>=29?tc('continue_work',{delaySeconds:30,reason:'Inspect existing render then export.',evidenceId:'e29',quote:'Rendering at 46%'}):tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}});
  }
  else if(user.includes('SUMMARY_RECOVERY_FIXTURE')){
    response=b.tools?.length?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'The files are ready. The last step is still pending.'};
@@ -186,6 +188,12 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ let bulkExecuted=0;const profiles=new Map();
+ const bulk=await runAgentLoop({message:'Finish 50 profiles SIX_HUNDRED_ACTIONS_FIXTURE',job:'agent',modelOverride:'openai/fixture',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',pendingWork:()=>bulkExecuted<600,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_name,input)=>{const k=bulkExecuted++;assert.equal(input.tool,k%2?'browser_snapshot':'browser_click');if(k%2){const id=Math.floor(k/12);profiles.set(id,[...(profiles.get(id)||[]),Math.floor(k%12/2)]);}return {profile:Math.floor(k/12),section:Math.floor(k%12/2),text:'Observed fixture section '+k};}}});
+ ok('one request executes 600 tools and completes 50 profiles without continue, even past the old timer',()=>{assert.equal(bulkExecuted,600);assert.equal(profiles.size,50);for(const sections of profiles.values())assert.deepEqual(sections,[0,1,2,3,4,5]);assert.equal(bulk.verification.status,'completed');assert(!bulk.continuation);assert(!bulk.modelError);});
+ bulkCalls=0;let cancelledTools=0;const longStop=new AbortController();
+ await assert.rejects(()=>runAgentLoop({message:'Finish 50 profiles SIX_HUNDRED_ACTIONS_FIXTURE',job:'agent',modelOverride:'openai/fixture',allowContinuation:true,signal:longStop.signal,workRuntime:{context:'Fixture',pendingWork:()=>true,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{if(++cancelledTools===40)longStop.abort();return {text:'Observed section '+cancelledTools};}}}),/abort/i);
+ ok('user cancellation still stops an unrestricted task after its 40th action',()=>assert.equal(cancelledTools,40));
  for(const invalidCall of [false,true]){
    let reads=0;
    const simple=await runAgentLoop({message:"What's left? "+(invalidCall?'PLAIN_STATUS_CALL_FIXTURE':'PLAIN_STATUS_FIXTURE'),modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[{name:'workspace_files',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{reads++;return {files:[{name:'ready.mp4'}]};}}});
@@ -223,8 +231,8 @@ try{
  const partial=await runtime.runChat('partial-task',partialChat,'Export 50 profiles PARTIAL_COMPLETE_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
  ok('verified first profile is not completion of the unfinished 50-profile plan',()=>assert(partial.continuation));
  let checkpointClicks=0,checkpointReads=0;
- const afterClick=await runAgentLoop({message:'Finish CHECKPOINT_WRITE_FIXTURE',job:'agent',allowContinuation:true,modelOverride:'openai/fixture',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}})),execute:async(_n,i)=>{if(i.tool==='browser_click'){assert.equal(i.arguments.target,'#source-filter');checkpointClicks++;}else checkpointReads++;return {text:'Source filter is open; 49 profiles remain',read:checkpointReads};}}});
- ok('last click receives observation-only readback and automatically continues; extra checkpoint click blocked',()=>{assert.equal(checkpointClicks,1);assert.equal(checkpointReads,29);assert(afterClick.continuation);});
+ const afterClick=await runAgentLoop({message:'Finish CHECKPOINT_WRITE_FIXTURE',job:'agent',allowContinuation:true,modelOverride:'openai/fixture',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}})),execute:async(_n,i)=>{if(i.tool==='browser_click')checkpointClicks++;else checkpointReads++;return {text:'Source filter is open; 49 profiles remain',read:checkpointReads};}}});
+ ok('actions and readbacks remain available at the former checkpoint boundary',()=>{assert.equal(checkpointClicks,2);assert.equal(checkpointReads,29);assert(afterClick.continuation);});
  const loginChat=store.createChat('login-repair',{});
  const loginRepair=await runtime.runChat('login-repair',loginChat,'now log in ALWAYS_EMPTY_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
  ok('short login request recovers malformed model replies without another user continue',()=>assert.equal(loginRepair.continuation?.recovery,'model_response'));
@@ -241,9 +249,9 @@ try{
  let continuationReads=0;
  const continuationTools=['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}}));
  const checkpointed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot','Checkpoint round must reject a fabricated external action');continuationReads++;return {text:'Rendering at 46%'};}}});
- ok('reserved checkpoint yields unfinished work with observed state and cannot run external actions',()=>{assert.equal(continuationReads,29);assert.equal(checkpointed.continuation.delaySeconds,30);assert.match(checkpointed.continuation.reason,/existing render/);});
- const elapsed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot');return {text:'Current page inspected'};}}});
- ok('elapsed segment permits one read-only checkpoint before the hard task timer',()=>{assert.equal(elapsed.verification?.receipts.length,1);assert(elapsed.continuation);});
+ ok('explicit observed external wait still yields the saved job',()=>{assert.equal(continuationReads,29);assert.equal(checkpointed.continuation.delaySeconds,30);assert.match(checkpointed.continuation.reason,/existing render/);});
+ const elapsed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot');return {text:'Rendering at 46%'};}}});
+ ok('old elapsed checkpoint cannot remove tools or end an interactive task',()=>{assert.equal(elapsed.verification?.receipts.length,29);assert(elapsed.continuation);});
  if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
  for(const available of [true,false]){
    let mailDiscovery=0;

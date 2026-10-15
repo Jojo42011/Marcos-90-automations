@@ -262,7 +262,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let emailRecoveryPrompted = false;
     let plainStatusRewrite = false;
     let substituted;
-    const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
+    // A saved interactive task owns its execution lifetime. Tool rounds are not
+    // user turns: never remove its tools just because it performed 29 actions.
+    const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime && (0, execution_js_1.executionRequest)(opts.message);
+    const stepBudget = uninterrupted ? Infinity : opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
+    let idleToolRounds = 0;
+    let falseLimitReminders = 0;
     /**
      * Run one tool call, refusing an identical repeat.
      *
@@ -416,7 +421,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let providerRetries = 0;
     for (let step = 0; step < stepBudget; step++) {
         opts.signal?.throwIfAborted();
-        if (opts.allowContinuation && opts.checkpointAt && Date.now() >= opts.checkpointAt && step < stepBudget - 3)
+        if (!uninterrupted && opts.allowContinuation && opts.checkpointAt && Date.now() >= opts.checkpointAt && step < stepBudget - 3)
             step = stepBudget - 3;
         /* The final round runs with tools WITHHELD. The budget then ends in an
            answer assembled from everything gathered, instead of the dead-end
@@ -537,6 +542,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             return { speech: "The AI service repeatedly returned an empty or unusable response. The task is unfinished. Saved work is retained; any action without a confirmed result must be inspected before retrying.", modelError: "Empty or malformed model response after bounded repair; finish reason: " + String(out.stopReason || "unknown"), verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
         }
         if (!out.toolUses.length) {
+            if (uninterrupted && (0, execution_js_1.segmentLimit)(out.text) && falseLimitReminders < 2) {
+                falseLimitReminders++;
+                system += "\nRUNTIME CORRECTION: This saved task has NO tool-round or elapsed-task-time cutoff. All execution tools remain available. The previous draft's execution-limit claim is false. Continue the authorized work now; do not ask for another continue, reduce the requested scope, or substitute a different workflow. Keep the existing browser and saved records. Only actual completion, cancellation, an observed blocker, persistent no-progress, or provider/budget failure ends the task.";
+                continue;
+            }
             const browserReceipts = verification.result().receipts.filter(r => r.tool === "computer");
             if (opts.allowContinuation && opts.workRuntime && !summaryRound && !scrollRecoveryPrompted && browserReceipts.length && /(?:manual(?:ly)? scroll|you (?:must|need to|can|should) scroll|(?:automation|I) (?:can.t|cannot|can not) scroll|copy.paste approach|physically scrolling)/i.test(out.text) && !/captcha|disconnected|expired|permission denied|sign in yourself/i.test(out.text)) {
                 scrollRecoveryPrompted = true;
@@ -547,7 +557,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 const checkpoint = verification.continuationCheckpoint();
                 if (checkpoint && (0, reliability_js_1.canResumeFromReceipts)(verification.result().receipts, true))
                     return { speech: "Continuing the remaining work automatically.", continuation: { delaySeconds: 10, reason: "Inspect the current state and saved work_records, then finish the remaining task_plan steps. Do not repeat completed actions.", progressKey: checkpoint.progressKey }, verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens };
-                if (!checkpoint && !summaryRound && unfinishedReminders >= 2) {
+                if (!uninterrupted && !checkpoint && !summaryRound && unfinishedReminders >= 2) {
                     step = stepBudget - 4;
                     continue;
                 }
@@ -603,6 +613,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             };
         }
         hadToolOnly = !out.text.trim();
+        const receiptStart = verification.result().receipts.length;
         const toolResults = [];
         if (opts.workRuntime) {
             // Preserve dependency and evidence order, including verification tools that
@@ -612,6 +623,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: toolResultContent(allowed ? await runTool(tu.name, tu.input || {}) : { error: "Tool is not available in this round; checkpoint browser access is observation-only" }) });
                 if (continuation)
                     return { speech: "Work is saved and will continue after the current step is ready.", continuation, verification: verification.result(), toolRounds: toolRounds + 1, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens };
+            }
+            if (uninterrupted) {
+                const progressed = verification.result().receipts.slice(receiptStart).some(r => r.outcome === "returned");
+                idleToolRounds = progressed ? 0 : idleToolRounds + 1;
+                if (progressed)
+                    falseLimitReminders = 0;
+                if (idleToolRounds >= 8)
+                    return { speech: "The last eight tool rounds produced no successful operation. The task is unfinished; I could not recover from the repeated tool failures. Saved work is retained.", verification: verification.result(), modelError: "Repeated tool failures without progress", toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens };
             }
         }
         else {

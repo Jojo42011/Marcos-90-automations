@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { segmentLimit } from "../harvey/work/execution.js";
+import { executionRequest, segmentLimit } from "../harvey/work/execution.js";
 import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
@@ -424,7 +424,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let plainStatusRewrite = false;
   let substituted: { asked: string; ran: string } | undefined;
 
-  const stepBudget = opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
+  // A saved interactive task owns its execution lifetime. Tool rounds are not
+  // user turns: never remove its tools just because it performed 29 actions.
+  const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime && executionRequest(opts.message);
+  const stepBudget = uninterrupted ? Infinity : opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
+  let idleToolRounds=0;
+  let falseLimitReminders=0;
 
   /**
    * Run one tool call, refusing an identical repeat.
@@ -543,7 +548,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let providerRetries=0;
   for (let step = 0; step < stepBudget; step++) {
     opts.signal?.throwIfAborted();
-    if(opts.allowContinuation && opts.checkpointAt && Date.now()>=opts.checkpointAt && step<stepBudget-3)step=stepBudget-3;
+    if(!uninterrupted && opts.allowContinuation && opts.checkpointAt && Date.now()>=opts.checkpointAt && step<stepBudget-3)step=stepBudget-3;
     /* The final round runs with tools WITHHELD. The budget then ends in an
        answer assembled from everything gathered, instead of the dead-end
        "hit the tool loop limit" that discarded the whole turn's work. */
@@ -656,6 +661,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       return {speech:"The AI service repeatedly returned an empty or unusable response. The task is unfinished. Saved work is retained; any action without a confirmed result must be inspected before retrying.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }
     if (!out.toolUses.length) {
+      if(uninterrupted && segmentLimit(out.text) && falseLimitReminders<2){
+        falseLimitReminders++;
+        system+="\nRUNTIME CORRECTION: This saved task has NO tool-round or elapsed-task-time cutoff. All execution tools remain available. The previous draft's execution-limit claim is false. Continue the authorized work now; do not ask for another continue, reduce the requested scope, or substitute a different workflow. Keep the existing browser and saved records. Only actual completion, cancellation, an observed blocker, persistent no-progress, or provider/budget failure ends the task.";
+        continue;
+      }
       const browserReceipts=verification.result().receipts.filter(r=>r.tool==="computer");
       if(opts.allowContinuation && opts.workRuntime && !summaryRound && !scrollRecoveryPrompted && browserReceipts.length && /(?:manual(?:ly)? scroll|you (?:must|need to|can|should) scroll|(?:automation|I) (?:can.t|cannot|can not) scroll|copy.paste approach|physically scrolling)/i.test(out.text) && !/captcha|disconnected|expired|permission denied|sign in yourself/i.test(out.text)){
         scrollRecoveryPrompted=true;
@@ -665,7 +675,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && (summaryRound || unfinishedReminders>=2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))){
         const checkpoint=verification.continuationCheckpoint();
         if(checkpoint && canResumeFromReceipts(verification.result().receipts,true))return {speech:"Continuing the remaining work automatically.",continuation:{delaySeconds:10,reason:"Inspect the current state and saved work_records, then finish the remaining task_plan steps. Do not repeat completed actions.",progressKey:checkpoint.progressKey},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
-        if(!checkpoint && !summaryRound && unfinishedReminders>=2){step=stepBudget-4;continue;}
+        if(!uninterrupted && !checkpoint && !summaryRound && unfinishedReminders>=2){step=stepBudget-4;continue;}
       }
       if(opts.allowContinuation && !summaryRound && unfinishedReminders<2 && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked"){
         unfinishedReminders++;
@@ -720,6 +730,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
     hadToolOnly = !out.text.trim();
 
+    const receiptStart=verification.result().receipts.length;
     const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
     if (opts.workRuntime) {
       // Preserve dependency and evidence order, including verification tools that
@@ -728,6 +739,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         const allowed=stepTools?.some(t=>t.name===tu.name) && !(checkpointRound && tu.name==="computer" && !isObservation(tu.name,tu.input||{}));
         toolResults.push({type:"tool_result",tool_use_id:tu.id,content:toolResultContent(allowed?await runTool(tu.name,tu.input||{}):{error:"Tool is not available in this round; checkpoint browser access is observation-only"})});
         if(continuation) return {speech:"Work is saved and will continue after the current step is ready.",continuation,verification:verification.result(),toolRounds:toolRounds+1,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
+      }
+      if(uninterrupted){
+        const progressed=verification.result().receipts.slice(receiptStart).some(r=>r.outcome==="returned");
+        idleToolRounds=progressed?0:idleToolRounds+1;
+        if(progressed)falseLimitReminders=0;
+        if(idleToolRounds>=8)return {speech:"The last eight tool rounds produced no successful operation. The task is unfinished; I could not recover from the repeated tool failures. Saved work is retained.",verification:verification.result(),modelError:"Repeated tool failures without progress",toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
       }
     } else {
       toolResults.push(...await Promise.all(out.toolUses.map(async tu=>({type:"tool_result" as const,tool_use_id:tu.id,content:toolResultContent(await runTool(tu.name,tu.input||{}))}))));
