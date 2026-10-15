@@ -9,7 +9,7 @@ import http from 'node:http';
 import {randomUUID} from 'node:crypto';
 const require=createRequire(import.meta.url),dir=mkdtempSync(join(tmpdir(),'harvey-reliability-'));
 for(const k of Object.keys(process.env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|DATABASE_URL|DB_JSON_PATH|COMPOSIO|HARVEY_WORK_DIR|TENANT_OWNER_ID/.test(k))delete process.env[k];
-Object.assign(process.env,{TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),HARVEY_VAULT_KEY:'12'.repeat(32),HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_ENABLED:'false',DOTENV_CONFIG_PATH:join(dir,'no-env')});
+Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:join(dir,'budget.db'),HARVEY_VAULT_KEY:'12'.repeat(32),HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_ENABLED:'false',DOTENV_CONFIG_PATH:join(dir,'no-env')});
 const originalFetch=global.fetch;
 global.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url||String(url));assert(['127.0.0.1','localhost'].includes(u.hostname),'External request blocked: '+u.hostname);return originalFetch(url,...args);};
 const root=resolve('dist/src'),store=require(join(root,'harvey/work/store.js')),rel=require(join(root,'harvey/reliability.js'));
