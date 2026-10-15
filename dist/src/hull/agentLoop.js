@@ -243,6 +243,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let observationRevision = 0;
     let continuation;
     let unfinishedReminders = 0;
+    let scrollRecoveryPrompted = false;
     const safeBrowserRetry = new Set();
     /* Calls held by the gate. The turn still finishes; these did not run. */
     const heldApprovals = [];
@@ -279,7 +280,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
                 return { error: "VIDEO RECOVERY BUDGET REACHED", diagnostic: { code: "recovery_exhausted", message: "Two edit calls for this source already ran; automatic recovery is inside the tool.", detail: "Use inspect_video and the retained error. Do not vary arguments to retry the same failing source or claim an unverified codec limitation." } };
         }
         const read = (0, reliability_js_1.isObservation)(name, input) || (0, reliability_js_1.isDiscovery)(name, input);
-        const sig = signature(name, input) + (opts.workRuntime && read ? `:${observationRevision}` : "");
+        const scrolling = opts.workRuntime && name === "computer" && input.action === "call" && ["browser_scroll", "browser_mouse_wheel"].includes(String(input.tool));
+        const scrollCheckpoint = scrolling ? verification.continuationCheckpoint() : null;
+        if (scrolling && !scrollCheckpoint)
+            return { error: "Inspect the current page or scroll region before scrolling again. Read fresh rows after each scroll." };
+        const sig = signature(name, input) + (scrolling ? ":" + scrollCheckpoint.progressKey : "") + (opts.workRuntime && read ? `:${observationRevision}` : "");
         const seen = (callCounts.get(sig) || 0) + 1;
         callCounts.set(sig, seen);
         const polling = opts.workRuntime && name === "computer" && input.action === "call" && input.tool === "browser_wait_for";
@@ -526,6 +531,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             return { speech: "I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.", modelError: "Empty or malformed model response after bounded repair; finish reason: " + String(out.stopReason || "unknown"), verification: verification.result(), toolRounds, model, modelUsed: lastModelUsed, costUsd, promptTokens, completionTokens, cachedTokens, contextPlan: lastPlan };
         }
         if (!out.toolUses.length) {
+            const browserReceipts = verification.result().receipts.filter(r => r.tool === "computer");
+            if (opts.allowContinuation && opts.workRuntime && !summaryRound && !scrollRecoveryPrompted && browserReceipts.length && /(?:manual(?:ly)? scroll|you (?:must|need to|can|should) scroll|(?:automation|I) (?:can.t|cannot|can not) scroll|copy.paste approach|physically scrolling)/i.test(out.text) && !/captcha|disconnected|expired|permission denied|sign in yourself/i.test(out.text)) {
+                scrollRecoveryPrompted = true;
+                system += "\nBROWSER RETRIEVAL RECOVERY: Do not hand ordinary scrolling or copying back to the user based on missing rows. Discover this computer's tools and try browser_scroll with an observed scroll container (hosted: browser_inspect_scroll_regions; local: fresh snapshot refs), then read fresh rows. These semantic tools do not require a vision model. A saved snapshot offset is not scrolling. Check actual pagination/native export if appropriate. Preserve the user's filters and saved records. If an attempted operation genuinely fails, report that exact observed reason; do not infer missing data or unsupported automation. This correction does not authorize external writes or expand task scope.";
+                continue;
+            }
             if (opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status !== "completed" && verification.result().status !== "blocked" && (summaryRound || unfinishedReminders >= 2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))) {
                 const checkpoint = verification.continuationCheckpoint();
                 if (checkpoint)

@@ -37,6 +37,7 @@ function resourceScope(name:string,input:any):string {
   if(name.startsWith("plugin_"))return stableCallKey("connection",input.connectionId);
   if(name==="COMPOSIO_MULTI_EXECUTE_TOOL")return stableCallKey("managed",[input.harvey_connection_scope,(input.tools||[]).map((t:any)=>String(t.tool_slug).split("_")[0]).sort()]);
   if(name==="business_call")return "business:"+String(input.tool||"").replace(/^(create|update|delete|get|list|search|find|read)_/,"").replace(/s$/,"");
+  if(name==="work_records"&&input.action==="export")return "files";
   if(name==="inspect_video"||name==="edit_video"||name==="workspace_files"||name==="workspace_download")return "files";
   return name;
 }
@@ -47,7 +48,7 @@ export function isObservation(name: string, input: any): boolean {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
   }
-  if (name === "computer") return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_read_table|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
+  if (name === "computer") return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_inspect_scroll_regions|browser_read_table|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
   if (name === "plugin_request") return String(input.method || "GET").toUpperCase() === "GET";
   if (name === "business_call" && input.tool === "crm_api") return String(input.arguments?.method||"GET").toUpperCase()==="GET";
   if (name === "business_call" && input.tool === "crm_api_index") return true;
@@ -85,7 +86,7 @@ export class TurnVerification {
     if(!Array.isArray(records)||!records.length||records.length>30)throw Error("Provide 1–30 records with observed IDs and field paths");
     return records.map((record:any)=>{
       const receipt=this.receipts.find(r=>r.id===record.evidenceId);
-      if(!receipt?.observation||receipt.outcome!=="returned"||receipt.limitation)throw Error("Records require successful readable observation evidence");
+      if(!receipt?.observation||receipt.outcome!=="returned"||receipt.limitation||receipt.truncated)throw Error("Records require successful readable, untruncated observation evidence");
       const read=(path:any)=>{
         if(typeof path!=="string"||!path.startsWith("/")||path.length>1000)throw Error("Use a JSON pointer into observed structured data");
         let value:any=this.sources.get(receipt.id);

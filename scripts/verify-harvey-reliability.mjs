@@ -66,6 +66,13 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
    const rewrite=JSON.stringify(b.messages).includes('Rewrite the draft below into 2–4 short, plain sentences for Marco.');
    response=!rewrite&&n===0?tc('workspace_files',{}):rewrite?(JSON.stringify(b.messages).includes('PLAIN_STATUS_CALL_FIXTURE')?tc('workspace_files',{}):{role:'assistant',content:'Both videos are ready. They still need to be combined, and I have not started that step.'}):{role:'assistant',content:'## Technical status\n'+('The source files are prepared; combining them is still pending. '.repeat(14))};
  }
+ else if(user.includes('SCROLL_PAGING_FIXTURE')){
+   response=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n<9?tc('computer',{action:'call',tool:n%2?'browser_scroll':'browser_read_table',arguments:n%2?{target:'#leads',deltaY:600}:{}}):n===9?tc('report_verification',{status:'completed',evidenceIds:['e9'],checks:['Read final page'],limitations:[]}):{role:'assistant',content:'All fixture pages read.'};
+ }
+ else if(user.includes('SCROLL_RECOVERY_FIXTURE')){
+   const repaired=JSON.stringify(b.messages).includes('BROWSER RETRIEVAL RECOVERY');
+   response=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===1&&!repaired?{role:'assistant',content:'The site requires physically scrolling, which my automation cannot do. Try manual scroll and screenshot.'}:n===1?tc('computer',{action:'call',tool:'browser_scroll',arguments:{deltaY:600}}):n===2?tc('computer',{action:'call',tool:'browser_read_table',arguments:{}}):n===3?tc('report_verification',{status:'completed',evidenceIds:['e3'],checks:['Read rows after scrolling'],limitations:[]}):{role:'assistant',content:'Retrieved rows after scrolling.'};
+ }
  else if(user.includes('AUTO_YIELD_RUNTIME_FIXTURE')){
    response=n===0?tc('workspace_files',{}):{role:'assistant',content:'I reached the execution limit. Just say continue and I will finish.'};
  }
@@ -180,6 +187,12 @@ try{
    const result=await require(join(root,'harvey/work/runtime.js')).runChat('continuation-fixture',continuationChat,(execution?'Finish':'Did you finish')+' CONTINUATION_RUNTIME_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
    ok('real runtime continuation requires an execution request and unfinished plan '+execution,()=>assert.equal(!!result.continuation,execution));
  }
+ let pagingScrolls=0;
+ const paged=await runAgentLoop({message:'Read all SCROLL_PAGING_FIXTURE',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_n,i)=>{if(i.tool==='browser_scroll')pagingScrolls++;return {rows:[{page:pagingScrolls}]};}}});
+ ok('identical scroll gestures can advance after distinct fresh page observations',()=>{assert.equal(pagingScrolls,4);assert.equal(paged.verification.status,'completed');});
+ let scrollCalls=0;
+ const scrollRecovery=await runAgentLoop({message:'Export leads SCROLL_RECOVERY_FIXTURE',modelOverride:'inception/mercury-2.5',allowContinuation:true,workRuntime:{context:'Fixture',tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_n,i)=>{if(i.tool==='browser_scroll')scrollCalls++;return {rows:i.tool==='browser_read_table'?[{name:'Fixture'}]:[]};}}});
+ ok('unsupported manual-scroll handoff retries supported retrieval with text-only model',()=>{assert.equal(scrollCalls,1);assert.match(scrollRecovery.speech,/Retrieved rows/);assert.equal(scrollRecovery.verification.status,'completed');});
  const autoChat=store.createChat('auto-yield-fixture',{});
  const automatic=await require(join(root,'harvey/work/runtime.js')).runChat('auto-yield-fixture',autoChat,'How many records are in each group? AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'auto-job',modelOverride:'openai/fixture'});
  ok('counting task seeds its plan and continues even when the model asks the user to continue',()=>{assert(automatic.continuation);assert(automatic.continuation.progressKey);assert(!/say continue/i.test(automatic.speech));assert(!store.messages('auto-yield-fixture',autoChat.id).some(m=>m.role==='assistant'&&/continue/i.test(m.content)));});
