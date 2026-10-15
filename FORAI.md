@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-15: Fixed continuation for short batch/login requests, scope corrections and legacy resume commands, including retained plans blocked only by an old turn limit. A final browser click can receive an observation-only checkpoint; step verification no longer completes an unfinished plan. Model-format failures report their actual cause. Transcript regressions cover these paths, pause/status boundaries and blocked checkpoint mutations; live Brivity export completion remains unverified.
+
 - 2026-10-15: Added hosted DOM scroll-region discovery and scrolling for text-only models, with repeated scrolls permitted only against fresh distinct observations. Added verified CSV export of saved work records and a bounded recovery turn for unsupported manual-scroll handoffs. Lazy/virtualized table fixtures verify filtered batches through authenticated download; this is not certification of a live Brivity export. Existing shared monthly allowance, local Chrome and long-task recovery remain unchanged.
 
 - 2026-10-13: Fixed retrieval-task continuation when a model stops early or asks for another continue. Request-scoped plans, source observations and retained private batches support bounded automatic resumption; unchanged observations trigger a different approach and an accurate stop reason. Added rendered-table reading and current model advice with per-model price provenance and owner-scoped response-time observations. Models UI explains costs, capabilities and limits. See docs/harvey-reliability-safeguards.md and docs/harvey-model-layer.md.
