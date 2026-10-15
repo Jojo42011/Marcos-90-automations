@@ -49,3 +49,11 @@ work_records projects JSON pointers from successful current receipts server-side
 Regression: verify-work-continuation.mjs, verify-harvey-onboarding.mjs and verify-harvey-reliability.mjs use isolated fixture stores and local services. Onboarding additionally exercises real Chromium pagination and source projection. The opt-in deployment check runs this same isolated fixture in the image, not a live customer CRM export.
 
 Malformed responses during unfinished interactive work can checkpoint and resume automatically up to three times when there is no unobserved external action. Model markup is never executed as a tool call. Persistent failures remain visible rather than looping indefinitely; the same job budget applies. Transient model transport failures retry the same in-memory request up to three times, preserving tool results.
+
+## Scrolling through retrieval workflows
+
+Hosted computer exposes browser_inspect_scroll_regions and browser_scroll. Fixed DOM operations discover rendered scrollable containers and return before/after positions without screenshot coordinates or model-authored code. Read fresh rows after each scroll. Repeated identical scroll gestures require a distinct successful observation; the write replay guard remains unchanged for submissions. Local Chrome retains its own ref-based scrolling schemas.
+
+A bounded runtime recovery pass challenges unsupported manual-scroll/copy-paste handoffs and asks the model to try its actual tools. Actual authentication, disconnect and authorization barriers still stop work. This is a recovery attempt, not a guarantee that every site is automatable.
+
+work_records export creates an owner/chat-scoped CSV from persisted source projections, reports missing fields, escapes spreadsheet formulas, verifies file contents and reuses identical exports. It neither certifies filters/coverage nor creates a Google Sheet. The model must reconcile the requested scope and use the requested destination; truncated observations cannot be saved as complete source values. verify-lead-export.mjs covers an initially empty lazy table, five virtualized batches, exclusions, duplicates/restart, exact CSV counts and authenticated download.

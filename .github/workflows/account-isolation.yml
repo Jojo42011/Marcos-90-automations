@@ -36,6 +36,7 @@ jobs:
       - run: node scripts/verify-openrouter-budget.mjs
       - run: node --check public/harvey-chat.js
       - run: npx playwright install --with-deps chromium
+      - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-lead-export.mjs
       - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-local-browser.mjs
       - run: PW_CHROMIUM=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-browser-extension.mjs
       - run: HARVEY_BROWSER_EXECUTABLE=$(node -p "require('playwright').chromium.executablePath()") node scripts/verify-harvey-onboarding.mjs
