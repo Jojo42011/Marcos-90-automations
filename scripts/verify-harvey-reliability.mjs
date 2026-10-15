@@ -9,7 +9,7 @@ import http from 'node:http';
 import {randomUUID} from 'node:crypto';
 const require=createRequire(import.meta.url),dir=mkdtempSync(join(tmpdir(),'harvey-reliability-'));
 for(const k of Object.keys(process.env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|DATABASE_URL|DB_JSON_PATH|COMPOSIO|HARVEY_WORK_DIR|TENANT_OWNER_ID/.test(k))delete process.env[k];
-Object.assign(process.env,{TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),HARVEY_VAULT_KEY:'12'.repeat(32),HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_ENABLED:'false',DOTENV_CONFIG_PATH:join(dir,'no-env')});
+Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:join(dir,'budget.db'),HARVEY_VAULT_KEY:'12'.repeat(32),HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_ENABLED:'false',DOTENV_CONFIG_PATH:join(dir,'no-env')});
 const originalFetch=global.fetch;
 global.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url||String(url));assert(['127.0.0.1','localhost'].includes(u.hostname),'External request blocked: '+u.hostname);return originalFetch(url,...args);};
 const root=resolve('dist/src'),store=require(join(root,'harvey/work/store.js')),rel=require(join(root,'harvey/reliability.js'));
@@ -72,6 +72,15 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
  else if(user.includes('SCROLL_RECOVERY_FIXTURE')){
    const repaired=JSON.stringify(b.messages).includes('BROWSER RETRIEVAL RECOVERY');
    response=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===1&&!repaired?{role:'assistant',content:'The site requires physically scrolling, which my automation cannot do. Try manual scroll and screenshot.'}:n===1?tc('computer',{action:'call',tool:'browser_scroll',arguments:{deltaY:600}}):n===2?tc('computer',{action:'call',tool:'browser_read_table',arguments:{}}):n===3?tc('report_verification',{status:'completed',evidenceIds:['e3'],checks:['Read rows after scrolling'],limitations:[]}):{role:'assistant',content:'Retrieved rows after scrolling.'};
+ }
+ else if(user.includes('CHECKPOINT_WRITE_FIXTURE')){
+   response=n<28?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{depth:n+1}}):n===28?tc('computer',{action:'call',tool:'browser_click',arguments:{target:'#source-filter'}}):n===29?{role:'assistant',content:'',tool_calls:[
+     {id:'forbidden',type:'function',function:{name:'computer',arguments:JSON.stringify({action:'call',tool:'browser_click',arguments:{target:'#export'}})}},
+     {id:'readback',type:'function',function:{name:'computer',arguments:JSON.stringify({action:'call',tool:'browser_snapshot',arguments:{}})}}
+   ]}:{role:'assistant',content:'I reached the execution limit. Say continue.'};
+ }
+ else if(user.includes('PARTIAL_COMPLETE_FIXTURE')){
+   response=n===0?tc('workspace_files',{}):n===1?tc('report_verification',{status:'completed',evidenceIds:['e1'],checks:['First profile inspected'],limitations:[]}):{role:'assistant',content:'First profile verified. Say continue for the other 49.'};
  }
  else if(user.includes('AUTO_YIELD_RUNTIME_FIXTURE')){
    response=n===0?tc('workspace_files',{}):{role:'assistant',content:'I reached the execution limit. Just say continue and I will finish.'};
@@ -196,6 +205,29 @@ try{
  const autoChat=store.createChat('auto-yield-fixture',{});
  const automatic=await require(join(root,'harvey/work/runtime.js')).runChat('auto-yield-fixture',autoChat,'How many records are in each group? AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'auto-job',modelOverride:'openai/fixture'});
  ok('counting task seeds its plan and continues even when the model asks the user to continue',()=>{assert(automatic.continuation);assert(automatic.continuation.progressKey);assert(!/say continue/i.test(automatic.speech));assert(!store.messages('auto-yield-fixture',autoChat.id).some(m=>m.role==='assistant'&&/continue/i.test(m.content)));});
+ for(const [index,message] of ['yes, start with 50 leads first','oh i meant, not include Mojo FL.','resume','conitnue','pause','just explain the status'].entries()){
+   const result=await runtime.runChat('auto-yield-fixture',autoChat,message+' AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'followup-'+index,modelOverride:'openai/fixture'});
+   ok('short task/correction/resume retains continuation but pause/status does not: '+message,()=>assert.equal(!!result.continuation,index<4));
+ }
+ const legacyChat=store.createChat('legacy-resume',{});
+ store.append('legacy-resume',legacyChat.id,{role:'user',content:'Read each of 50 lead profiles and export details excluding source Test Exclusion',at:new Date().toISOString()});
+ const legacy=await runtime.runChat('legacy-resume',legacyChat,'resume AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'legacy-job',modelOverride:'openai/fixture'});
+ ok('resume seeds missing legacy plan from authorized task history',()=>assert(legacy.continuation));
+ const retainedPlan=store.list('task_plan','legacy-resume').find(p=>p.chatId===legacyChat.id);
+ for(const [blocker,expected] of [['Paused at the turn execution limit',true],['CAPTCHA requires user approval',false]]){
+   store.put('task_plan','legacy-resume',{...retainedPlan,blocker,status:'blocked'});
+   const resumed=await runtime.runChat('legacy-resume',legacyChat,'resume AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'resume-'+expected,modelOverride:'openai/fixture'});
+   ok('resume clears old turn limits but preserves actual blockers: '+blocker,()=>assert.equal(!!resumed.continuation,expected));
+ }
+ const partialChat=store.createChat('partial-task',{});
+ const partial=await runtime.runChat('partial-task',partialChat,'Export 50 profiles PARTIAL_COMPLETE_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
+ ok('verified first profile is not completion of the unfinished 50-profile plan',()=>assert(partial.continuation));
+ let checkpointClicks=0,checkpointReads=0;
+ const afterClick=await runAgentLoop({message:'Finish CHECKPOINT_WRITE_FIXTURE',job:'agent',allowContinuation:true,modelOverride:'openai/fixture',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}})),execute:async(_n,i)=>{if(i.tool==='browser_click'){assert.equal(i.arguments.target,'#source-filter');checkpointClicks++;}else checkpointReads++;return {text:'Source filter is open; 49 profiles remain',read:checkpointReads};}}});
+ ok('last click receives observation-only readback and automatically continues; extra checkpoint click blocked',()=>{assert.equal(checkpointClicks,1);assert.equal(checkpointReads,29);assert(afterClick.continuation);});
+ const loginChat=store.createChat('login-repair',{});
+ const loginRepair=await runtime.runChat('login-repair',loginChat,'now log in ALWAYS_EMPTY_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});
+ ok('short login request recovers malformed model replies without another user continue',()=>assert.equal(loginRepair.continuation?.recovery,'model_response'));
  const oldAgent=process.env.HARVEY_MODEL_AGENT;
  process.env.HARVEY_MODEL_AGENT='inception/mercury-2.5';
  let autoVisualExecutions=0;
@@ -210,8 +242,8 @@ try{
  const continuationTools=['computer','continue_work'].map(name=>({name,description:'Fixture',input_schema:{type:'object',properties:{}}}));
  const checkpointed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot','Checkpoint round must reject a fabricated external action');continuationReads++;return {text:'Rendering at 46%'};}}});
  ok('reserved checkpoint yields unfinished work with observed state and cannot run external actions',()=>{assert.equal(continuationReads,29);assert.equal(checkpointed.continuation.delaySeconds,30);assert.match(checkpointed.continuation.reason,/existing render/);});
- const elapsed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async()=>{throw new Error('The elapsed segment must not execute more external actions');}}});
- ok('elapsed segment enters checkpoint rounds before the hard task timer',()=>assert.equal(elapsed.verification?.receipts.length,0));
+ const elapsed=await runAgentLoop({message:'Finish CONTINUATION_CHECKPOINT_FIXTURE',job:'agent',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',tools:continuationTools,pendingWork:()=>true,execute:async(_n,i)=>{assert.equal(i.tool,'browser_snapshot');return {text:'Current page inspected'};}}});
+ ok('elapsed segment permits one read-only checkpoint before the hard task timer',()=>{assert.equal(elapsed.verification?.receipts.length,1);assert(elapsed.continuation);});
  if(oldAgent===undefined)delete process.env.HARVEY_MODEL_AGENT;else process.env.HARVEY_MODEL_AGENT=oldAgent;
  for(const available of [true,false]){
    let mailDiscovery=0;

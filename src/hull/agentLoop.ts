@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { segmentLimit } from "../harvey/work/execution.js";
 import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
@@ -503,6 +504,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if(!opts.allowContinuation||!opts.workRuntime.tools.some(t=>t.name==="continue_work"))throw new Error("Continuation is only available inside a saved interactive job");
         if(opts.workRuntime.pendingWork && !opts.workRuntime.pendingWork())throw new Error("Save an unfinished task_plan for this authorized execution request before continuing; do not continue a status question or blocked task");
         verification.continuationEvidence(input.evidenceId,input.quote);
+        if(!canResumeFromReceipts(verification.result().receipts,true))throw new Error("Inspect the affected service after every uncertain action before continuing; an unrelated observation is not a read-back.");
         const delaySeconds=Number(input.delaySeconds);
         if(!Number.isInteger(delaySeconds)||delaySeconds<10||delaySeconds>120)throw new Error("Continuation delay must be 10–120 seconds");
         if(typeof input.reason!=="string"||!input.reason.trim()||input.reason.length>500)throw new Error("Provide a short remaining-work checkpoint, without secrets");
@@ -513,6 +515,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       try{return verification.verifyValues(input);}catch(e){return {error:(e as Error).message};}
     }
     if (opts.workRuntime && name === "report_verification") {
+      if(opts.allowContinuation && input.status==="blocked" && segmentLimit(JSON.stringify(input.limitations||[])))return {error:"The turn limit does not block this saved job. Inspect current state, retain unfinished task_plan steps and continue_work automatically."};
       try { return verification.review(input); } catch (e) { return {error: (e as Error).message}; }
     }
     if(opts.workRuntime&&name==="work_records"&&input.action==="save"){
@@ -547,9 +550,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const lastRound = step === stepBudget - 1;
     const summaryRound = opts.workRuntime ? step >= stepBudget - 3 : lastRound;
     const checkpointRound = !!opts.allowContinuation && !plainStatusRewrite && step === stepBudget - 3;
-    const stepTools = plainStatusRewrite ? undefined : checkpointRound ? activeTools?.filter(t=>["continue_work","report_verification"].includes(t.name)) : summaryRound ? undefined : activeTools;
+    const checkpointReadNeeded = checkpointRound && !verification.continuationCheckpoint();
+    const stepTools = plainStatusRewrite ? undefined : checkpointRound ? activeTools?.filter(t=>["continue_work","report_verification",...(checkpointReadNeeded?["computer"]:[])].includes(t.name)) : summaryRound ? undefined : activeTools;
     const stepSystem = checkpointRound
-      ? system + "\n\nCHECKPOINT ROUND: If authorized plan steps remain without a blocker, use continue_work with an exact current observation and a brief remaining-work note. A continuation preserves this same job and budget; it must inspect current state before further actions. Otherwise report the actual verified result or concrete blocker. No external actions are available in this round."
+      ? system + "\n\nCHECKPOINT ROUND: If authorized plan steps remain without a blocker, use continue_work with an exact current observation and a brief remaining-work note. If the last browser action lacks a read-back, use computer browser_snapshot now; only browser observations are allowed, never clicks, typing, navigation or other mutations. A continuation preserves this same job and budget; it must inspect current state before further actions. Otherwise report the actual verified result or concrete blocker. No external mutations are available in this round."
       : summaryRound && toolRounds > 0
       ? system +
         "\n\nFINAL ROUND: no more actions are available this turn. Report verified progress and the precise unresolved reason using current evidence. If the execution budget is why work stopped, say it paused at its execution limit. Never substitute an unsupported website, alpha, permission or credit diagnosis for an execution or targeting limit. Distinguish an observed application error from a hypothesis. Do not claim the workflow finished without verification."
@@ -649,7 +653,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && canResumeFromReceipts(verification.result().receipts,true)){
         return {speech:"Recovering the AI response and continuing from saved progress.",continuation:{delaySeconds:10,recovery:"model_response",reason:"The last model reply was malformed; no action from that reply ran. Inspect the saved task_plan, work_records and current site before continuing unfinished work. Do not repeat completed actions."},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
       }
-      return {speech:"I stopped before finishing this step. Your files and completed work are saved, so we can pick up from here without starting over.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+      return {speech:"The AI service repeatedly returned an empty or unusable response. The task is unfinished. Saved work is retained; any action without a confirmed result must be inspected before retrying.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }
     if (!out.toolUses.length) {
       const browserReceipts=verification.result().receipts.filter(r=>r.tool==="computer");
@@ -658,13 +662,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         system+="\nBROWSER RETRIEVAL RECOVERY: Do not hand ordinary scrolling or copying back to the user based on missing rows. Discover this computer's tools and try browser_scroll with an observed scroll container (hosted: browser_inspect_scroll_regions; local: fresh snapshot refs), then read fresh rows. These semantic tools do not require a vision model. A saved snapshot offset is not scrolling. Check actual pagination/native export if appropriate. Preserve the user's filters and saved records. If an attempted operation genuinely fails, report that exact observed reason; do not infer missing data or unsupported automation. This correction does not authorize external writes or expand task scope.";
         continue;
       }
-      if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="completed" && verification.result().status!=="blocked" && (summaryRound || unfinishedReminders>=2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))){
+      if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && (summaryRound || unfinishedReminders>=2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))){
         const checkpoint=verification.continuationCheckpoint();
-        if(checkpoint)return {speech:"Continuing the remaining work automatically.",continuation:{delaySeconds:10,reason:"Inspect the current state and saved work_records, then finish the remaining task_plan steps. Do not repeat completed actions.",progressKey:checkpoint.progressKey},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
+        if(checkpoint && canResumeFromReceipts(verification.result().receipts,true))return {speech:"Continuing the remaining work automatically.",continuation:{delaySeconds:10,reason:"Inspect the current state and saved work_records, then finish the remaining task_plan steps. Do not repeat completed actions.",progressKey:checkpoint.progressKey},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
+        if(!checkpoint && !summaryRound && unfinishedReminders>=2){step=stepBudget-4;continue;}
       }
-      if(opts.allowContinuation && !summaryRound && unfinishedReminders<2 && opts.workRuntime?.pendingWork?.() && !["completed","blocked"].includes(verification.result().status)){
+      if(opts.allowContinuation && !summaryRound && unfinishedReminders<2 && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked"){
         unfinishedReminders++;
-        system+="\nThe authorized task still has unfinished plan steps and no concrete blocker. A status report is not task completion. Continue the next step, or use continue_work with an exact observed progress quote while an external render runs. If targeting fails, inspect ports/geometry and change approach; do not infer an application limitation or missing credits from a failed gesture. If genuinely blocked, checkpoint the precise observed reason before answering.";
+        system+="\nThe authorized task still has unfinished plan steps and no concrete blocker. Verifying one profile or one step does not complete the whole request. Continue the next step without asking for confirmation. If the whole requested outcome is verified, checkpoint every completed task_plan step before finishing. Otherwise obtain a fresh observation and use continue_work. If genuinely blocked, checkpoint the precise observed reason before answering. An execution segment ending is not a user blocker.";
         continue;
       }
       if(opts.workRuntime?.loginEmailAvailable && !emailRecoveryPrompted && !summaryRound && /(?:share|provide|send me|check your|need you|need the).{0,100}(?:code|inbox)|(?:code).{0,60}(?:from you|share it)/is.test(out.text)){
@@ -720,7 +725,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       // Preserve dependency and evidence order, including verification tools that
       // bypass the runtime queue. Never verify while a preceding write is in flight.
       for (const tu of out.toolUses) {
-        toolResults.push({type:"tool_result",tool_use_id:tu.id,content:toolResultContent(stepTools?.some(t=>t.name===tu.name)?await runTool(tu.name,tu.input||{}):{error:"Tool is not available in this round"})});
+        const allowed=stepTools?.some(t=>t.name===tu.name) && !(checkpointRound && tu.name==="computer" && !isObservation(tu.name,tu.input||{}));
+        toolResults.push({type:"tool_result",tool_use_id:tu.id,content:toolResultContent(allowed?await runTool(tu.name,tu.input||{}):{error:"Tool is not available in this round; checkpoint browser access is observation-only"})});
         if(continuation) return {speech:"Work is saved and will continue after the current step is ready.",continuation,verification:verification.result(),toolRounds:toolRounds+1,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
       }
     } else {
