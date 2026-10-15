@@ -264,7 +264,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     let substituted;
     // A saved interactive task owns its execution lifetime. Tool rounds are not
     // user turns: never remove its tools just because it performed 29 actions.
-    const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime && (0, execution_js_1.executionRequest)(opts.message);
+    const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime;
     const stepBudget = uninterrupted ? Infinity : opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
     let idleToolRounds = 0;
     let falseLimitReminders = 0;

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { executionRequest, segmentLimit } from "../harvey/work/execution.js";
+import { segmentLimit } from "../harvey/work/execution.js";
 import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
@@ -426,7 +426,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
   // A saved interactive task owns its execution lifetime. Tool rounds are not
   // user turns: never remove its tools just because it performed 29 actions.
-  const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime && executionRequest(opts.message);
+  const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime;
   const stepBudget = uninterrupted ? Infinity : opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
   let idleToolRounds=0;
   let falseLimitReminders=0;
