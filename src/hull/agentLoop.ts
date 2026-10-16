@@ -127,6 +127,7 @@ function extractAssistantText(content: Anthropic.Messages.Message["content"]): s
 
 export interface AgentLoopResult {
   continuation?: {delaySeconds:number;reason:string;progressKey?:string;recovery?:"model_response"};
+  toolFailure?: {code:string;message:string;detail:string};
   verification?: Verification;
   speech: string;
   toolRounds: number;
@@ -406,6 +407,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let continuation: AgentLoopResult["continuation"];
   let unfinishedReminders=0;
   let scrollRecoveryPrompted=false;
+  let browserFailureCount=0;
+  let browserRecoveryUsed=false;
   const safeBrowserRetry = new Set<string>();
   /* Calls held by the gate. The turn still finishes; these did not run. */
   const heldApprovals: PendingApproval[] = [];
@@ -448,8 +451,16 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     const read = isObservation(name, input) || isDiscovery(name,input);
     const scrolling=opts.workRuntime&&name==="computer"&&input.action==="call"&&["browser_scroll","browser_mouse_wheel"].includes(String(input.tool));
-    const scrollCheckpoint=scrolling?verification.continuationCheckpoint():null;
-    if(scrolling&&!scrollCheckpoint)return {error:"Inspect the current page or scroll region before scrolling again. Read fresh rows after each scroll."};
+    let scrollCheckpoint=scrolling?verification.continuationCheckpoint():null;
+    if(scrolling&&!scrollCheckpoint){
+      try{
+        const snapshot=await opts.workRuntime.execute("computer",{action:"call",tool:"browser_snapshot",arguments:{}});
+        const observed=verification.record("computer",{action:"call",tool:"browser_snapshot"},snapshot);opts.onEvidence?.(observed);
+        if(observed.outcome==='failed')return {error:'Scroll preflight failed: '+(observed.diagnostic?.message||'Current page observation failed')};
+      }catch(error){return {error:"Scroll preflight failed: "+String((error as Error).message)};}
+      scrollCheckpoint=verification.continuationCheckpoint();
+      if(!scrollCheckpoint)return {error:"Scroll preflight failed: no successful current page observation. Inspect the returned snapshot error; this is not proof of lazy loading or missing data."};
+    }
     const sig = signature(name, input) + (scrolling?":"+scrollCheckpoint!.progressKey:"") + (opts.workRuntime && read ? `:${observationRevision}` : "");
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
@@ -539,6 +550,25 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const receipt = verification.record(name, input, result);
     if (!receipt.observation) observationRevision++;
     opts.onEvidence?.(receipt);
+    if(name==="computer"&&input.action==="call"){
+      browserFailureCount=receipt.outcome==="failed"?browserFailureCount+1:0;
+      if(browserFailureCount>=2&&!browserRecoveryUsed&&opts.workRuntime.tools.some(t=>t.name==="computer")){
+        browserRecoveryUsed=true;
+        const recovery:any={reason:receipt.diagnostic,note:"Runtime read-only recovery on the selected computer. These observations do not retry the failed action or authorize a write."};
+        for(const tool of ['browser_snapshot','browser_scroll','browser_inspect_scroll_regions','browser_read_table','browser_wait_for']){
+          try{const schema=await opts.workRuntime.execute('computer',{action:'tools',tool});recovery[tool]=schema;}catch{recovery[tool]={unavailable:true};}
+        }
+        // Local and hosted selection remains inside the existing runtime. No
+        // navigation, login, browser switch or uncertain write is replayed.
+        try{
+          const snapshot=await opts.workRuntime.execute('computer',{action:'call',tool:'browser_snapshot',arguments:{}});
+          const observed=verification.record('computer',{action:'call',tool:'browser_snapshot'},snapshot);opts.onEvidence?.(observed);
+          recovery.currentObservation={...(snapshot&&typeof snapshot==='object'?snapshot as Record<string,unknown>:{data:snapshot}),_harveyEvidence:observed};
+        }catch{recovery.currentObservation={error:'Current browser observation failed; retain the original tool diagnostic.'};}
+        system+='\nRUNTIME BROWSER RECOVERY: Two browser calls failed. The tool result now includes installed schemas and a current read-only observation from the same selected computer. Correct the call using those schemas, then continue the authorized workflow. Do not retry an uncertain write. Do not diagnose lazy loading, timing or missing rows from schema errors, repeat refusals or connection failures. An empty table is not proof of the cause. If a tool is unavailable, use the discovered supported actions; never ask the user to scroll or copy data because a guessed call failed.';
+        if(result&&typeof result==='object')result={...result,runtimeRecovery:recovery};
+      }
+    }
     if (result && typeof result === "object" && !Array.isArray(result)) {
       return { _harveyEvidence: receipt, ...Object.fromEntries(Object.entries(result).filter(([k]) => k !== "_harveyEvidence")) };
     }
@@ -744,7 +774,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         const progressed=verification.result().receipts.slice(receiptStart).some(r=>r.outcome==="returned");
         idleToolRounds=progressed?0:idleToolRounds+1;
         if(progressed)falseLimitReminders=0;
-        if(idleToolRounds>=8)return {speech:"The last eight tool rounds produced no successful operation. The task is unfinished; I could not recover from the repeated tool failures. Saved work is retained.",verification:verification.result(),modelError:"Repeated tool failures without progress",toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
+        if(idleToolRounds>=8){
+          const failed=verification.result().receipts.filter(r=>r.outcome==='failed'&&r.diagnostic);
+          const diagnostic=[...failed].reverse().find(r=>r.diagnostic?.code!=='repeat_refused')?.diagnostic||failed.at(-1)?.diagnostic||{code:'tool_error',message:'No successful tool operation was returned',detail:'tool execution'};
+          return {speech:"The task is unfinished. "+diagnostic.detail+" failed: "+diagnostic.message+". I tried recovery but could not obtain a successful result. Saved work is retained. This error does not establish a lazy-loading or timing problem.",verification:verification.result(),toolFailure:diagnostic,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
+        }
       }
     } else {
       toolResults.push(...await Promise.all(out.toolUses.map(async tu=>({type:"tool_result" as const,tool_use_id:tu.id,content:toolResultContent(await runTool(tu.name,tu.input||{}))}))));

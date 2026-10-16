@@ -14,7 +14,7 @@ function needsTaskPlan(message) {
 }
 /** Short follow-ups inherit only an existing task, never an unrelated old request. */
 function taskFollowup(message) {
-    return executionRequest(message) && /^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message);
+    return executionRequest(message) && (/^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message) || message.length < 200 && /\b(?:try again|retry|pick up where you left off)\b/i.test(message));
 }
 function segmentLimit(reason) {
     return /\b(?:turn|step|execution) (?:budget|limit)|\bfinal round\b/i.test(reason) && !/\b(?:24.hour|256|monthly|credits|provider|rate limit)\b/i.test(reason);

@@ -9,7 +9,7 @@ export function needsTaskPlan(message:string):boolean {
 
 /** Short follow-ups inherit only an existing task, never an unrelated old request. */
 export function taskFollowup(message:string):boolean {
-  return executionRequest(message)&&/^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message);
+  return executionRequest(message)&&(/^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message)||message.length<200&&/\b(?:try again|retry|pick up where you left off)\b/i.test(message));
 }
 
 export function segmentLimit(reason:string):boolean {

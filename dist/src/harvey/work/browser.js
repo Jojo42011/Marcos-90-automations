@@ -396,12 +396,23 @@ async function browserCall(owner, chat, name, args, signal) {
         if (args.target !== undefined && (typeof args.target !== "string" || args.target.length > 2000) || args.offset !== undefined && (!Number.isInteger(args.offset) || args.offset < 0))
             return { error: "Use a bounded selector and nonnegative offset" };
         const s = await session(owner, chat);
-        return observedAction(s, name, async () => { try {
-            return (0, canvas_js_1.parseBrowserJson)(checked(await call(s, "browser_evaluate", { function: (0, tables_js_1.tableCode)({ target: args.target, offset: args.offset }) }, 15000, signal)));
-        }
-        catch (e) {
-            return { error: "Table observation failed: " + e.message, note: "This does not prove the site has no records. Inspect the relevant tab or a focused snapshot." };
-        } });
+        return observedAction(s, name, async () => {
+            try {
+                let result;
+                for (let attempt = 0; attempt < 5; attempt++) {
+                    signal?.throwIfAborted();
+                    result = (0, canvas_js_1.parseBrowserJson)(checked(await call(s, "browser_evaluate", { function: (0, tables_js_1.tableCode)({ target: args.target, offset: args.offset }) }, 15000, signal)));
+                    if (result.error || result.rows?.length)
+                        return result;
+                    if (attempt < 4)
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                }
+                return { ...result, waitedForRowsMs: 1000, note: "No rendered rows after bounded read-only polling. Inspect the current tab, actual scroll region, filters or pagination. This does not establish a lazy-loading cause or absence of data." };
+            }
+            catch (e) {
+                return { error: "Table observation failed: " + e.message, note: "This does not prove the site has no records. Inspect the relevant tab or a focused snapshot." };
+            }
+        });
     }
     if (name === "browser_inspect_targets" || name === "browser_drag_targets") {
         if (args.nodeIds !== undefined && (!Array.isArray(args.nodeIds) || args.nodeIds.length > 4 || args.nodeIds.some((id) => typeof id !== "string" || id.length > 200)))

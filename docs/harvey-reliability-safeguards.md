@@ -54,6 +54,12 @@ Malformed responses during unfinished interactive work can checkpoint and resume
 
 ## Scrolling through retrieval workflows
 
+Repeated browser failures trigger one runtime-managed, read-only recovery packet containing installed schemas and a current observation from the same selected computer. No navigation, login, browser switching or uncertain action is retried by that recovery. A missing pre-scroll observation is obtained automatically. Hosted rendered-table reads poll empty rows for up to one second; an empty result remains a coverage limitation, not proof of lazy loading or absent records.
+
+Failed receipts retain redacted error messages and action metadata. Repeated failures report the underlying recorded error, and jobs classify it as a tool failure rather than a provider failure. Diagnostic-only follow-ups use saved error metadata directly, with no model inference about timing or lazy loading. Older failures without retained details remain explicitly undiagnosed. Tool arguments are not retained in diagnostics; these records do not establish a remote site's underlying cause.
+
+The opt-in verify-mercury-browser-live.mjs uses the actual selected Mercury API with an isolated Chromium page, injected pre-execution validation failures and synthetic virtualized records through verified CSV export. It does not access customer records or prove a live Brivity task complete. Model-call/cost/time guards apply to this paid acceptance fixture only.
+
 Hosted computer exposes browser_inspect_scroll_regions and browser_scroll. Fixed DOM operations discover rendered scrollable containers and return before/after positions without screenshot coordinates or model-authored code. Read fresh rows after each scroll. Repeated identical scroll gestures require a distinct successful observation; the write replay guard remains unchanged for submissions. Local Chrome retains its own ref-based scrolling schemas.
 
 A bounded runtime recovery pass challenges unsupported manual-scroll/copy-paste handoffs and asks the model to try its actual tools. Actual authentication, disconnect and authorization barriers still stop work. This is a recovery attempt, not a guarantee that every site is automatable.

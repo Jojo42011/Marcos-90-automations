@@ -43,6 +43,7 @@ const localBrowser_js_1 = require("./localBrowser.js");
 const modelAdvice_js_1 = require("./modelAdvice.js");
 const records_js_1 = require("./records.js");
 const execution_js_1 = require("./execution.js");
+const failureReport_js_1 = require("./failureReport.js");
 const users_js_1 = require("../../core/users.js");
 const teamTraining_js_1 = require("./teamTraining.js");
 const chatRelay_js_1 = require("./chatRelay.js");
@@ -370,6 +371,12 @@ async function runChat(owner, chat, message, options = {}, runId) {
             return { ...result, toolFailed: false };
         }
         const requestId = options.workRequestId || (0, crypto_1.randomUUID)();
+        const diagnosis = !runId && !options.continuationTurn && !options.workDelegated ? (0, failureReport_js_1.failureReport)(owner, chat.id, message) : undefined;
+        if (diagnosis) {
+            (0, store_js_1.append)(owner, chat.id, { role: 'assistant', content: diagnosis, at: new Date().toISOString() });
+            options.onToken?.(diagnosis);
+            return { speech: diagnosis, toolRounds: 0, model: 'harvey-diagnostics', toolFailed: false };
+        }
         if (options.allowContinuation && !options.continuationTurn && (0, execution_js_1.executionRequest)(message)) {
             const previous = (0, store_js_1.list)("task_plan", owner).find(p => p.chatId === chat.id);
             if (previous && (0, execution_js_1.taskFollowup)(message))
@@ -405,8 +412,8 @@ async function runChat(owner, chat, message, options = {}, runId) {
             toolFailed = false;
         const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed|logged\s+in|signed\s+in|filled)\b/i.test(result.speech) && result.toolRounds === 0;
         const unfinished = !!options.allowContinuation && !!workRuntime.pendingWork?.();
-        const needsReview = unfinished || !!runId || (result.verification?.receipts.length || 0) > 0 || unsupportedActionClaim || !!result.modelError || !!result.budgetRefused;
-        checkpoint.status = result.modelError || result.budgetRefused ? "blocked" : needsReview ? result.verification?.status || "needs_verification" : "completed";
+        const needsReview = unfinished || !!runId || (result.verification?.receipts.length || 0) > 0 || unsupportedActionClaim || !!result.toolFailure || !!result.modelError || !!result.budgetRefused;
+        checkpoint.status = result.toolFailure || result.modelError || result.budgetRefused ? "blocked" : needsReview ? result.verification?.status || "needs_verification" : "completed";
         checkpoint.updatedAt = new Date().toISOString();
         (0, store_js_1.put)("verification", owner, checkpoint);
         // Keep verification as structured state. Do not paste internal status labels
