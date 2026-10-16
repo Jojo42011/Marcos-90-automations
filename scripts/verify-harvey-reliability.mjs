@@ -65,6 +65,10 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
    if(n===1){assert.notEqual(b.model,'inception/mercury-2.5');assert(JSON.stringify(b.messages).includes('image_url'));}
    response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):{role:'assistant',content:'The visual step is done.'};
  }
+ else if(user.includes('SCHEMA_RECOVERY_FIXTURE')){
+   response=n<2?tc('computer',{action:'call',tool:'browser_scroll',arguments:{deltaY:'down'}}):n===2?tc('computer',{action:'call',tool:'browser_inspect_scroll_regions',arguments:{}}):n===3?tc('computer',{action:'call',tool:'browser_scroll',arguments:{target:'#leads',deltaY:600}}):n===4?tc('computer',{action:'call',tool:'browser_read_table',arguments:{}}):n===5?tc('report_verification',{status:'completed',evidenceIds:['e8'],checks:['Read rows after correcting installed scroll schema'],limitations:[]}):{role:'assistant',content:'Rows retrieved after correcting the scroll arguments.'};
+ }
+ else if(user.includes('DISCONNECTED_TOOLS_FIXTURE'))response=tc('computer',{action:'call',tool:'browser_scroll',arguments:{deltaY:600+n}});
  else if(user.includes('AUTO_FORMAT_RECOVERY_FIXTURE')){
    response=b.model==='inception/mercury-2.5'?{role:'assistant',content:''}:{role:'assistant',content:'Recovered without replaying the task.'};
  }
@@ -188,6 +192,23 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ let recoveryReads=0,recoverySchemas=0,successfulScrolls=0;
+ const schemaRecovery=await runAgentLoop({message:'Finish SCHEMA_RECOVERY_FIXTURE',allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>false,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_name,i)=>{
+   if(i.action==='tools'){recoverySchemas++;return {tools:[{name:i.tool,inputSchema:{type:'object',properties:{deltaY:{type:'number'}}}}]};}
+   if(i.tool==='browser_snapshot'){recoveryReads++;return {text:'Leads table and scroll region observed'};}
+   if(i.tool==='browser_inspect_scroll_regions')return {regions:[{target:'#leads'}]};
+   if(i.tool==='browser_scroll'){if(typeof i.arguments.deltaY!=='number')return {error:'Invalid type for browser argument: deltaY',recovery:{kind:'arguments',actionOutcome:'not_executed',safeToRetry:true}};successfulScrolls++;return {moved:true};}
+   return {rows:[{id:'fixture-lead'}]};
+ } }});
+ ok('two invalid Mercury scroll calls receive installed schemas/current page and recover without user help',()=>{assert.equal(recoverySchemas,5);assert.equal(recoveryReads,3);assert.equal(successfulScrolls,1);assert.equal(schemaRecovery.verification.status,'completed');assert(!schemaRecovery.toolFailure);});
+ const disconnected=await runAgentLoop({message:'Finish DISCONNECTED_TOOLS_FIXTURE',allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>({error:'Browser disconnected; reconnect the selected local tab'})}});
+ ok('unrecoverable browser failure preserves actual reason instead of model/provider failure',()=>{assert(disconnected.toolFailure);assert.match(disconnected.speech,/disconnected/);assert(!disconnected.modelError);assert(!/because.*lazy/i.test(disconnected.speech));});
+ const failureChat=store.createChat('failure-diagnosis',{});
+ store.put('job','failure-diagnosis',{id:'failed-job',chatId:failureChat.id,status:'needs_attention',result:{failure:{kind:'tool_error',...disconnected.toolFailure}}});
+ const diagnosed=await runtime.runChat('failure-diagnosis',failureChat,'waht fialed?',{allowContinuation:true});
+ ok('diagnostic follow-up reads saved tool error without a model guessing about lazy loading',()=>{assert.equal(diagnosed.model,'harvey-diagnostics');assert.equal(diagnosed.toolRounds,0);assert.match(diagnosed.speech,/disconnected/);assert.equal(store.list('job','other-owner').length,0);});
+ const secretProof=new rel.TurnVerification();secretProof.record('computer',{action:'call',tool:'browser_type',arguments:{text:'private-fixture-password'}},{error:'Invalid argument private-fixture-password for user fixture@example.com at https://example.com/?secret=abc'});
+ ok('retained tool diagnostics redact argument values, email addresses and signed URLs',()=>{const saved=JSON.stringify(secretProof.result().receipts);assert(!saved.includes('private-fixture-password'));assert(!saved.includes('fixture@example.com'));assert(!saved.includes('secret=abc'));assert(saved.includes('arguments'));});
  let bulkExecuted=0;const profiles=new Map();
  const bulk=await runAgentLoop({message:"Finish 50 profiles; don't start over. SIX_HUNDRED_ACTIONS_FIXTURE",job:'agent',modelOverride:'openai/fixture',allowContinuation:true,checkpointAt:Date.now()-1,workRuntime:{context:'Fixture',pendingWork:()=>bulkExecuted<600,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_name,input)=>{const k=bulkExecuted++;assert.equal(input.tool,k%2?'browser_snapshot':'browser_click');if(k%2){const id=Math.floor(k/12);profiles.set(id,[...(profiles.get(id)||[]),Math.floor(k%12/2)]);}return {profile:Math.floor(k/12),section:Math.floor(k%12/2),text:'Observed fixture section '+k};}}});
  ok('one request executes 600 tools and completes 50 profiles without continue, even past the old timer',()=>{assert.equal(bulkExecuted,600);assert.equal(profiles.size,50);for(const sections of profiles.values())assert.deepEqual(sections,[0,1,2,3,4,5]);assert.equal(bulk.verification.status,'completed');assert(!bulk.continuation);assert(!bulk.modelError);});
@@ -280,7 +301,9 @@ try{
  ok('visual-only response honestly states missing image capability',()=>assert.match(visualResult.speech,/cannot inspect image pixels/));
  for(const safe of [true,false]){
   let executions=0;
-  await runAgentLoop({message:'BROWSER_GUARD_FIXTURE',modelOverride:'openai/fixture',workRuntime:{context:'Local browser recovery fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async()=>{
+  await runAgentLoop({message:'BROWSER_GUARD_FIXTURE',modelOverride:'openai/fixture',workRuntime:{context:'Local browser recovery fixture.',tools:[{name:'computer',description:'Fixture browser',input_schema:{type:'object',properties:{}}}],execute:async(_name,input)=>{
+   if(input.action==='tools')return {tools:[]};
+   if(input.tool==='browser_snapshot')return {text:'Current state inspected without another click'};
    executions++;return executions===1?{error:'Fixture target failure',recovery:{actionOutcome:safe?'not_executed':'unknown',safeToRetry:safe}}:{content:[{type:'text',text:'Clicked'}]};
   }}});
   ok(safe?'confirmed unexecuted browser action gets one retry, then successful replay is refused':'uncertain browser action is never automatically replayed',()=>assert.equal(executions,safe?2:1));

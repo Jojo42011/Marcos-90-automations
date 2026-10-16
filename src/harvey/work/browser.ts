@@ -190,7 +190,16 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
   if(name==="browser_read_table"){
     if(args.target!==undefined&&(typeof args.target!=="string"||args.target.length>2000)||args.offset!==undefined&&(!Number.isInteger(args.offset)||args.offset<0))return {error:"Use a bounded selector and nonnegative offset"};
     const s=await session(owner,chat);
-    return observedAction(s,name,async()=>{try{return parseBrowserJson(checked(await call(s,"browser_evaluate",{function:tableCode({target:args.target,offset:args.offset})},15000,signal)));}catch(e){return {error:"Table observation failed: "+(e as Error).message,note:"This does not prove the site has no records. Inspect the relevant tab or a focused snapshot."};}});
+    return observedAction(s,name,async()=>{try{
+      let result:any;
+      for(let attempt=0;attempt<5;attempt++){
+        signal?.throwIfAborted();
+        result=parseBrowserJson(checked(await call(s,"browser_evaluate",{function:tableCode({target:args.target,offset:args.offset})},15000,signal)));
+        if(result.error||result.rows?.length)return result;
+        if(attempt<4)await new Promise(resolve=>setTimeout(resolve,250));
+      }
+      return {...result,waitedForRowsMs:1000,note:"No rendered rows after bounded read-only polling. Inspect the current tab, actual scroll region, filters or pagination. This does not establish a lazy-loading cause or absence of data."};
+    }catch(e){return {error:"Table observation failed: "+(e as Error).message,note:"This does not prove the site has no records. Inspect the relevant tab or a focused snapshot."};}});
   }
   if(name==="browser_inspect_targets"||name==="browser_drag_targets"){
     if(args.nodeIds!==undefined&&(!Array.isArray(args.nodeIds)||args.nodeIds.length>4||args.nodeIds.some((id:any)=>typeof id!=="string"||id.length>200)))return {error:"nodeIds must contain up to four observed node IDs"};

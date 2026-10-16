@@ -90,4 +90,8 @@ S.put('job','alice',{...S.get('job','alice',old.id),createdAt:new Date(Date.now(
 await J.executeJob('alice',old.id,async(_o,_c,_p,opts)=>{assert.equal(opts.checkpointAt,undefined);assert(!opts.signal.aborted);return {speech:'Remaining profiles completed',verification:{status:'completed'}};});
 assert.equal(S.get('job','alice',old.id).status,'completed');
 console.log('ok interactive jobs continue beyond 24 hours and 256 yields without an elapsed-task checkpoint');
+const failureChat=S.createChat('alice',{}),failureJob=J.enqueueJob('alice',failureChat.id,{requestId:'tool-diagnostic',message:'Finish source retrieval'});
+await J.executeJob('alice',failureJob.id,async()=>({speech:'Browser disconnected',toolFailure:{code:'browser_disconnected',message:'Selected browser disconnected',detail:'computer/browser_snapshot'}}));
+const toolFailed=S.get('job','alice',failureJob.id);assert.equal(toolFailed.status,'needs_attention');assert.equal(toolFailed.result.failure.kind,'tool_error');assert.equal(toolFailed.result.failure.code,'browser_disconnected');
+console.log('ok saved job retains browser tool failure separately from provider or credit failures');
 S.closeStore();

@@ -76,10 +76,11 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
     }});
     job=get<WorkJob>("job",owner,id);
     job.totalCostUsd=(job.totalCostUsd||0)+Math.max(0,(result.costUsd||0)-segmentCost);
-    const attention=result.toolFailed||!!result.modelError||!!result.budgetRefused||("needsVerification" in result&&result.needsVerification);
+    const attention=result.toolFailed||!!result.toolFailure||!!result.modelError||!!result.budgetRefused||("needsVerification" in result&&result.needsVerification);
     job.status=controller.signal.aborted?"needs_attention":result.modelError||result.budgetRefused?"failed":attention?"needs_attention":"completed";
     job.result={text:result.speech,conversationId:job.chatId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,needsAttention:attention||controller.signal.aborted,approvals,schedules,
       ...(result.modelError?{failure:{kind:/402|credits|afford/i.test(result.modelError)?"provider_credit_limit":/Empty or malformed/i.test(result.modelError)?"invalid_model_response":"provider_error",model:result.modelUsed||result.model}}:{}),
+      ...(result.toolFailure?{failure:{kind:"tool_error",...result.toolFailure}}:{}),
       usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0}};
     if(result.continuation&&!controller.signal.aborted&&!result.modelError&&!result.budgetRefused&&!job.originChatId){
       if(result.continuation.recovery==='model_response'){
