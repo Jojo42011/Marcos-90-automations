@@ -234,9 +234,9 @@ try{
  const autoChat=store.createChat('auto-yield-fixture',{});
  const automatic=await require(join(root,'harvey/work/runtime.js')).runChat('auto-yield-fixture',autoChat,'How many records are in each group? AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'auto-job',modelOverride:'openai/fixture'});
  ok('counting task seeds its plan and continues even when the model asks the user to continue',()=>{assert(automatic.continuation);assert(automatic.continuation.progressKey);assert(!/say continue/i.test(automatic.speech));assert(!store.messages('auto-yield-fixture',autoChat.id).some(m=>m.role==='assistant'&&/continue/i.test(m.content)));});
- for(const [index,message] of ['yes, start with 50 leads first','oh i meant, not include Mojo FL.','resume','conitnue','pause','just explain the status'].entries()){
+ for(const [index,message] of ['yes, start with 50 leads first','oh i meant, not include Mojo FL.','resume','conitnue','well just time it correctly and try again','pause','just explain the status'].entries()){
    const result=await runtime.runChat('auto-yield-fixture',autoChat,message+' AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'followup-'+index,modelOverride:'openai/fixture'});
-   ok('short task/correction/resume retains continuation but pause/status does not: '+message,()=>assert.equal(!!result.continuation,index<4));
+   ok('short task/correction/resume retains continuation but pause/status does not: '+message,()=>assert.equal(!!result.continuation,index<5));
  }
  const legacyChat=store.createChat('legacy-resume',{});
  store.append('legacy-resume',legacyChat.id,{role:'user',content:'Read each of 50 lead profiles and export details excluding source Test Exclusion',at:new Date().toISOString()});
