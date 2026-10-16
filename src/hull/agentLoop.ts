@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { segmentLimit } from "../harvey/work/execution.js";
+import {computerArguments} from '../harvey/work/computerArguments.js';
 import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
@@ -515,6 +516,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   };
 
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
+    if(opts.workRuntime&&name==='computer')input=computerArguments(input);
     if(opts.workRuntime && name==="continue_work"){
       try {
         if(!opts.allowContinuation||!opts.workRuntime.tools.some(t=>t.name==="continue_work"))throw new Error("Continuation is only available inside a saved interactive job");

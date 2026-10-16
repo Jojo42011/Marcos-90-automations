@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-16: Live Mercury acceptance exposed an unsupported computer-call envelope after the initial recovery change. Normalize explicit tool-name/argument wrappers before observation classification and replay guards, and reject malformed call envelopes before browser dispatch. Targets, selected computer and action authorization remain unchanged; unsupported code execution stays unavailable. Synthetic live acceptance is rerun separately from the customer Brivity task.
+
 - 2026-10-16: Browser failure recovery now supplies installed schemas and a current read-only observation on the selected computer after repeated failed calls, with automatic observation before scrolling and bounded polling for empty rendered tables. Failed receipts retain redacted tool/action diagnostics; saved jobs distinguish tool errors from provider failures, and diagnostic-only follow-ups read saved errors without a model guessing a cause. Existing cancellation, replay guards and unlimited interactive rounds remain. Offline recovery/export fixtures and opt-in live Mercury synthetic-browser checks are separate from live Brivity completion.
 
 - 2026-10-15: Removed the saved interactive task's 32-round ceiling, tool-withholding checkpoint, 15-minute task timer and 24-hour/256-yield caps. Tools remain available until completion, cancellation or an actual failure; individual-operation timeouts and shared provider allowance still apply. A 600-tool-call fixture verifies 50 profiles in one uninterrupted request. This supersedes the earlier checkpoint-only fix and does not certify the live Brivity export.

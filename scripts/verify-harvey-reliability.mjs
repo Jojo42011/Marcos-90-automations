@@ -65,6 +65,9 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
    if(n===1){assert.notEqual(b.model,'inception/mercury-2.5');assert(JSON.stringify(b.messages).includes('image_url'));}
    response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):{role:'assistant',content:'The visual step is done.'};
  }
+ else if(user.includes('CALL_SHAPE_FIXTURE')){
+   response=n===0?tc('computer',{name:'browser_snapshot',args:'{}'}):n===1?tc('computer',{tool_name:'browser_scroll',parameters:{deltaY:600}}):n===2?tc('computer',{action:'browser_read_table',target:'#leads'}):n===3?tc('report_verification',{status:'completed',evidenceIds:['e3'],checks:['Canonical calls read back scrolled table'],limitations:[]}):{role:'assistant',content:'Retrieved fixture rows.'};
+ }
  else if(user.includes('SCHEMA_RECOVERY_FIXTURE')){
    response=n<2?tc('computer',{action:'call',tool:'browser_scroll',arguments:{deltaY:'down'}}):n===2?tc('computer',{action:'call',tool:'browser_inspect_scroll_regions',arguments:{}}):n===3?tc('computer',{action:'call',tool:'browser_scroll',arguments:{target:'#leads',deltaY:600}}):n===4?tc('computer',{action:'call',tool:'browser_read_table',arguments:{}}):n===5?tc('report_verification',{status:'completed',evidenceIds:['e8'],checks:['Read rows after correcting installed scroll schema'],limitations:[]}):{role:'assistant',content:'Rows retrieved after correcting the scroll arguments.'};
  }
@@ -192,6 +195,16 @@ async function chat(mode='work'){return (await api('/conversations','POST',{mode
 async function terminal(id){for(let i=0;i<300;i++){const r=await api('/work/jobs/'+id);if(!['queued','running','cancelling'].includes(r.data.status))return r.data;await new Promise(r=>setTimeout(r,30));}throw new Error('Job timed out');}
 try{
  const {runAgentLoop}=require(join(root,'hull/agentLoop.js'));
+ const {computerArguments}=require(join(root,'harvey/work/computerArguments.js'));
+ ok('explicit nested/JSON/namespaced computer envelopes normalize without guessing targets',()=>{
+   assert.deepEqual(computerArguments({arguments:{action:'call',tool:{name:'functions.browser_snapshot',arguments:'{}'}}}),{action:'call',tool:'browser_snapshot',arguments:{}});
+   assert.deepEqual(computerArguments({action:'scroll',deltaY:600,target:'#pane'}),{action:'call',tool:'browser_scroll',arguments:{deltaY:600,target:'#pane'}});
+   assert.deepEqual(computerArguments({action:'call',arguments:{tool_name:'browser_snapshot',parameters:'{}'}}),{action:'call',tool:'browser_snapshot',arguments:{}});
+   assert.equal(computerArguments({action:'browser_click',tool:'browser_navigate',arguments:{target:'#safe'}}).action,'invalid');
+ });
+ const canonicalCalls=[];
+ const canonical=await runAgentLoop({message:'Finish CALL_SHAPE_FIXTURE',allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>false,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_n,i)=>{canonicalCalls.push(i);assert.equal(i.action,'call');return {rows:[{id:'fixture'}]};}}});
+ ok('Mercury alternate call shapes execute observed scroll/read sequence without tool failures',()=>{assert.deepEqual(canonicalCalls.map(c=>c.tool),['browser_snapshot','browser_scroll','browser_read_table']);assert.equal(canonical.verification.status,'completed');});
  let recoveryReads=0,recoverySchemas=0,successfulScrolls=0;
  const schemaRecovery=await runAgentLoop({message:'Finish SCHEMA_RECOVERY_FIXTURE',allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>false,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async(_name,i)=>{
    if(i.action==='tools'){recoverySchemas++;return {tools:[{name:i.tool,inputSchema:{type:'object',properties:{deltaY:{type:'number'}}}}]};}

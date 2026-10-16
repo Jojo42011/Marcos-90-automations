@@ -5,6 +5,7 @@ exports.toolResultContent = toolResultContent;
 exports.runAgentLoop = runAgentLoop;
 exports.extractSentences = extractSentences;
 const execution_js_1 = require("../harvey/work/execution.js");
+const computerArguments_js_1 = require("../harvey/work/computerArguments.js");
 const reliability_js_1 = require("../harvey/reliability.js");
 const founderPrompt_js_1 = require("./founderPrompt.js");
 const modelRouting_js_1 = require("./modelRouting.js");
@@ -366,6 +367,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         }
     };
     const runTool = async (name, input) => {
+        if (opts.workRuntime && name === 'computer')
+            input = (0, computerArguments_js_1.computerArguments)(input);
         if (opts.workRuntime && name === "continue_work") {
             try {
                 if (!opts.allowContinuation || !opts.workRuntime.tools.some(t => t.name === "continue_work"))

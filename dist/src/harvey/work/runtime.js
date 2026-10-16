@@ -290,6 +290,8 @@ async function runtime(owner, chat, unattended, onEvent, signal, query = "", act
             case "plugin_tools": return (0, connectors_js_1.mcpTools)(owner, chat.projectId, input.connectionId);
             case "plugin_call": return (0, connectors_js_1.mcpTools)(owner, chat.projectId, input.connectionId, input.tool, input.arguments);
             case "computer": {
+                if (!['tools', 'call'].includes(input.action) || input.action === 'call' && (typeof input.tool !== 'string' || !input.tool || !input.arguments || typeof input.arguments !== 'object' || Array.isArray(input.arguments)))
+                    return { error: "Invalid computer call envelope. Use action='call', tool='browser_snapshot', arguments={} for a current observation, or action='tools' to discover installed schemas. No browser action ran.", inputSchema: exports.WORK_TOOLS.find(t => t.name === 'computer').input_schema };
                 if (localComputer) {
                     if (unattended || delegated || actorId !== owner)
                         return { error: "Local browser control is only available to its owner in an interactive chat" };
