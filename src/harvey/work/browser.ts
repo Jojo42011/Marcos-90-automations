@@ -30,6 +30,19 @@ type Session = {owner:string;chat:string;client:Client;tools:any[];lastUsed:numb
 const sessions = new Map<string, Promise<Session>>();
 let shuttingDown=false;
 let shutdownRegistered=false;
+let catalogPromise:Promise<any[]>|undefined;
+// MCP listTools is schema discovery, not a browser session. Keep its catalog
+// independent of owner profiles and the finite set of live Chromium workers.
+async function installedBrowserTools():Promise<any[]> {
+  if(!catalogPromise)catalogPromise=(async()=>{
+    const client=new Client({name:'harvey-browser-catalog',version:'1.0.0'});
+    const env:Record<string,string>={};for(const name of ['PATH','SystemRoot','TEMP','TMP','PLAYWRIGHT_BROWSERS_PATH'])if(process.env[name])env[name]=process.env[name]!;
+    const transport=new StdioClientTransport({command:process.execPath,args:[join(__dirname,'browserWorker.js'),'--headless','--caps','storage,vision'],env,stderr:'pipe'});
+    try{await client.connect(transport,{timeout:15000});return (await client.listTools({},{timeout:15000})).tools.filter(t=>ALLOWED.has(t.name));}
+    finally{await client.close().catch(()=>{});}
+  })().catch(e=>{catalogPromise=undefined;throw e;});
+  return catalogPromise;
+}
 function registerShutdown(){
   if(shutdownRegistered)return;shutdownRegistered=true;
   for(const sig of ["SIGTERM","SIGINT"] as const)process.once(sig,()=>{
@@ -149,7 +162,7 @@ export async function closeBrowsers(){canvasObservations.clear();await Promise.a
 // Closing a laptop only disconnects the UI. There is deliberately no idle tab eviction.
 // Periodically capture cookie changes and client-side tab navigation while the model is idle.
 const maintenance=setInterval(()=>{for(const pending of sessions.values())void pending.then(s=>{if(!s.busy&&!s.closing&&!s.failed){s.dirty=true;void observedAction(s,"session checkpoint",()=>checkpoint(s)).catch(()=>{});}}).catch(()=>{});},30000);maintenance.unref();
-export async function browserTools(owner:string,chat:string,name?:string){const tools=(await session(owner,chat)).tools.map(t=>t.name!=="browser_file_upload"?t:{...t,description:"Upload local workspace files into the currently opened file chooser. Click Choose files first, then use paths from workspace_files. Native OS interaction is unnecessary. Missing paths do not cancel; cancel:true explicitly cancels.",inputSchema:{type:"object",properties:{paths:{type:"array",items:{type:"string"},minItems:1,maxItems:20},cancel:{type:"boolean"}}}});if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
+export async function browserTools(owner:string,chat:string,name?:string){const tools=[...await installedBrowserTools(),...EXTRA_TOOLS].map(t=>t.name!=="browser_file_upload"?t:{...t,description:"Upload local workspace files into the currently opened file chooser. Click Choose files first, then use paths from workspace_files. Native OS interaction is unnecessary. Missing paths do not cancel; cancel:true explicitly cancels.",inputSchema:{type:"object",properties:{paths:{type:"array",items:{type:"string"},minItems:1,maxItems:20},cancel:{type:"boolean"}}}});if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
 export async function browserMetrics(owner:string,chat:string){const s=await sessions.get(owner+":"+chat);return s?{...s.metrics}:undefined;}
 export async function browserPreview(owner:string,chat:string){
   if(!browserEnabled())return {state:"disabled"};

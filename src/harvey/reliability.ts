@@ -39,13 +39,15 @@ function resourceScope(name:string,input:any):string {
   if(name==="COMPOSIO_MULTI_EXECUTE_TOOL")return stableCallKey("managed",[input.harvey_connection_scope,(input.tools||[]).map((t:any)=>String(t.tool_slug).split("_")[0]).sort()]);
   if(name==="business_call")return "business:"+String(input.tool||"").replace(/^(create|update|delete|get|list|search|find|read)_/,"").replace(/s$/,"");
   if(name==="work_records"&&input.action==="export")return "files";
-  if(name==="inspect_video"||name==="edit_video"||name==="workspace_files"||name==="workspace_download")return "files";
+  if(name==="inspect_video"||name==="edit_video"||name==="workspace_files"||name==="workspace_download"||name==='workspace_write'||name==='workspace_read')return "files";
   return name;
 }
 
 // Conservative classification: unknown tools are possible actions, not verified reads.
 export function isObservation(name: string, input: any): boolean {
   if(name==='inspect_screen')return true;
+  if(name==='workspace_read')return true;
+  if(name==='workspace_write')return false;
   if (name === "COMPOSIO_MULTI_EXECUTE_TOOL") {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
@@ -178,7 +180,7 @@ export class TurnVerification {
       if (!cited.length || !input.checks.some((s: string) => s.trim()) || input.limitations.length) throw new Error("Completion requires evidence, concrete checks and no unresolved limitations");
       if (cited.some((r: Receipt) => r.truncated)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
       if (cited.some((r: Receipt) => r.limitation)) throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
-      for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery)) {
+      for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery&&!['task_plan','continuity'].includes(r.tool))) {
         if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error("Read back each affected service after its action before claiming completion");
       }
       if (this.receipts.some(r => r.outcome === "held")) throw new Error("An action is still held for approval; report needs_verification");

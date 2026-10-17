@@ -26,6 +26,8 @@ const base='http://127.0.0.1:'+server.address().port;
 const call=(tool,args={})=>B.browserCall('alice','recovery',tool,args);
 const txt=r=>JSON.stringify(r);
 try{
+ const catalog=await B.browserTools('alice','catalog-only','browser_snapshot');assert.equal(catalog[0].name,'browser_snapshot');assert.equal(await B.browserMetrics('alice','catalog-only'),undefined);
+ console.log('ok schema discovery does not allocate a browser session');
  const started=Date.now();let r=await call('browser_navigate',{url:base+'/login'});assert(!r.error,txt(r));
  const baseline=await B.browserMetrics('alice','recovery');
  r=await call('browser_snapshot',{target:'#one'});assert(!r.error,txt(r));

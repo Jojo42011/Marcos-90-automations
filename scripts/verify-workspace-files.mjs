@@ -24,6 +24,20 @@ assert.equal(F.workspaceFiles('alice','files',{includeDiagnostics:true}).files.l
 assert.equal(F.workspaceFiles('alice','files',{includeDiagnostics:true}).nextOffset,20);
 assert(JSON.stringify(F.workspaceFiles('alice','files')).length<12000);
 console.log('ok preserved media aliases, strict chooser arguments, owner/path boundaries and bounded asset listing');
+const authored=F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"total":375}'});
+assert.equal(F.readWorkspaceFile('alice','text',{file:'report.json'}).content,'{"total":375}');
+assert.equal(F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"total":375}'}).unchanged,true);
+assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{}'}),/Read it first/);
+F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{}',expectedSha256:authored.sha256});
+assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{}',expectedSha256:authored.sha256})&&F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"changed":true}',expectedSha256:authored.sha256}),/Read it first/);
+assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'../outside.md',content:'bad'}));
+assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'bad.json',content:'{'}),/Invalid JSON/);
+assert.throws(()=>F.readWorkspaceFile('bob','text',{file:'report.json'}));
+F.writeWorkspaceFile('alice','text',{file:'long.md',content:'a'.repeat(11000)});
+assert.equal(F.readWorkspaceFile('alice','text',{file:'long.md'}).nextOffset,8000);
+assert.equal(F.readWorkspaceFile('alice','text',{file:'long.md',offset:8000}).content.length,3000);
+if(process.platform!=='win32'){symlinkSync(join(other,'secret.mp4'),join(F.filesDir('alice','text'),'escape.md'));assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'escape.md',content:'bad'}),/outside/);}
+console.log('ok chat-scoped authored text, actual content read-back, idempotence, revision conflicts, JSON validation and paginated reads');
 const fixture=async()=>({stream:Readable.from([data.subarray(0,12),data.subarray(12)]),size:data.length,mime:'video/mp4'});
 const downloaded=await D.downloadFile(dir,{url:'https://fixture.invalid/asset',filename:'Background.mp4',expectedSize:data.length},undefined,fixture);
 assert.equal(downloaded.size,data.length);assert.equal(downloaded.sha256.length,64);assert.deepEqual(readFileSync(downloaded.path),data);

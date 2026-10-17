@@ -1,4 +1,5 @@
-import { readdirSync, statSync, mkdirSync, realpathSync } from "fs";
+import { readdirSync, statSync, mkdirSync, realpathSync, readFileSync, writeFileSync, existsSync, renameSync, unlinkSync } from "fs";
+import { createHash, randomUUID } from 'crypto';
 import { join, basename, sep, resolve } from "path";
 import { uploadFile } from "./uploadFiles.js";
 import { exportVideo, inspectVideoPath, videoFailure } from "./video.js";
@@ -9,6 +10,36 @@ export function filePath(owner: string, chat: string, name: string) {
   const root=realpathSync(filesDir(owner,chat)),p=realpathSync(join(root,name));if(!p.startsWith(root+sep))throw new Error("File is outside this chat");return p;
 }
 export function files(owner: string, chat: string) {const dir=filesDir(owner,chat);return readdirSync(dir).filter(n=>!n.startsWith(".")&&statSync(join(dir,n)).isFile()).map(name=>({name,size:statSync(join(dir,name)).size,path:join(dir,name),download:`/api/harvey/work/files/${chat}/${encodeURIComponent(name)}`}));}
+const digest=(data:Buffer|string)=>createHash('sha256').update(data).digest('hex');
+function textName(value:any):string {
+  if(typeof value!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9 _.-]{0,139}$/.test(value)||! /\.(?:txt|md|csv|tsv|json|yaml|yml|xml|html)$/i.test(value))throw Error('Use a plain text filename in this chat, such as report.md, records.csv or plan.json; no directories');
+  return value;
+}
+export function writeWorkspaceFile(owner:string,chat:string,input:any) {
+  const name=textName(input.file);
+  if(typeof input.content!=='string'||Buffer.byteLength(input.content)>2*1024*1024||input.content.includes('\0'))throw Error('Provide UTF-8 text content of at most 2 MiB; split large artifacts into files');
+  if(/\.json$/i.test(name))try{JSON.parse(input.content);}catch{throw Error('Invalid JSON content; correct it before saving');}
+  const path=join(filesDir(owner,chat),name),sha256=digest(input.content);
+  if(existsSync(path)){
+    const old=readFileSync(filePath(owner,chat,name));
+    if(digest(old)===sha256)return {file:name,sha256,size:old.length,download:`/api/harvey/work/files/${chat}/${encodeURIComponent(name)}`,unchanged:true};
+    if(input.expectedSha256!==digest(old))throw Error('File already exists with different content. Read it first and pass its expectedSha256 to replace it');
+  }else if(input.expectedSha256)throw Error('File no longer exists; inspect the current workspace before replacing it');
+  const pending=join(filesDir(owner,chat),'.text-'+randomUUID());
+  try{writeFileSync(pending,input.content,{encoding:'utf8',flag:'wx',mode:0o600});renameSync(pending,path);}finally{if(existsSync(pending))unlinkSync(pending);}
+  return {file:name,sha256,size:Buffer.byteLength(input.content),download:`/api/harvey/work/files/${chat}/${encodeURIComponent(name)}`,note:'Bytes saved. Read with workspace_read and check the requested content before reporting completion. Authored text is not independent evidence of external facts.'};
+}
+export function readWorkspaceFile(owner:string,chat:string,input:any) {
+  const name=textName(input.file),path=filePath(owner,chat,name);
+  if(statSync(path).size>2*1024*1024)throw Error('Text file exceeds 2 MiB; use a smaller artifact');
+  const bytes=readFileSync(path);let content:string;
+  try{content=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{throw Error('File is not valid UTF-8 text');}
+  if(content.includes('\0'))throw Error('File contains binary data; use the appropriate media tool');
+  const offset=input.offset??0,limit=input.limit??8000;
+  if(!Number.isSafeInteger(offset)||offset<0||offset>content.length||!Number.isSafeInteger(limit)||limit<1||limit>10000)throw Error('Use a valid character offset and limit from 1 to 10000');
+  const end=Math.min(content.length,offset+limit);
+  return {file:name,content:content.slice(offset,end),offset,nextOffset:end<content.length?end:null,totalCharacters:content.length,sha256:digest(bytes),truncated:offset>0||end<content.length,download:`/api/harvey/work/files/${chat}/${encodeURIComponent(name)}`};
+}
 function mediaPath(owner:string,chat:string,raw:string){
   const root=realpathSync(filesDir(owner,chat)),p=realpathSync(resolve(root,raw));
   if(!p.startsWith(root+sep)||!statSync(p).isFile())throw new Error("Video must be a file in this chat workspace");

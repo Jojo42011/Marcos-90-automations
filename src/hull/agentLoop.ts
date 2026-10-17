@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { segmentLimit } from "../harvey/work/execution.js";
+import { segmentLimit, executionRequest } from "../harvey/work/execution.js";
 import {computerArguments} from '../harvey/work/computerArguments.js';
 import {unsupportedCapabilityClaim} from '../harvey/work/capabilities.js';
 import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, type Verification, type Receipt } from "../harvey/reliability.js";
@@ -595,7 +595,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       try { return verification.review(input); } catch (e) { return {error: (e as Error).message}; }
     }
     if(opts.workRuntime&&name==="work_records"&&input.action==="save"){
-      try{input={...input,_verifiedRecords:verification.projectRecords(input.records)};}catch(e){return {error:(e as Error).message};}
+      try{input={...input,_verifiedRecords:verification.projectRecords(input.records)};}catch(e){
+        const result={error:(e as Error).message,note:'No record was saved. Use successful structured observation JSON: records:[{evidenceId:"eN",idPath:"/rows/0/id",fieldPaths:{name:"/rows/0/name"}}]. Paths must match actual observed data, not literal values. For visual-only rows use inspect_screen structured=true, then project its data paths. A visible unique title or profile link can be a stable key; do not invent IDs.'};
+        const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};
+      }
     }
     if(opts.workRuntime&&name==='workflow'&&input.action==='learn'){
       const review=verification.result();
@@ -795,7 +798,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       // Negative instructions are constraints, not evidence that an action was requested.
       const affirmativeMessage = opts.message.replace(/\b(?:do not|don['’]t|never|without)\b[^.!?\n]*(?:[.!?]|$)/gi, "");
       const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
-      if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && !evidence.checks.length && (evidence.receipts.length > 0 || actionRequested)) {
+      if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && (opts.allowContinuation?evidence.status==='needs_verification':!evidence.checks.length) && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
         // Do not append an unanswered assistant turn: some providers interpret
         // that as unsupported prefill. The last real user/tool-result stays last.
@@ -804,6 +807,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           ? "Runtime verification reminder: inspect the actual receipts returned this turn. For a read, report_verification may cite its complete observation directly; no extra read-back is required. Retrieve smaller results when truncated (crm_api supports select for top-level fields). For writes, perform the necessary read-back without repeating the write. Then report the verified outcome or explain the observed blocker."
           : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
         continue;
+      }
+      if(opts.allowContinuation&&opts.workRuntime&&executionRequest(opts.message)&&evidence.receipts.length&&evidence.status==='needs_verification'&&completionRepairs>=3&&!plainStatusRewrite){
+        return {speech:'The task is not verified complete. I could not finish the required source, saved-content or action read-back checks. Saved work is retained.',verification:evidence,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
       }
       const statusQuestion=opts.message.length<300 && /\b(?:where\b.{0,30}\b(?:stop|are we)|what(?:'s| is) left|what happened|did it work|status)\b/i.test(opts.message) && !/\b(?:detailed|technical report|table|breakdown)\b/i.test(opts.message);
       if(opts.workRuntime && statusQuestion && !plainStatusRewrite && !lastRound && (out.text.length>600 || /^\s*#{1,6}\s/m.test(out.text))){
