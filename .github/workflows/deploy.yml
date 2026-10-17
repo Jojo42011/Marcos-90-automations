@@ -11,6 +11,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # The consent fixture loads compiled modules through VM stubs. Compile the
+      # current source rather than trusting checked-in dist; native install
+      # hooks are unnecessary here (the production image installs normally).
+      - name: Compile current source for deployment preflight
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
       - name: Verify model-independent credential consent
         run: node scripts/verify-harvey-credential-consent.mjs
 
