@@ -25,6 +25,9 @@ const server=http.createServer(async(req,res)=>{
   }else if(mode==='recovery'){
    if(n===0)message={role:'assistant',content:"I cannot extract virtualized table data."};
    else{assert(body.messages.some(m=>String(m.content).includes('CAPABILITY RECOVERY')));const steps=[['capabilities',{}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Read fixture records'],limitations:[]}]];message=n<=steps.length?tc(...steps[n-1]):{role:'assistant',content:'Read the records using the available route.'};}
+  }else if(mode==='visual_fields'){
+   const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['inspect_screen',{question:'Read the visible profile name into data.rows',structured:true}],['work_records',{action:'save',collection:'visual-profiles',records:[{evidenceId:'e3',idPath:'/sourcePage',fieldPaths:{Name:'/data/rows/0/name'}}]}],['work_records',{action:'list',collection:'visual-profiles'}],['report_verification',{status:'completed',evidenceIds:['e3','e5'],checks:['Read back visual field saved under observed profile URL'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved the observed visual profile.'};
   }else if(mode==='profiles'){
    const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_click',arguments:{target:'#notes'}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_click',arguments:{target:'#notes'}}],['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/people/2'}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_click',arguments:{target:'#notes'}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e8'],checks:['Different profile read back; same-page repeat refused'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Inspected both profiles.'};
@@ -45,6 +48,7 @@ Object.assign(process.env,{OPENROUTER_API_KEY:'local-fixture',OPENROUTER_BASE_UR
 const root=resolve('dist/src'),{runAgentLoop}=require(join(root,'hull/agentLoop.js'));
 const store=require(join(root,'harvey/work/store.js')),runtime=require(join(root,'harvey/work/runtime.js'));
 const learning=require(join(root,'harvey/work/learning.js')),execution=require(join(root,'harvey/work/execution.js'));
+const records=require(join(root,'harvey/work/records.js'));
 const caps=require(join(root,'harvey/work/capabilities.js')),failure=require(join(root,'harvey/toolFailures.js'));
 const tools=runtime.WORK_TOOLS.filter(t=>['computer','inspect_screen','capabilities'].includes(t.name));
 try{
@@ -76,9 +80,13 @@ try{
  for(const text of ['yes, do it','Google Sheets is connected now','I authorized Google Sheets','Authorize Google Sheets, then do whatever you can','well just time it correctly and try again'])assert(execution.taskFollowup(text));
  assert(!execution.taskFollowup('Are Google Sheets connected?'));assert(!execution.taskFollowup('stop'));assert(!execution.taskFollowup('just explain the plan'));
  console.log('ok follow-up retains exact contract and rechecks historical blockers without bypassing security');
+ mode='visual_fields';round=0;
+ const savedVisual=await runAgentLoop({message:'Read visual profile fields',modelOverride:'inception/mercury-2.5',workRuntime:{tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='work_records')],context:'Fixture',execute:async(name,input)=>name==='work_records'?records.workRecords('fixture',chat.id,input):input.tool==='browser_take_screenshot'?{_image:{media_type:'image/png',data:'fixture-profile-pixels'}}:{url:'https://fixture.invalid/people/42?token=secret'}}});
+ assert.equal(savedVisual.verification.status,'completed');const visualRecord=records.workRecords('fixture',chat.id,{action:'list',collection:'visual-profiles'}).items[0];assert.equal(visualRecord.key,'https://fixture.invalid/people/42');assert.equal(visualRecord.fields.Name,'Fixture Person');assert(!JSON.stringify(visualRecord).includes('secret'));
+ console.log('ok structured visual fields persist under the observed profile path without inventing IDs or retaining URL tokens');
  mode='contract';round=0;const other=store.createChat('fixture',{});
  const incomplete=await runtime.runChat('fixture',other,'Export two fixture records',{modelOverride:'inception/mercury-2.5'});
- assert.notEqual(incomplete.verification.status,'completed');assert.equal(store.list('work_record','fixture').length,0);
+ assert.notEqual(incomplete.verification.status,'completed');assert.equal(store.list('work_record','fixture').filter(r=>r.chatId===other.id).length,0);
  console.log('ok model cannot mark missing contracted records complete');
  const history=learning.boundedHistory([{role:'user',content:'Exclude Mojo FL; Google Sheets; 20 profiles'},{role:'assistant',content:'x'.repeat(40000)},{role:'user',content:'yes do it'}]);
  assert(history.messages.some(m=>m.content.includes('Exclude Mojo FL')));

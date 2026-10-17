@@ -439,6 +439,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let capabilityRecoveryPrompted=false;
   let assistedVisionAt=0;
   const unscopedBrowserActions=new Set<string>();
+  const scopedBrowserActions=new Set<string>();
 
   /**
    * Run one tool call, refusing an identical repeat.
@@ -471,6 +472,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     // Same-page repeats (including uncertain submissions) remain refused.
     const pageScope=opts.workRuntime&&name==='computer'&&!read?verification.browserLocation():undefined;
     const operation=signature(name,input);
+    if(opts.workRuntime&&name==='computer'&&!read&&!pageScope&&scopedBrowserActions.has(operation))return {error:'The current page identity is unknown after the last operation. Inspect a fresh page before considering this action again; no action was replayed.'};
+    if(pageScope)scopedBrowserActions.add(operation);
     if(opts.workRuntime&&name==='computer'&&!read&&!pageScope)unscopedBrowserActions.add(operation);
     const sig = operation + (pageScope&&!unscopedBrowserActions.has(operation)?':'+pageScope:'') + (scrolling?":"+scrollCheckpoint!.progressKey:"") + (opts.workRuntime && read ? `:${observationRevision}` : "");
     const seen = (callCounts.get(sig) || 0) + 1;
@@ -535,6 +538,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         const screenshot=await executeTool('computer',{action:'call',tool:'browser_take_screenshot',arguments:{}});
         const capturedAt=Date.now();
         const captured=verification.record('computer',{action:'call',tool:'browser_take_screenshot'},getModelInfo(lastModelUsed)?.supportsVision===false?{...(screenshot as any),imageUnavailableToModel:true}:screenshot);opts.onEvidence?.(captured);
+        const sourcePage=verification.browserPage();
         const {image}=takeImage(screenshot);
         if(!image)throw Error((screenshot as any)?.error||'Screenshot capture returned no image pixels');
         opts.signal?.throwIfAborted();
@@ -553,6 +557,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           screenAnalyses.set(key,result);
         }
         assistedVisionAt=capturedAt;
+        if(sourcePage)result={...result,sourcePage:sourcePage.url,sourcePageObservedAt:sourcePage.observedAt,sourcePageNote:'Observed origin/path only; query, fragment and credentials omitted. Use an actual stable record ID when multiple records share this path.'};
       }catch(e){result={error:'Screen inspection failed: '+(e instanceof ModelLayerError?e.summary:(e as Error).message),stage:'visual_observation',note:'This does not establish that the website cannot be automated. Try semantic snapshot/table or diagnose the specific capture/provider error.'};}
       opts.signal?.throwIfAborted();
       const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);
