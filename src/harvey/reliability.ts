@@ -182,7 +182,7 @@ export class TurnVerification {
       if (cited.some((r: Receipt) => r.truncated)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
       if (cited.some((r: Receipt) => r.limitation)) throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
       for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery&&!['task_plan','continuity'].includes(r.tool))) {
-        if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error("Read back each affected service after its action before claiming completion");
+        if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error(`Read back each affected service after its action before claiming completion. Missing ${action.scope} observation after ${action.tool} (${action.id}). For browser use computer browser_snapshot or inspect_screen and cite that receipt; for saved text use workspace_read for the affected file.`);
         if(action.tool==='workspace_write'&&action.outcome==='returned'){
           const file:any=this.sources.get(action.id),after=this.receipts.slice(this.receipts.indexOf(action)+1);
           const superseded=after.some(r=>r.tool==='workspace_write'&&r.outcome==='returned'&&(this.sources.get(r.id) as any)?.file===file?.file);

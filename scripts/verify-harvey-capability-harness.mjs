@@ -22,6 +22,9 @@ const server=http.createServer(async(req,res)=>{
    assert.equal(body.model,mainModel,'The main model must stay pinned');
    const steps=[['inspect_screen',{question:'Locate the visible fixture Save button'}],['computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e4'],checks:['Read back saved fixture state after click'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and checked.'};
+  }else if(mode==='missing_readback'){
+   const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/report'}}],['workspace_read',{file:'fixture.md'}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Attempted unrelated read-back'],limitations:[]}],['report_verification',{status:'completed',evidenceIds:['e2','e4'],checks:['Reviewed fresh selected-page observation and saved content'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Reviewed the page and saved content.'};
   }else if(mode==='forced_review'){
    if(n===2)assert.equal(body.tool_choice?.function?.name,'report_verification','Provider must receive an explicit verification tool choice');
    message=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===2?tc('report_verification',{status:'completed',evidenceIds:['e1'],checks:['Observed fixture outcome'],limitations:[]}):{role:'assistant',content:'The observed fixture is complete.'};
@@ -119,6 +122,9 @@ try{
  mode='forced_review';round=0;
  const forced=await runAgentLoop({message:'Open and check the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
  assert.equal(forced.verification.status,'completed');
+ mode='missing_readback';round=0;let navigations=0,readbacks=0;
+ const recoveredReadback=await runAgentLoop({message:'Read the fixture page and report',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>{if(name==='workspace_read')return {file:'fixture.md',content:'Observed fixture report'};if(input.tool==='browser_navigate')navigations++;if(input.tool==='browser_snapshot')readbacks++;return {url:'https://fixture.invalid/report',observed:'Fixture report'};}}});
+ assert.equal(recoveredReadback.verification.status,'completed');assert.equal(navigations,1);assert.equal(readbacks,1);
  console.log('ok real text artifacts read back, invalid projections retain diagnostics, and unverified success prose cannot escape the final gate');
  mode='resume';round=0;
  store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});
