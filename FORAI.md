@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-17: Final replies turn inline-code names or paths of files actually present in the current owner/chat into authenticated clickable downloads; unknown files and other owners remain unchanged. This closes the live catalog delivery gap after content verification.
+
 - 2026-10-17: Compact DOM replacements now return their own source receipt at the top level, avoiding contradictory truncated evidence identifiers. Rejected completion reviews list eligible current observation IDs with per-file hashes so models can repair citations without repeating writes. Known current-chat download links normalize surrounding Markdown whitespace as well as incorrect hosts. Completion still requires actual source review and saved-content read-back.
 
 - 2026-10-17: Existing-chat QA exposed additional plan-revision and stop-review failures. Same-request plan saves now preserve omitted fields; explicit completed indices can derive the next step, with invalid indices still rejected. New source observations reset verification repair attempts; repeated identical reads do not. Truncated extraction snapshots offer compact current DOM rows with a separate source receipt before visual fallback. Verified workspace links using an invented host normalize to the actual same-origin artifact path. Acceptance fixtures retain earlier failed-chat history and existing catalog/research artifacts; customer data and unrelated browser sessions remain untouched.
