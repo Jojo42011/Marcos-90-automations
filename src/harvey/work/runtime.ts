@@ -164,7 +164,11 @@ async function runtime(owner: string, chat: Chat, unattended: boolean, onEvent?:
         for(const key of ["successCriteria","steps","requiredSources"]){if(!Array.isArray(input[key])||input[key].length>30)throw new Error("Plan fields must be arrays with at most 30 entries");value[key]=input[key].map((v:any)=>text(v,key,500));}
         if(!value.steps.length||!value.successCriteria.length)throw new Error("A plan needs steps and observable success criteria");
         const current=list<any>('task_plan',owner).find(p=>p.chatId===chat.id);
-        value.contract=validateContract(input.contract)??(current?.requestId===requestId?current.contract:undefined);
+        const contractUpdate=validateContract(input.contract);
+        // A plan revision may update just the destination or count. Omitted
+        // requirements still belong to this request; explicit values replace them.
+        const retainedContract=current?.requestId===requestId?current.contract:undefined;
+        value.contract=contractUpdate?{...retainedContract,...contractUpdate}:retainedContract;
         put("task_plan",owner,{...value,...(current?{id:current.id}:{})});return get("task_plan",owner,current?.id||value.id);
       }
       case "handoff_to_work": { const target = handoffChat(owner,chat.id,input.brief); return {chatId:target.id,url:`/harvey?chat=${target.id}`,status:"Planning draft ready; no execution started"}; }
