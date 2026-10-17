@@ -25,15 +25,16 @@ const MAX_USER_MESSAGES_PHONE_SCAN = 12;
 
 /**
  * US-ish mobile: strip non-digits; accept 10 digits, or 11 starting with country code 1.
- * If one bubble contains extra digits (zip + phone, two numbers), prefer the last 10-digit run.
+ * Ignore URLs and prefer the last complete US phone candidate; never truncate a longer numeric ID.
  */
 export function extractPhone(text: string): string | null {
-  const digits = text.replace(/\D/g, "");
-  if (digits.length === 10) return digits;
-  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-  if (digits.length > 11) {
-    const tail = digits.slice(-10);
-    if (tail.length === 10) return tail;
+  // Video IDs and tracking parameters are references, never contact numbers.
+  const clean = text.replace(/https?:\/\/\S+|www\.\S+/gi, " ");
+  const candidates = clean.match(/(?<!\d)(?:\+?1[\s().-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}(?!\d)/g) ?? [];
+  for (const candidate of candidates.reverse()) {
+    const digits = candidate.replace(/\D/g, "");
+    if (digits.length === 10) return digits;
+    if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
   }
   return null;
 }

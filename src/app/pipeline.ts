@@ -2,8 +2,8 @@
  * Run modules in order by lead state. Single entry for webhook-driven flow.
  */
 import { respondsToDmInvitation } from "../integrations/zernio/history.js";
-import { hasVideoKeyword, voiceVideoReply } from "../videoKnowledge/index.js";
-import { asksForListingFacts, unverifiedListingReply, requestsPhoneNumber, requestsUnsupportedPropertyMedia } from "./propertyKnowledge.js";
+import { hasVideoKeyword, lookupVideoKnowledge, isPropertyConversationExit } from "../videoKnowledge/index.js";
+import { asksForListingFacts, unverifiedListingReply, propertyFunnelReply, requestsPhoneNumber, requestsUnsupportedPropertyMedia } from "./propertyKnowledge.js";
 import * as db from "../core/db.js";
 import { getListing } from "../core/listingsStore.js";
 import type { Conversation, IncomingWebhookPayload, Lead } from "../core/types.js";
@@ -16,7 +16,6 @@ import {
   classifyNewLeadBuyingIntent,
   failOpenCount,
   generateMarcoPipelineReply,
-  chooseMarcoVideoReply,
   preflightLeadTurnReview,
   sanitizeOpeningReplyAgainstRecentMarco,
   sanitizePipelineReplyAgainstRecentMarco,
@@ -797,14 +796,10 @@ export async function run(
     }
   }
 
-  // Preserve linked MLS behavior. Video evidence applies only to TikTok without a linked listing.
-  const propertyReply = payload.platform === "tiktok" && !(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn
-    ? await voiceVideoReply(payload.userId, latestLeadText, options=>chooseMarcoVideoReply(options,conversation),'marco') : null;
-  if (propertyReply) {
-    await db.appendMessage(lead.id, "assistant", propertyReply);
-    await db.updateLead(lead);
-    return { lead, reply: propertyReply };
-  }
+  // Facts are optional context for the existing funnel, never a separate DM flow.
+  const videoKnowledge = payload.platform === "tiktok" && !(lead.mlsListingKey && getListing(lead.mlsListingKey))
+    && !phoneCapturedThisTurn && !isPropertyConversationExit(latestLeadText)
+    ? await lookupVideoKnowledge(payload.userId, latestLeadText) : null;
 
   if (respondsToDmInvitation(latestLeadText) && !phoneCapturedThisTurn) {
     const reply = "Hey, thanks for messaging me here! What would you like to know about the property?";
@@ -813,9 +808,13 @@ export async function run(
     return { lead, reply };
   }
 
-  if (!(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn && asksForListingFacts(latestLeadText)) {
-    const reply = unverifiedListingReply(Boolean(lead.phone), [...conversation.messages].reverse().find(m => m.role === "assistant")?.text);
-    if (!lead.phone) lead = { ...lead, state: FunnelStage.PhoneRequested };
+  if (!(lead.mlsListingKey && getListing(lead.mlsListingKey)) && !phoneCapturedThisTurn && !isPropertyConversationExit(latestLeadText) && (videoKnowledge || asksForListingFacts(latestLeadText))) {
+    const declinedContact = conversation.messages.some(m => m.role === "user" && signalsExplicitPhoneRefusal(m.text));
+    // Preserve Marco's existing location/address/builder-by-text policy.
+    const summary = videoKnowledge?.summary && (Boolean(lead.phone) || !/It's in |area mentioned|address listed|builder|video from/i.test(videoKnowledge.summary))
+      ? videoKnowledge.summary : null;
+    const reply = propertyFunnelReply(Boolean(lead.phone), [...conversation.messages].reverse().find(m => m.role === "assistant")?.text, summary, declinedContact);
+    if (!lead.phone && !declinedContact) lead = { ...lead, state: FunnelStage.PhoneRequested };
     await db.appendMessage(lead.id, "assistant", reply);
     await db.updateLead(lead);
     return { lead, reply };

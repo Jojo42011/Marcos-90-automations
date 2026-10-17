@@ -54,7 +54,7 @@ export function hasVideoKeyword(message: string): boolean {
         return false;
     }
 }
-const queries: Record<Field, RegExp> = { city: /\b(?:city|where|location|is it in)\b/i, area: /\b(?:area|neighbou?rhood|where|location)\b/i, address: /\baddress\b/i, price: /\b(?:price|pricing|cost|how much)\b/i, bedrooms: /\b(?:bedrooms?|beds?)\b/i, bathrooms: /\b(?:bathrooms?|baths?)\b/i, size: /\b(?:size|square feet|sq\.?\s?ft)\b/i, acreage: /\b(?:acreage|acres?|lot)\b/i, builder: /\bbuilder\b/i, features: /\b(?:features?|pool|garage|elevator|barn|kitchen|patio|casita|fireplace|balcony)\b/i };
+const queries: Record<Field, RegExp> = { city: /\b(?:city|where|location|is it in)\b/i, area: /\b(?:area|neighbou?rhood|where|location)\b/i, address: /\baddress\b/i, price: /\b(?:price|pricing|cost|how much|selling for|asking price)\b/i, bedrooms: /\b(?:bedrooms?|beds?)\b/i, bathrooms: /\b(?:bathrooms?|baths?)\b/i, size: /\b(?:size|square feet|sq\.?\s?ft)\b/i, acreage: /\b(?:acreage|acres?|lot)\b/i, builder: /\bbuilder\b/i, features: /\b(?:features?|lazy river|pool|garage|elevator|barn|kitchen|patio|casita|fireplace|balcony)\b/i };
 export function videoReply(person: string, message: string, store?: VideoStore, accountId = account(), enabled = videoRepliesEnabled()): string | null {
     if (!enabled || !accountId)
         return null;
@@ -117,7 +117,7 @@ export function videoReply(person: string, message: string, store?: VideoStore, 
         if (!notes) return null;
         if (propertyQuestion && !fields.length)
             return "I'll need to verify that detail on this one.";
-        const requestedFeature = question.match(/\b(pool|garage|elevator|barn|kitchen|patio|casita|fireplace|balcony)\b/i)?.[1];
+        const requestedFeature = question.match(/\b(lazy river|pool|garage|elevator|barn|kitchen|patio|casita|fireplace|balcony)\b/i)?.[1];
         const selected = fields.length ? notes.facts.filter(f => fields.includes(f.field) && (f.field !== 'features' || !requestedFeature || f.value.toLowerCase().includes(requestedFeature.toLowerCase()))) : notes.facts.filter(f => ['city', 'area', 'bedrooms', 'bathrooms', 'features'].includes(f.field));
         if (!selected.length)
             return "I found the video, but it doesn't have confirmed information for that question. I'll need to verify that detail.";
@@ -191,6 +191,20 @@ export async function importOwnedVideo(store: VideoStore, accountId: string, url
     if(!Number.isFinite(timestamp)||timestamp<=0)throw Error('Video publication date is unavailable');
     store.ingest({account:accountId,post:String(meta.id),url:meta.webpage_url,caption:String(meta.description||''),published:new Date(timestamp*1000).toISOString()});
     return store.get(accountId,String(meta.id));
+}
+
+/** Video knowledge supplements the funnel; it never chooses contact or clarification steps. */
+export async function lookupVideoKnowledge(person: string, message: string): Promise<{summary: string | null} | null> {
+    if (!videoRepliesEnabled()) return null;
+    const reply = videoReply(person, await expandVideoLinks(message));
+    if (!reply) return null;
+    // Only the deterministic fact renderer can supply a summary. Missing-fact and
+    // lookup instructions stay internal rather than replacing the client funnel.
+    const factual = /^(?:It's (?:in|got) |The (?:area mentioned|address listed|video from|video lists) )/.test(reply);
+    return {summary: factual ? reply : null};
+}
+export function isPropertyConversationExit(message: string): boolean {
+    return /^(?:ok(?:ay)?|thanks|thank you|bye|have a good day|stop|never mind|nevermind|nvm|no thanks)[.!\s]*$/i.test(message.trim());
 }
 
 /** The voice model selects among grounded replies; it cannot add property facts. */

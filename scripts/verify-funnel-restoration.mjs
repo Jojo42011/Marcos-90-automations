@@ -1,0 +1,47 @@
+import assert from "node:assert/strict";
+import {createRequire} from "node:module";
+import {mkdtempSync,rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import path from "node:path";
+const require=createRequire(import.meta.url),dir=mkdtempSync(path.join(tmpdir(),"marco-funnel-"));
+process.env.DB_JSON_PATH=path.join(dir,"leads.json");
+process.env.LISTINGS_DB_PATH=path.join(dir,"listings.db");
+process.env.VIDEO_KNOWLEDGE_DB_PATH=path.join(dir,"video.db");
+process.env.VIDEO_KNOWLEDGE_ENABLED="true";
+process.env.VIDEO_KNOWLEDGE_REPLIES_ENABLED="true";
+process.env.ZERNIO_TIKTOK_ACCOUNT_ID="fixture";
+delete process.env.ANTHROPIC_API_KEY;
+globalThis.fetch=async()=>{throw Error("No live APIs allowed");};
+const pipeline=require("../dist/src/app/pipeline.js");
+const video=require("../dist/src/videoKnowledge/index.js");
+const phone=require("../dist/src/app/funnelDeterministic.js");
+const s=video.videoStore();
+const url="https://www.tiktok.com/@fixture/video/7657993222253464863";
+s.ingest({account:"fixture",post:"7657993222253464863",url,published:"2026-10-01T00:00:00Z",caption:"A home with a lazy river. Comment RIVER."});
+s.complete(s.claim("fixture"),"A home with a lazy river.",{facts:[],keywords:["river"]});
+const event=(userId,message)=>({platform:"tiktok",userId,commentOrDm:"dm",message});
+try {
+ assert.equal(phone.extractPhone(url),null);
+ assert.equal(phone.extractPhone(url+"?tracking=2105550198"),null);
+ assert.equal(phone.extractPhone(url+" my number is (210) 555-0198"),"2105550198");
+ const first=await pipeline.run({...event("screenshot","Can you provide me with the details for the home?"),marcoPreviousOutbound:"Hi! Is this your first time going through the home buying process?"});
+ assert.match(first.reply,/best number/i);assert.match(first.reply,/have someone reach out/i);
+ assert.equal(first.lead.state,"phone_requested");assert.doesNotMatch(first.reply,/first time|paste|copy link|not confirmed/i);
+ const link=await pipeline.run(event("url",url));
+ assert.match(link.reply,/best number/i);assert.equal(link.lead.phone,null);assert.equal(link.lead.state,"phone_requested");
+ const capture=await pipeline.run(event("url","210 555 0198"));
+ assert.equal(capture.lead.phone,"2105550198");assert.equal(capture.reply,"I'll get that over to you.");
+ const known=await pipeline.run(event("url","RIVER price?"));
+ assert.doesNotMatch(known.reply,/best number|paste|copy link|\$\d/i);
+ const unknown=await pipeline.run(event("description","Tell me about the home with a lazy river"));
+ assert.match(unknown.reply,/best number/i);assert.doesNotMatch(unknown.reply,/paste|copy link|Which house/i);
+ const close=await pipeline.run(event("description","Thanks"));
+ assert.doesNotMatch(close.reply||"",/paste|copy link|best number|Which house/i);
+ // Add only a fact corroborated by BOTH sources.
+ const row=s.get("fixture","7657993222253464863");
+ s.review("fixture",row.post,row.revision,"retry");
+ s.complete(s.claim("fixture"),"A home with a lazy river.",{facts:[{field:"features",value:"lazy river",quote:"A home with a lazy river.",source:"transcript"}],evidence:[{field:"features",value:"lazy river",quote:"A home with a lazy river.",source:"caption"},{field:"features",value:"lazy river",quote:"A home with a lazy river.",source:"transcript"}],keywords:["river"]});
+ const facts=await pipeline.run(event("verified","RIVER info"));
+ assert.match(facts.reply,/lazy river/i);assert.match(facts.reply,/best number/i);assert.equal(facts.lead.state,"phone_requested");
+ console.log("Funnel restoration: screenshot, URL, capture, known contact, description, closeout and corroborated facts passed.");
+} finally {video.closeVideoStore();rmSync(dir,{recursive:true,force:true});}

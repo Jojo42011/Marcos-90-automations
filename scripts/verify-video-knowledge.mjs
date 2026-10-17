@@ -82,7 +82,9 @@ try {
    const liveStore=videoStore();liveStore.ingest(video());liveStore.complete(liveStore.claim('account-a'),'The complete source speech.',notes);liveStore.review('account-a','111',liveStore.get('account-a','111').revision,'approve');
    const pipeline=await import(pathToFileURL(path.resolve('dist/src/app/pipeline.js')).href);
    const payload={platform:'tiktok',userId:'video-test',username:'fixture',displayName:'Fixture',message:'OAK HILL location?',commentOrDm:'dm',marcoPreviousOutbound:null,listingRef:null};
-   const first=await pipeline.run(payload);assert.match(first.reply,/San Antonio/);assert.doesNotMatch(first.reply,/Austin/);
+   const first=await pipeline.run(payload);assert.match(first.reply,/best number/i);assert.doesNotMatch(first.reply,/Austin|San Antonio/);
+   await pipeline.run({...payload,message:'210 555 0198'});
+   const location=await pipeline.run(payload);assert.match(location.reply,/San Antonio/);assert.doesNotMatch(location.reply,/Austin|best number/i);
    const second=await pipeline.run({...payload,message:'price?'});assert.match(second.reply,/450,000/);
  });
  await check('database persists across reopen',()=>{store.close();const reopened=new VideoStore(path.join(dir,'videos.db'));assert.equal(reopened.get('account-a','222').state,'ready');reopened.close();});
