@@ -57,7 +57,7 @@ const store = {
 };
 const runtime = load("harvey/work/runtime.js", {
   "./localBrowser.js":{localBrowserSelected:()=>false},
-  "./modelAdvice.js":{}, "./records.js":{}, "./execution.js":load("harvey/work/execution.js"),
+  "./capabilities.js":load("harvey/work/capabilities.js"), "./modelAdvice.js":{}, "./records.js":{}, "./execution.js":load("harvey/work/execution.js"),
   "./failureReport.js":load("harvey/work/failureReport.js",{"./store.js":store}),
   "../../core/users.js":{getAccountUserById:()=>null},
   "./teamTraining.js":{sharedTrainingContext:()=>[]},

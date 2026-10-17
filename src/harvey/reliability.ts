@@ -31,10 +31,10 @@ export const VERIFICATION_TOOL: Tool = {
 };
 export const SOURCE_CHECK_TOOL: Tool = {name:"verify_source_values",description:"Check extracted values against exact JSON-pointer paths in a returned tool result. Use for CRM addresses, IDs, statuses, counts and metrics before presenting them. This checks values, not whether every page was retrieved. Paths start with /; use ~1 for / and ~0 for ~. String JSON bodies are parsed when traversed.",input_schema:{type:"object",properties:{evidenceId:{type:"string"},claims:{type:"array",items:{type:"object",properties:{path:{type:"string"},expected:{}},required:["path","expected"]}}},required:["evidenceId","claims"]}};
 export function isDiscovery(name:string,input:any):boolean {
-  return ["business_tools","plugins","plugin_tools","saved_logins","COMPOSIO_SEARCH_TOOLS","COMPOSIO_GET_TOOL_SCHEMAS","COMPOSIO_WAIT_FOR_CONNECTIONS"].includes(name) || name==="computer"&&input.action==="tools";
+  return ["capabilities","business_tools","plugins","plugin_tools","saved_logins","COMPOSIO_SEARCH_TOOLS","COMPOSIO_GET_TOOL_SCHEMAS","COMPOSIO_WAIT_FOR_CONNECTIONS"].includes(name) || name==="computer"&&input.action==="tools";
 }
 function resourceScope(name:string,input:any):string {
-  if(name==="computer"||name==="use_saved_login")return "browser";
+  if(name==="computer"||name==="use_saved_login"||name==='inspect_screen')return "browser";
   if(name.startsWith("plugin_"))return stableCallKey("connection",input.connectionId);
   if(name==="COMPOSIO_MULTI_EXECUTE_TOOL")return stableCallKey("managed",[input.harvey_connection_scope,(input.tools||[]).map((t:any)=>String(t.tool_slug).split("_")[0]).sort()]);
   if(name==="business_call")return "business:"+String(input.tool||"").replace(/^(create|update|delete|get|list|search|find|read)_/,"").replace(/s$/,"");
@@ -45,6 +45,7 @@ function resourceScope(name:string,input:any):string {
 
 // Conservative classification: unknown tools are possible actions, not verified reads.
 export function isObservation(name: string, input: any): boolean {
+  if(name==='inspect_screen')return true;
   if (name === "COMPOSIO_MULTI_EXECUTE_TOOL") {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
@@ -83,6 +84,23 @@ export class TurnVerification {
   private receipts: Receipt[] = [];
   private sources = new Map<string,unknown>();
   private report?: Omit<Verification, "receipts" | "basis">;
+  browserPage():{url:string;observedAt:string}|undefined {
+    for(const r of [...this.receipts].reverse()){
+      if(r.tool!=='computer'||r.discovery)continue;
+      if(r.outcome!=='returned')return undefined;
+      const source:any=this.sources.get(r.id);
+      const raw=Array.isArray(source?.content)?source.content.filter((c:any)=>c.type==='text').map((c:any)=>c.text).join('\n'):'';
+      const url=source?.url||raw.match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1];
+      if(typeof url==='string'&&/^https?:\/\//.test(url))try{const page=new URL(url);return {url:page.origin+page.pathname,observedAt:r.at};}catch{}
+      // An unknown mutation may have navigated: don't attach an older profile.
+      if(!r.observation)return undefined;
+    }
+    return undefined;
+  }
+  browserLocation():string|undefined {
+    const page=this.browserPage();
+    return page?stableCallKey('observed_browser_location',page.url):undefined;
+  }
   projectRecords(records:any) {
     if(!Array.isArray(records)||!records.length||records.length>30)throw Error("Provide 1–30 records with observed IDs and field paths");
     return records.map((record:any)=>{

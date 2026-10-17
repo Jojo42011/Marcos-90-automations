@@ -90,6 +90,16 @@ export function workflowPrompt(owner:string,chatId:string,id:string) {
   const w=workflow(owner,chatId,id);
   return `Pinned taught workflow, revision ${w.revision}. This procedure is not proof it will succeed. Verify current account, prerequisites and every success check. Stop and report missing information or uncertain writes. Never invent missing values.\n${JSON.stringify(w)}`;
 }
+export function learnWorkflow(owner:string,chatId:string,input:any) {
+  get('chat',owner,chatId);
+  if(!Array.isArray(input._executionProof)||!input._executionProof.length)throw Error('A learned procedure needs completed execution evidence from the current agent loop');
+  const w:Workflow={id:randomUUID(),chatId,name:safeNote(input.name,'Workflow name',100),steps:lines(input.steps,'Steps',12,400),checks:lines(input.checks,'Success checks',8,200),prerequisites:lines(input.prerequisites||[],'Prerequisites',8,150),sourceSeqs:[],revision:1,createdAt:now()};
+  if(!w.steps.length||!w.checks.length)throw Error('A learned procedure needs reusable steps and observable checks');
+  if([...w.steps,...w.checks].some(s=>/\[ref=|observationId\s*[:=]|\b(?:e\d+|snapshotId)\s*[:=]/i.test(s)))throw Error('Save the method, not temporary browser references or receipt IDs');
+  const existing=workflows(owner,chatId).find(x=>x.name.toLowerCase()===w.name.toLowerCase());
+  if(existing){w.previousId=existing.id;w.revision=existing.revision+1;}
+  return put('workflow',owner,{...w,basis:'verified_execution_require_current_prerequisites',executionProof:input._executionProof});
+}
 export function learningContext(owner:string,chat:Chat,query:string) {
   const words=new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[]);
   const lessons=activeLessons(owner,chat.id).map(m=>({m,score:[...words].filter(w=>(m.key+" "+m.value).toLowerCase().includes(w)).length})).sort((a,b)=>b.score-a.score);
@@ -101,6 +111,14 @@ export function learningContext(owner:string,chat:Chat,query:string) {
 }
 export function boundedHistory(history:Message[]) {
   const selected:Message[]=[];let chars=0;
-  for(const m of [...history].reverse()){if(selected.length>=24||chars+m.content.length>28000)break;selected.unshift(m);chars+=m.content.length;}
+  for(const m of [...history].reverse()){
+    if(selected.length>=24)break;
+    if(chars+m.content.length>28000){
+      // A giant assistant reply must not hide every earlier user instruction.
+      if(m.role==='user'&&chars<26000){const clipped={...m,content:m.content.slice(0,Math.min(12000,28000-chars))+'\n[Message clipped; use history_search for the rest.]'};selected.unshift(clipped);chars+=clipped.content.length;}
+      continue;
+    }
+    selected.unshift(m);chars+=m.content.length;
+  }
   return {messages:selected,diagnostics:{historyMessagesLoaded:history.length,historyMessagesUsed:selected.length,historyCharacters:chars,historyOmitted:history.length-selected.length,historyCharacterLimit:28000}};
 }

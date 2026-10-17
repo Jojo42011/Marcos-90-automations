@@ -3,6 +3,8 @@ export function toolFailure(name:string,input:any,result:any) {
   const error=(value:any,depth=0):string=>{
     if(!value||typeof value!=="object"||depth>3)return "";
     if(typeof value.error==="string")return value.error;
+    if(value.error&&typeof value.error.message==='string')return value.error.message;
+    if((value.ok===false||value.success===false||value.successful===false)&&typeof value.message==='string')return value.message;
     if(value.isError)return (value.content||[]).filter((c:any)=>c.type==="text").map((c:any)=>c.text).join(" ")||"Tool returned isError";
     for(const v of Object.values(value)){const found=error(v,depth+1);if(found)return found;}
     return "";

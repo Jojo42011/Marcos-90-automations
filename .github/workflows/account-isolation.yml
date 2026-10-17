@@ -26,6 +26,7 @@ jobs:
       - run: node scripts/verify-account-isolation.mjs
       - run: node scripts/verify-account-ui.mjs
       - run: node scripts/verify-harvey-credential-consent.mjs
+      - run: node scripts/verify-harvey-capability-harness.mjs
       - run: node scripts/verify-workspace-files.mjs
       - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: node scripts/verify-video-edit.mjs
