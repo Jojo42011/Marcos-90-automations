@@ -113,6 +113,19 @@ try{
  assert.equal(retainedContract.count,2,'Partial contract updates must retain the requested count');assert.equal(retainedContract.collection,'profiles');assert.deepEqual(retainedContract.exclusions,['Mojo FL']);assert.equal(retainedContract.destination,'Google Sheets');
  assert.notEqual(incomplete.verification.status,'completed');assert.equal(store.list('work_record','fixture').filter(r=>r.chatId===other.id).length,0);
  console.log('ok model cannot mark missing contracted records complete');
+ const projection=new (require(join(root,'harvey/reliability.js')).TurnVerification)();
+ for(const observed of [{id:'same-person',name:'Fixture Name',phone:'fixture-phone'},{id:'same-person',notes:'Observed note'},{id:'same-person',phone:null}]){
+  const receipt=projection.record('computer',{action:'call',tool:'browser_read_table'},{rows:[observed]});
+  records.workRecords('fixture',other.id,{action:'save',collection:'incremental',_verifiedRecords:projection.projectRecords([{evidenceId:receipt.id,idPath:'/rows/0/id',fieldPaths:Object.fromEntries(Object.keys(observed).filter(k=>k!=='id').map(k=>[k,'/rows/0/'+k]))}])});
+ }
+ const merged=records.workRecords('fixture',other.id,{action:'list',collection:'incremental'});
+ assert.equal(merged.total,1);assert.deepEqual(merged.items[0].fields,{name:'Fixture Name',phone:null,notes:'Observed note'});
+ assert.equal(merged.items[0].fieldSources.name.path,'/rows/0/name');assert.equal(merged.items[0].fieldSources.notes.path,'/rows/0/notes');
+ store.closeStore();assert.deepEqual(records.workRecords('fixture',other.id,{action:'list',collection:'incremental'}).items[0].fields,merged.items[0].fields);
+ const partials=['name','notes'].map(field=>({key:'batched-person',fields:{[field]:'Observed '+field},source:{tool:'computer',observedAt:'fixture-time',paths:{[field]:'/rows/0/'+field}}}));
+ records.workRecords('fixture',other.id,{action:'save',collection:'same-batch',_verifiedRecords:partials});
+ assert.deepEqual(records.workRecords('fixture',other.id,{action:'list',collection:'same-batch'}).items[0].fields,{name:'Observed name',notes:'Observed notes'});
+ console.log('ok incremental sections retain previously observed fields, explicit null corrections and per-field provenance');
  const history=learning.boundedHistory([{role:'user',content:'Exclude Mojo FL; Google Sheets; 20 profiles'},{role:'assistant',content:'x'.repeat(40000)},{role:'user',content:'yes do it'}]);
  assert(history.messages.some(m=>m.content.includes('Exclude Mojo FL')));
  const map=caps.capabilityMap({local:false,browser:true,managed:true,connectionError:'discovery failed',apps:[],custom:[],tools:['computer','inspect_screen','COMPOSIO_SEARCH_TOOLS','work_records']});

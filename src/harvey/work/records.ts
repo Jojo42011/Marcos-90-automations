@@ -28,9 +28,14 @@ export function workRecords(owner:string,chatId:string,input:any) {
     // Only the agent loop supplies this projection after checking current tool evidence.
     const records=input._verifiedRecords;
     if(!Array.isArray(records)||!records.length||records.length>30)throw Error("Save records through source evidence, not unsupported values");
-    workDb().transaction(()=>{for(const record of records){
+    workDb().transaction(()=>{const existing=new Map(rows().map(r=>[r.id,r]));for(const record of records){
       const id=createHash("sha256").update(JSON.stringify([chatId,collection,record.key])).digest("hex");
-      put("work_record",owner,{id,chatId,collection,...record});
+      const previous=existing.get(id);
+      const origins=(r:any)=>r?.fieldSources??Object.fromEntries(Object.keys(r?.fields||{}).map(field=>[field,{tool:r.source?.tool,observedAt:r.source?.observedAt,path:r.source?.paths?.[field]}]));
+      // Profiles arrive in sections. Only newly observed fields replace old
+      // values (including explicit null); retain the original field provenance.
+      const saved=put("work_record",owner,{id,chatId,collection,...record,fields:{...previous?.fields,...record.fields},fieldSources:{...origins(previous),...origins(record)}});
+      existing.set(id,saved);
     }}).immediate();
     return {saved:records.length,total:rows().length,note:"Source values saved; this does not establish complete coverage or correct field interpretation. Read records before writing the final document."};
   }
