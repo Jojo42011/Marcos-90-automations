@@ -89,6 +89,7 @@ try{
  console.log('ok checkpoint failure is separate from action outcome; explicit Close remains closed');
  await B.browserCall('alice','cards','browser_navigate',{url:base+'/cards'});
  const cards=await B.browserCall('alice','cards','browser_read_table',{});assert.equal(cards.layout,'cards');assert.equal(cards.rows.length,6);assert.equal(cards.rows[0].links[0].title,'Full fixture title 0');assert(cards.rows[0].id.endsWith('/book/0'));assert(!cards.truncated);
+ const targetedCards=await B.browserCall('alice','cards','browser_read_table',{target:'article'});assert.equal(targetedCards.rows.length,6);assert.equal(targetedCards.rows[0].title,'Full fixture title 0');
  console.log('ok rendered article cards expose literal full titles, prices and stable profile links without vision');
  assert.equal(writes,1);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,fixtureWrites:writes}));
 }finally{await B.closeBrowsers();server.closeAllConnections();await new Promise(r=>server.close(r));}
