@@ -1,7 +1,7 @@
 name: Harvey candidate workflows
 on:
   push:
-    branches: ['codex/harvey-live-workflow-fixes']
+    branches: ['codex/harvey-live-workflow-fixes', 'codex/harvey-existing-chat-recovery']
   workflow_dispatch:
 permissions:
   contents: read

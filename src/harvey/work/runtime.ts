@@ -152,26 +152,32 @@ async function runtime(owner: string, chat: Chat, unattended: boolean, onEvent?:
         throw new Error("Unknown team action");
       }
       case "task_plan": {
-        if(input.action==="get")return {plan:list<any>("task_plan",owner).find(p=>p.chatId===chat.id)||null};
-        if(input.action==="checkpoint"){
-          const current=list<any>("task_plan",owner).find(p=>p.chatId===chat.id);if(!current)throw new Error("Save a task plan first");
-          if(!Array.isArray(input.completedSteps)||input.completedSteps.some((i:any)=>!Number.isInteger(i)||i<0||i>=current.steps.length))throw new Error("completedSteps must contain valid zero-based step indices");
-          if(!Number.isInteger(input.nextStep)||input.nextStep<0||input.nextStep>current.steps.length)throw new Error("nextStep must be a valid step index or the step count");
+        const current=list<any>('task_plan',owner).find(p=>p.chatId===chat.id);
+        if(input.action==="get")return {plan:current||null};
+        const progress=(plan:any)=>{
+          if(!plan)throw Error('Save a task plan first');
+          const completed=input.completedSteps??plan.completedSteps??[];
+          if(!Array.isArray(completed)||completed.some((i:any)=>!Number.isInteger(i)||i<0||i>=plan.steps.length))throw Error(`completedSteps must use zero-based indices 0 through ${plan.steps.length-1}. Read task_plan get; do not use step names or one-based numbering`);
+          const first=plan.steps.findIndex((_s:any,i:number)=>!completed.includes(i)),next=input.nextStep??(first<0?plan.steps.length:first);
+          if(!Number.isInteger(next)||next<0||next>plan.steps.length)throw Error(`nextStep must be an integer from 0 through ${plan.steps.length}; omit it to derive it from completedSteps`);
           const blocker=input.blocker?text(input.blocker,"Blocker",1000):"";
           if(allowContinuation&&segmentLimit(blocker))throw new Error("A turn execution limit is a checkpoint, not a blocker. Save remaining steps without this blocker and use continue_work after a fresh observation.");
-          return put("task_plan",owner,{...current,completedSteps:[...new Set(input.completedSteps)],nextStep:input.nextStep,blocker,status:blocker?"blocked":"in_progress",updatedAt:new Date().toISOString()});
-        }
+          return {...plan,completedSteps:[...new Set(completed)],nextStep:next,blocker,status:blocker?'blocked':'in_progress',updatedAt:new Date().toISOString()};
+        };
+        if(input.action==='checkpoint')return put('task_plan',owner,progress(current));
         if(input.action!=="save")throw new Error("Unknown plan action");
-        const value:any={id:randomUUID(),chatId:chat.id,requestId,objective:text(input.objective,"Objective",2000),updatedAt:new Date().toISOString(),status:"planned"};
-        for(const key of ["successCriteria","steps","requiredSources"]){if(!Array.isArray(input[key])||input[key].length>30)throw new Error("Plan fields must be arrays with at most 30 entries");value[key]=input[key].map((v:any)=>text(v,key,500));}
+        const retained=current?.requestId===requestId?current:undefined;
+        let value:any={...retained,id:current?.id||randomUUID(),chatId:chat.id,requestId,objective:text(input.objective??retained?.objective,"Objective",2000),updatedAt:new Date().toISOString(),status:retained?.status||"planned"};
+        for(const key of ["successCriteria","steps","requiredSources"]){let lines=input[key]??retained?.[key]??(key==='requiredSources'?[]:undefined);if(typeof lines==='string')lines=[lines];if(!Array.isArray(lines)||lines.length>30)throw Error(`${key} must be an array of at most 30 short strings; omit unchanged fields when revising the current plan`);value[key]=lines.map((v:any)=>text(v,key,500));}
         if(!value.steps.length||!value.successCriteria.length)throw new Error("A plan needs steps and observable success criteria");
-        const current=list<any>('task_plan',owner).find(p=>p.chatId===chat.id);
+        if(retained&&JSON.stringify(value.steps)!==JSON.stringify(retained.steps)){value.completedSteps=[];value.nextStep=0;}
         const contractUpdate=validateContract(input.contract);
         // A plan revision may update just the destination or count. Omitted
         // requirements still belong to this request; explicit values replace them.
         const retainedContract=current?.requestId===requestId?current.contract:undefined;
         value.contract=contractUpdate?{...retainedContract,...contractUpdate}:retainedContract;
-        put("task_plan",owner,{...value,...(current?{id:current.id}:{})});return get("task_plan",owner,current?.id||value.id);
+        if(input.completedSteps!==undefined||input.nextStep!==undefined)value=progress(value);
+        return put('task_plan',owner,value);
       }
       case "handoff_to_work": { const target = handoffChat(owner,chat.id,input.brief); return {chatId:target.id,url:`/harvey?chat=${target.id}`,status:"Planning draft ready; no execution started"}; }
       case "business_tools": return {tools:availableBusinessTools};

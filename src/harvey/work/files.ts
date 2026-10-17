@@ -66,8 +66,13 @@ export function workspaceFiles(owner:string,chat:string,input:any={}) {
 
 /** Correct only links to files actually present in this chat; never publish disk paths. */
 export function publicFileLinks(owner:string,chat:string,speech:string){
-  if(!/\]\(\/(?:workspace|data)\/harvey-work\//.test(speech))return speech;
+  if(!/\]\((?:\/(?:workspace|data)\/harvey-work\/|(?:https?:\/\/[^/\s)]+)?\/api\/harvey\/work\/files\/)/.test(speech))return speech;
   const links=new Map<string,string>();
-  for(const file of files(owner,chat)){links.set(file.path,file.download);links.set(file.path.replace(/^\/data\//,"/workspace/"),file.download);}
-  return speech.replace(/\]\(([^)\s]+)\)/g,(whole,path)=>links.has(path)?`](${links.get(path)})`:whole);
+  const downloads=new Set<string>();
+  for(const file of files(owner,chat)){links.set(file.path,file.download);links.set(file.path.replace(/^\/data\//,"/workspace/"),file.download);downloads.add(file.download);}
+  return speech.replace(/\]\(([^)\s]+)\)/g,(whole,path)=>{
+    if(links.has(path))return `](${links.get(path)})`;
+    try{const url=new URL(path,'https://harvey.invalid');if(downloads.has(url.pathname))return `](${url.pathname})`;}catch{}
+    return whole;
+  });
 }
