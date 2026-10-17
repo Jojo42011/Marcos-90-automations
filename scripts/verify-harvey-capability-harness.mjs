@@ -15,7 +15,7 @@ const tc=(name,input)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+rou
 const server=http.createServer(async(req,res)=>{
  if(req.method==='GET'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[]}));return;}
  let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw);let message;
- if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:'The fixture Save button is visible at viewport x=20,y=30. No other records are visible.'};}
+ if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
   if(mode==='visual'){
