@@ -13,6 +13,7 @@ const {TurnVerification}=require('../dist/src/harvey/reliability.js');
 let writes=0;
 const server=http.createServer((req,res)=>{
  res.setHeader('Content-Type','text/html');
+ if(req.url==='/cards'){res.end('<h1>Catalog</h1>'+Array.from({length:6},(_,i)=>`<article><a href="/book/${i}" title="Full fixture title ${i}">Short title</a><p>Price ${i+10}.00</p><p>In stock</p></article>`).join(''));return;}
  if(req.url==='/write'){if(req.method==='POST')writes++;res.end('<h1>Saved exactly once</h1>');return;}
  if(req.url==='/login')res.setHeader('Set-Cookie','fixture_session=valid; HttpOnly; SameSite=Lax; Path=/');
  if(req.url==='/second'){res.end('<h1>Second tab '+(req.headers.cookie?.includes('fixture_session=valid')?'authenticated':'signed out')+'</h1>');return;}
@@ -26,6 +27,8 @@ const base='http://127.0.0.1:'+server.address().port;
 const call=(tool,args={})=>B.browserCall('alice','recovery',tool,args);
 const txt=r=>JSON.stringify(r);
 try{
+ const catalog=await B.browserTools('alice','catalog-only','browser_snapshot');assert.equal(catalog[0].name,'browser_snapshot');assert.equal(await B.browserMetrics('alice','catalog-only'),undefined);
+ console.log('ok schema discovery does not allocate a browser session');
  const started=Date.now();let r=await call('browser_navigate',{url:base+'/login'});assert(!r.error,txt(r));
  const baseline=await B.browserMetrics('alice','recovery');
  r=await call('browser_snapshot',{target:'#one'});assert(!r.error,txt(r));
@@ -84,5 +87,9 @@ try{
  r=await B.browserCall('alice','save-warning','browser_navigate',{url:base+'/second'});assert(!r.error,txt(r));assert(r.persistenceWarning);
  rmdirSync(join(dir,'auth-state.json.pending'));
  console.log('ok checkpoint failure is separate from action outcome; explicit Close remains closed');
+ await B.browserCall('alice','cards','browser_navigate',{url:base+'/cards'});
+ const cards=await B.browserCall('alice','cards','browser_read_table',{});assert.equal(cards.layout,'cards');assert.equal(cards.rows.length,6);assert.equal(cards.rows[0].links[0].title,'Full fixture title 0');assert(cards.rows[0].id.endsWith('/book/0'));assert(!cards.truncated);
+ const targetedCards=await B.browserCall('alice','cards','browser_read_table',{target:'article'});assert.equal(targetedCards.rows.length,6);assert.equal(targetedCards.rows[0].title,'Full fixture title 0');
+ console.log('ok rendered article cards expose literal full titles, prices and stable profile links without vision');
  assert.equal(writes,1);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,fixtureWrites:writes}));
 }finally{await B.closeBrowsers();server.closeAllConnections();await new Promise(r=>server.close(r));}

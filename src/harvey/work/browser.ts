@@ -19,7 +19,7 @@ const TARGETED = new Set(["browser_click","browser_type","browser_fill_form","br
 const EXTRA_TOOLS = [
   {name:"browser_inspect_scroll_regions",description:"Find rendered page/pane scroll containers and their selectors and positions. Use when rows are missing, virtualized or lazy-loaded; no screenshot or vision model needed.",inputSchema:{type:"object",properties:{}}},
   {name:"browser_scroll",description:"Scroll an observed container or the document using DOM scrolling, without screenshot coordinates. Supports text-only models. Use a selector from browser_inspect_scroll_regions or the observed table. Then read fresh rows/snapshot; do not ask the user to scroll for you.",inputSchema:{type:"object",properties:{target:{type:"string"},deltaY:{type:"number",minimum:-2000,maximum:2000},deltaX:{type:"number",minimum:-2000,maximum:2000}}}},
-  {name:"browser_read_table",description:"Read compact structured currently rendered table/grid rows, headers, stable links and scroll metrics. Optional target is a unique observed table selector. offset/nextOffset page DOM rows only: use actual UI pagination or scrolling for unseen/virtualized records. Verify filters and total separately; save sourced rows with work_records before continuing.",inputSchema:{type:"object",properties:{target:{type:"string"},offset:{type:"integer",minimum:0}}}},
+  {name:"browser_read_table",description:"Read compact structured rendered table/grid rows or article/list cards, including stable links and full link titles/alt text. Use this for catalog cards as well as tables before relying on screenshots. Optional target is an observed table/container selector or repeating article/list-card selector; multiple matching cards are allowed. Prefer row.title/full link titles over shortened display text. offset/nextOffset page DOM rows only: use actual UI pagination or scrolling for unseen/virtualized records. Verify filters and total separately; save sourced rows with work_records before continuing.",inputSchema:{type:"object",properties:{target:{type:"string"},offset:{type:"integer",minimum:0}}}},
   {name:"browser_inspect_targets",description:"Inspect visible canvas nodes, ports, controls and exposed graph edges with precise viewport rectangles and a screenshot. Optionally focus on observed nodeIds when the graph is large. Use before connecting overlapping nodes; missing DOM edges require destination read-back, not guesswork.",inputSchema:{type:"object",properties:{nodeIds:{type:"array",items:{type:"string"},maxItems:4}}}},
   {name:"browser_drag_targets",description:"Connect two freshly observed port targets with a controlled mouse gesture. Requires observationId and target IDs from browser_inspect_targets. Rejects moved/obscured targets before pressing. Returns fresh graph and pixels; verify the intended input, not just gesture completion.",inputSchema:{type:"object",properties:{observationId:{type:"string"},start:{type:"string"},end:{type:"string"}},required:["observationId","start","end"]}},
   {name:"browser_read_snapshot",description:"Read another bounded page of the most recent full snapshot without recapturing it. Use snapshotId and nextOffset returned by the previous result. For a new state or a specific region use browser_snapshot with target/depth instead.",inputSchema:{type:"object",properties:{snapshotId:{type:"string"},offset:{type:"integer",minimum:0}},required:["snapshotId","offset"]}},
@@ -30,6 +30,19 @@ type Session = {owner:string;chat:string;client:Client;tools:any[];lastUsed:numb
 const sessions = new Map<string, Promise<Session>>();
 let shuttingDown=false;
 let shutdownRegistered=false;
+let catalogPromise:Promise<any[]>|undefined;
+// MCP listTools is schema discovery, not a browser session. Keep its catalog
+// independent of owner profiles and the finite set of live Chromium workers.
+async function installedBrowserTools():Promise<any[]> {
+  if(!catalogPromise)catalogPromise=(async()=>{
+    const client=new Client({name:'harvey-browser-catalog',version:'1.0.0'});
+    const env:Record<string,string>={};for(const name of ['PATH','SystemRoot','TEMP','TMP','PLAYWRIGHT_BROWSERS_PATH'])if(process.env[name])env[name]=process.env[name]!;
+    const transport=new StdioClientTransport({command:process.execPath,args:[join(__dirname,'browserWorker.js'),'--headless','--caps','storage,vision'],env,stderr:'pipe'});
+    try{await client.connect(transport,{timeout:15000});return (await client.listTools({},{timeout:15000})).tools.filter(t=>ALLOWED.has(t.name));}
+    finally{await client.close().catch(()=>{});}
+  })().catch(e=>{catalogPromise=undefined;throw e;});
+  return catalogPromise;
+}
 function registerShutdown(){
   if(shutdownRegistered)return;shutdownRegistered=true;
   for(const sig of ["SIGTERM","SIGINT"] as const)process.once(sig,()=>{
@@ -149,7 +162,7 @@ export async function closeBrowsers(){canvasObservations.clear();await Promise.a
 // Closing a laptop only disconnects the UI. There is deliberately no idle tab eviction.
 // Periodically capture cookie changes and client-side tab navigation while the model is idle.
 const maintenance=setInterval(()=>{for(const pending of sessions.values())void pending.then(s=>{if(!s.busy&&!s.closing&&!s.failed){s.dirty=true;void observedAction(s,"session checkpoint",()=>checkpoint(s)).catch(()=>{});}}).catch(()=>{});},30000);maintenance.unref();
-export async function browserTools(owner:string,chat:string,name?:string){const tools=(await session(owner,chat)).tools.map(t=>t.name!=="browser_file_upload"?t:{...t,description:"Upload local workspace files into the currently opened file chooser. Click Choose files first, then use paths from workspace_files. Native OS interaction is unnecessary. Missing paths do not cancel; cancel:true explicitly cancels.",inputSchema:{type:"object",properties:{paths:{type:"array",items:{type:"string"},minItems:1,maxItems:20},cancel:{type:"boolean"}}}});if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
+export async function browserTools(owner:string,chat:string,name?:string){if(!browserEnabled())throw Error("Harvey's hosted browser is not enabled");const tools=[...await installedBrowserTools(),...EXTRA_TOOLS].map(t=>t.name!=="browser_file_upload"?t:{...t,description:"Upload local workspace files into the currently opened file chooser. Click Choose files first, then use paths from workspace_files. Native OS interaction is unnecessary. Missing paths do not cancel; cancel:true explicitly cancels.",inputSchema:{type:"object",properties:{paths:{type:"array",items:{type:"string"},minItems:1,maxItems:20},cancel:{type:"boolean"}}}});if(name){const t=tools.find(t=>t.name===name);if(!t)throw new Error("Unsupported browser tool");return [t];}return tools.map(t=>({name:t.name,description:t.description?.slice(0,180),schema:"Request computer action=tools with this tool name for its complete input schema."}));}
 export async function browserMetrics(owner:string,chat:string){const s=await sessions.get(owner+":"+chat);return s?{...s.metrics}:undefined;}
 export async function browserPreview(owner:string,chat:string){
   if(!browserEnabled())return {state:"disabled"};

@@ -2,6 +2,11 @@
 export function browserArguments(schema:any,input:any){
   if(!input||typeof input!=="object"||Array.isArray(input))throw new Error("Browser arguments must be an object");
   const args={...input},props=schema?.properties||{};
+  if(props.values?.type==='array'&&args.value!==undefined){
+    const values=Array.isArray(args.value)?args.value:[args.value];
+    if(args.values!==undefined&&JSON.stringify(args.values)!==JSON.stringify(values))throw Error('Conflicting browser selection arguments; use values');
+    args.values=values;delete args.value;
+  }
   for(const [canonical,aliases] of [["target",["ref","selector"]],["startTarget",["startRef"]],["endTarget",["endRef"]]] as const){
     if(!props[canonical])continue;
     for(const alias of aliases){

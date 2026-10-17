@@ -39,13 +39,16 @@ function resourceScope(name:string,input:any):string {
   if(name==="COMPOSIO_MULTI_EXECUTE_TOOL")return stableCallKey("managed",[input.harvey_connection_scope,(input.tools||[]).map((t:any)=>String(t.tool_slug).split("_")[0]).sort()]);
   if(name==="business_call")return "business:"+String(input.tool||"").replace(/^(create|update|delete|get|list|search|find|read)_/,"").replace(/s$/,"");
   if(name==="work_records"&&input.action==="export")return "files";
-  if(name==="inspect_video"||name==="edit_video"||name==="workspace_files"||name==="workspace_download")return "files";
+  if(name==="inspect_video"||name==="edit_video"||name==="workspace_files"||name==="workspace_download"||name==='workspace_write'||name==='workspace_read')return "files";
   return name;
 }
 
 // Conservative classification: unknown tools are possible actions, not verified reads.
 export function isObservation(name: string, input: any): boolean {
   if(name==='inspect_screen')return true;
+  if(name==='report_verification')return true;
+  if(name==='workspace_read')return true;
+  if(name==='workspace_write')return false;
   if (name === "COMPOSIO_MULTI_EXECUTE_TOOL") {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
@@ -74,7 +77,7 @@ function errorResult(value: any, depth = 0): boolean {
 // Recovery may re-enter reasoning only after all possible external actions have read-backs.
 // Empty/read-only segments are safe to reason through again; no action is replayed here.
 export function canResumeFromReceipts(receipts: Receipt[], allowEmpty = false) {
-  const relevant=receipts.filter(r=>!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool));
+  const relevant=receipts.filter(r=>!r.discovery&&!['task_plan','continuity','work_records','report_verification','verify_source_values'].includes(r.tool));
   if(!relevant.length)return allowEmpty;
   const last=relevant.at(-1)!;
   return last.observation && last.outcome==='returned' && !last.limitation && relevant.every((r,i)=>
@@ -122,7 +125,7 @@ export class TurnVerification {
     });
   }
   continuationCheckpoint(): {progressKey:string}|null {
-    const relevant=this.receipts.filter(r=>!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool));
+    const relevant=this.receipts.filter(r=>!r.discovery&&!['task_plan','continuity','work_records','report_verification','verify_source_values'].includes(r.tool));
     const last=relevant.at(-1);
     if(!last||!last.observation||last.outcome!=="returned"||last.limitation)return null;
     const source=this.sources.get(last.id);if(!source)return null;
@@ -133,7 +136,7 @@ export class TurnVerification {
     const receipt=this.receipts.find(r=>r.id===id);
     if(!receipt||!receipt.observation||receipt.outcome!=="returned"||receipt.limitation)throw new Error("Continuation needs a successful current observation");
     if(typeof quote!=="string"||quote.length<4||quote.length>500||!JSON.stringify(this.sources.get(receipt.id)).includes(quote))throw new Error("Quote the exact observed progress/state before continuing; no invented job status");
-    if(this.receipts.slice(this.receipts.indexOf(receipt)+1).some(r=>!r.observation&&!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool)))throw new Error("Observe again after the last action before yielding");
+    if(this.receipts.slice(this.receipts.indexOf(receipt)+1).some(r=>!r.observation&&!r.discovery&&!['task_plan','continuity','work_records','report_verification','verify_source_values'].includes(r.tool)))throw new Error("Observe again after the last action before yielding");
   }
   record(name: string, input: any, result: any): Receipt {
     this.report = undefined; // A new action invalidates the earlier completion claim.
@@ -178,8 +181,13 @@ export class TurnVerification {
       if (!cited.length || !input.checks.some((s: string) => s.trim()) || input.limitations.length) throw new Error("Completion requires evidence, concrete checks and no unresolved limitations");
       if (cited.some((r: Receipt) => r.truncated)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
       if (cited.some((r: Receipt) => r.limitation)) throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
-      for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery)) {
-        if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error("Read back each affected service after its action before claiming completion");
+      for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery&&!['task_plan','continuity'].includes(r.tool))) {
+        if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error(`Read back each affected service after its action before claiming completion. Missing ${action.scope} observation after ${action.tool} (${action.id}). For browser use computer browser_snapshot or inspect_screen and cite that receipt; for saved text use workspace_read for the affected file.`);
+        if(action.tool==='workspace_write'&&action.outcome==='returned'){
+          const file:any=this.sources.get(action.id),after=this.receipts.slice(this.receipts.indexOf(action)+1);
+          const superseded=after.some(r=>r.tool==='workspace_write'&&r.outcome==='returned'&&(this.sources.get(r.id) as any)?.file===file?.file);
+          if(!superseded&&!cited.some((r:Receipt)=>r.tool==='workspace_read'&&this.receipts.indexOf(r)>this.receipts.indexOf(action)&&(this.sources.get(r.id) as any)?.file===file?.file&&(this.sources.get(r.id) as any)?.sha256===file?.sha256))throw Error('Read back each authored file at its current hash before completion; reading another file or listing metadata is insufficient');
+        }
       }
       if (this.receipts.some(r => r.outcome === "held")) throw new Error("An action is still held for approval; report needs_verification");
     }

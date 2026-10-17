@@ -161,6 +161,8 @@ export interface CompletionRequest {
   system?: string;
   /** Anthropic-shaped tool definitions. Translated at the boundary. */
   tools?: unknown[];
+  /** Force one installed tool for an internal verification step. */
+  toolChoice?: string;
   maxTokens?: number;
   temperature?: number;
   /** Operator's explicit pick from the model picker. Beats routing defaults. */
