@@ -614,7 +614,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         }
       }
       if(opts.allowContinuation && input.status==="blocked" && segmentLimit(JSON.stringify(input.limitations||[])))return {error:"The turn limit does not block this saved job. Inspect current state, retain unfinished task_plan steps and continue_work automatically."};
-      try { return verification.review(input); } catch (e) {const result={error:(e as Error).message,inputSchema:VERIFICATION_TOOL.input_schema};const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};}
+      try { return verification.review(input); } catch (e) {const result={error:(e as Error).message,evidence:verification.reviewGuidance(),note:"Use successful complete observation IDs below, excluding replaced/truncated receipts. Review their actual source values before citing them; these IDs do not prove factual correctness.",inputSchema:VERIFICATION_TOOL.input_schema};const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};}
     }
     if(opts.workRuntime&&name==="work_records"&&input.action==="save"){
       try{input={...input,_verifiedRecords:verification.projectRecords(input.records)};}catch(e){
@@ -638,7 +638,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const {_image,...rest}=result as any;
       result={...rest,imageUnavailableToModel:true,imageWarning:"Screenshot captured, but this model does not support image input. Do not claim to see it. Use semantic snapshots/targets, or choose a vision-capable model."};
     }
-    const receipt = verification.record(name, input, result);
+    let receipt = verification.record(name, input, result);
     if (!receipt.observation) observationRevision++;
     opts.onEvidence?.(receipt);
     if(name==='computer'&&input.action==='call'&&['browser_navigate','browser_snapshot'].includes(String(input.tool))&&(result as any)?.truncated===true&&/\b(?:csv|catalog|table|records|leads|contacts)\b/i.test(opts.message)){
@@ -647,7 +647,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const readInput={action:'call',tool:'browser_read_table',arguments:{}};
       const compact:any=await executeTool('computer',readInput);
       const compactReceipt=verification.record('computer',readInput,compact);opts.onEvidence?.(compactReceipt);
-      if(compact?.rows?.length&&!compact.truncated&&!compact.error)result={snapshotId:(result as any).snapshotId,nextOffset:(result as any).nextOffset,originalSnapshotTruncated:true,structuredObservation:{...compact,_harveyEvidence:compactReceipt},note:'The long snapshot was replaced with compact current DOM records. Prefer full row.title/link titles over ellipsized display labels. Project source values from this structured receipt. Request a focused snapshot if controls or filters still need inspection.'};
+      if(compact?.rows?.length&&!compactReceipt.truncated&&compactReceipt.outcome==='returned'){
+        result={...compact,note:'Compact current DOM records replaced the truncated accessibility tree. This result and its receipt contain the complete rows shown here. Prefer full row.title/link titles over ellipsized display labels. Request a focused snapshot if controls or filters still need inspection.'};
+        receipt=compactReceipt;
+      }
       else result={...(result as any),structuredRead:{...compact,_harveyEvidence:compactReceipt},structuredReadNote:'Optional compact DOM read did not yield complete records. This does not establish missing data or an automation limitation; inspect a focused region or use inspect_screen structured=true.'};
     }
     if(name==="computer"&&input.action==="call"){

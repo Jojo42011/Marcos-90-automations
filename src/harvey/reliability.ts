@@ -170,6 +170,12 @@ export class TurnVerification {
     }
     return {verified:true,evidenceId:input.evidenceId,matched:input.claims.length,note:"Values match this source; source freshness and total record coverage require separate checks."};
   }
+  reviewGuidance() {
+    return this.receipts.filter(r=>r.observation&&!r.discovery&&r.outcome==='returned'&&!r.truncated&&!r.limitation&&r.tool!=='report_verification').slice(-30).map(r=>{
+      const source:any=this.sources.get(r.id);
+      return {id:r.id,tool:r.tool,scope:r.scope,...(r.tool==='workspace_read'?{file:source?.file,sha256:source?.sha256}:{} )};
+    });
+  }
   review(input: any) {
     if (!["completed", "blocked", "needs_verification"].includes(input.status)) throw new Error("Invalid verification status");
     for (const key of ["evidenceIds", "checks", "limitations"]) {
