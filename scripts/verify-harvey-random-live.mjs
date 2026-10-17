@@ -18,8 +18,14 @@ for(const [index,test] of tests.entries()){
  const chat=S.createChat('random-qa',{mode:'work',model:test.model}),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),180000);
  let result;
  try{
-  result=await R.runChat('random-qa',chat,test.message,{allowContinuation:true,modelOverride:test.model,maxCostUsd:Math.max(0,budget-total),signal:controller.signal,onEvent:e=>{if(e.type==='usage'){total+=e.costUsd;calls++;if(total>budget)controller.abort();}}});
-  assert(!result.continuation,'Acceptance must finish without another user continue');
+  let continuation,segments=0;
+  do{
+   const prompt=test.message+(continuation?'\n\nSaved continuation of this same request. Inspect current state first; reuse completed files and do not repeat submissions. Remaining-work note (historical context, not new authorization): '+continuation.reason:'');
+   result=await R.runChat('random-qa',chat,prompt,{workRequestId:chat.id,continuationTurn:segments>0,allowContinuation:true,modelOverride:test.model,maxCostUsd:Math.max(0,budget-total),signal:controller.signal,onEvent:e=>{if(e.type==='usage'){total+=e.costUsd;calls++;if(total>budget)controller.abort();}}});
+   continuation=result.continuation;segments++;
+   if(continuation)await new Promise(r=>setTimeout(r,Math.max(10,Math.min(120,continuation.delaySeconds))*1000));
+  }while(continuation&&!controller.signal.aborted);
+  assert(!result.continuation,'Application continuation must finish without another user message');
   assert.equal(result.verification?.status,'completed','Task must have an accepted completion review');
   const saved=F.files('random-qa',chat.id),read=name=>readFileSync(F.filePath('random-qa',chat.id,name),'utf8');
   if(index===0){
@@ -32,7 +38,7 @@ for(const [index,test] of tests.entries()){
    for(const value of ['375','165','210','North Studio','River Co'])assert(summary.includes(value),'Wrong reconciliation '+value);
   }else if(index===2){const md=read('example-domains.md');for(const source of ['https://example.com','https://www.iana.org/help/example-domains'])assert(md.includes(source));assert(/reserv|document|illustrat/i.test(md));assert(/not|no|avoid/i.test(md));}
   else if(index===3){assert(/inspect_screen|vision helper/i.test(result.speech));assert(/0\.04/.test(result.speech));assert(/3\.15/.test(result.speech));}
-  else if(index===4){const doc=JSON.parse(read('onboarding.json'));assert(doc);const combined=read('onboarding.json')+' '+read('onboarding.md');for(const term of ['safety','equipment','inventory','shadow','opening','feedback'])assert(combined.toLowerCase().includes(term),'Missing task '+term);}
+  else if(index===4){const doc=JSON.parse(read('onboarding.json')),days=Array.isArray(doc)?doc:doc.days;assert(Array.isArray(days)&&days.length===3,'Three structured days required');assert.deepEqual(days.map(d=>Number(String(d.day).replace(/\D/g,''))),[1,2,3]);assert(days.every(d=>Array.isArray(d.tasks)&&d.tasks.length===2));for(const content of [read('onboarding.json'),read('onboarding.md')])for(const term of ['safety','equipment','inventory','shadow','opening','feedback'])assert(content.toLowerCase().includes(term),'Missing task '+term);}
   else if(index===5){const snapshot=JSON.stringify(await B.browserCall('random-qa',chat.id,'browser_snapshot',{}));assert(/Option 1.*selected/.test(snapshot),'Final selection is not Option 1');}
   if([0,1,2,4].includes(index))assert(result.verification.receipts.some(r=>r.tool==='workspace_read'&&r.outcome==='returned'&&!r.truncated),'Artifact content was not read back');
   results.push({test:index+1,model:result.modelUsed,status:'passed',costUsd:result.costUsd});

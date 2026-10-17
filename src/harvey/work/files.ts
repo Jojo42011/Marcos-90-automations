@@ -21,6 +21,7 @@ export function writeWorkspaceFile(owner:string,chat:string,input:any) {
   if(/\.json$/i.test(name))try{JSON.parse(input.content);}catch{throw Error('Invalid JSON content; correct it before saving');}
   const path=join(filesDir(owner,chat),name),sha256=digest(input.content);
   if(existsSync(path)){
+    if(statSync(filePath(owner,chat,name)).size>2*1024*1024)throw Error('Existing text file exceeds the artifact edit size; retain it and create a separate smaller file');
     const old=readFileSync(filePath(owner,chat,name));
     if(digest(old)===sha256)return {file:name,sha256,size:old.length,download:`/api/harvey/work/files/${chat}/${encodeURIComponent(name)}`,unchanged:true};
     if(input.expectedSha256!==digest(old))throw Error('File already exists with different content. Read it first and pass its expectedSha256 to replace it');

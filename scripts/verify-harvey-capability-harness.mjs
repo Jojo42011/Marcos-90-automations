@@ -22,6 +22,9 @@ const server=http.createServer(async(req,res)=>{
    assert.equal(body.model,mainModel,'The main model must stay pinned');
    const steps=[['inspect_screen',{question:'Locate the visible fixture Save button'}],['computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e4'],checks:['Read back saved fixture state after click'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and checked.'};
+  }else if(mode==='forced_review'){
+   if(n===2)assert.equal(body.tool_choice?.function?.name,'report_verification','Provider must receive an explicit verification tool choice');
+   message=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===2?tc('report_verification',{status:'completed',evidenceIds:['e1'],checks:['Observed fixture outcome'],limitations:[]}):{role:'assistant',content:'The observed fixture is complete.'};
   }else if(mode==='artifact'){
    const steps=[['workspace_write',{file:'fixture.json',content:'{"total":375}'}],['workspace_read',{file:'fixture.json'}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Read back saved total 375'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and read back the requested JSON.'};
@@ -113,6 +116,9 @@ try{
  mode='unverified';round=0;
  const unverified=await runAgentLoop({message:'Open the fixture and verify both actions',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
  assert.equal(unverified.verification.status,'needs_verification');assert(!unverified.speech.includes('completed successfully'));
+ mode='forced_review';round=0;
+ const forced=await runAgentLoop({message:'Open and check the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
+ assert.equal(forced.verification.status,'completed');
  console.log('ok real text artifacts read back, invalid projections retain diagnostics, and unverified success prose cannot escape the final gate');
  mode='resume';round=0;
  store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});

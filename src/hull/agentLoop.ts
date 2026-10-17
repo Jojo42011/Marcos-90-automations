@@ -782,7 +782,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         system+="\nBROWSER RETRIEVAL RECOVERY: Do not hand ordinary scrolling or copying back to the user based on missing rows. Discover this computer's tools and try browser_scroll with an observed scroll container (hosted: browser_inspect_scroll_regions; local: fresh snapshot refs), then read fresh rows. These semantic tools do not require a vision model. A saved snapshot offset is not scrolling. Check actual pagination/native export if appropriate. Preserve the user's filters and saved records. If an attempted operation genuinely fails, report that exact observed reason; do not infer missing data or unsupported automation. This correction does not authorize external writes or expand task scope.";
         continue;
       }
-      if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && (summaryRound || unfinishedReminders>=2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))){
+      if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && (completionRepairs>0 || !uninterrupted) && (summaryRound || unfinishedReminders>=2 || /(?:say|reply|tell me|ask me).{0,45}continue|(?:turn|execution) (?:budget|limit)/i.test(out.text))){
         const checkpoint=verification.continuationCheckpoint();
         if(checkpoint && canResumeFromReceipts(verification.result().receipts,true))return {speech:"Continuing the remaining work automatically.",continuation:{delaySeconds:10,reason:"Inspect the current state and saved work_records, then finish the remaining task_plan steps. Do not repeat completed actions.",progressKey:checkpoint.progressKey},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
         if(!uninterrupted && !checkpoint && !summaryRound && unfinishedReminders>=2){step=stepBudget-4;continue;}
@@ -829,7 +829,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const lastOperation=[...evidence.receipts].reverse().find(r=>!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool));
       const blockedFailure=evidence.status==='blocked'&&lastOperation?.outcome==='failed'?lastOperation.diagnostic:undefined;
       return {
-        speech: blockedFailure?`The task is unfinished. ${blockedFailure.detail} failed: ${blockedFailure.message}. Saved work is retained; this error does not establish that the website cannot be automated.`:unseenVisualOnly ? "The screenshot was captured, but this model cannot inspect image pixels. Choose a vision-capable model for visual analysis; I can still work with page text and controls." : finalizeSpeech(out.text, opts, hadToolOnly),
+        speech: blockedFailure?`The task is unfinished. ${blockedFailure.detail} failed: ${blockedFailure.message}. Saved work is retained.`:unseenVisualOnly ? "The screenshot was captured, but this model cannot inspect image pixels. Choose a vision-capable model for visual analysis; I can still work with page text and controls." : finalizeSpeech(out.text, opts, hadToolOnly),
         ...(blockedFailure?{toolFailure:blockedFailure}:{}),
         ...(opts.workRuntime ? { verification: verification.result() } : {}),
         toolRounds,
