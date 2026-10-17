@@ -256,10 +256,10 @@ try{
  const legacy=await runtime.runChat('legacy-resume',legacyChat,'resume AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'legacy-job',modelOverride:'openai/fixture'});
  ok('resume seeds missing legacy plan from authorized task history',()=>assert(legacy.continuation));
  const retainedPlan=store.list('task_plan','legacy-resume').find(p=>p.chatId===legacyChat.id);
- for(const [blocker,expected] of [['Paused at the turn execution limit',true],['CAPTCHA requires user approval',false]]){
+ for(const [blocker,expected] of [['Paused at the turn execution limit',true],['CAPTCHA requires user approval',true]]){
    store.put('task_plan','legacy-resume',{...retainedPlan,blocker,status:'blocked'});
    const resumed=await runtime.runChat('legacy-resume',legacyChat,'resume AUTO_YIELD_RUNTIME_FIXTURE',{allowContinuation:true,workRequestId:'resume-'+expected,modelOverride:'openai/fixture'});
-   ok('resume clears old turn limits but preserves actual blockers: '+blocker,()=>assert.equal(!!resumed.continuation,expected));
+   ok('explicit resume rechecks historical blocker without erasing it: '+blocker,()=>{assert.equal(!!resumed.continuation,expected);assert.equal(store.get('task_plan','legacy-resume',retainedPlan.id).lastBlocker,blocker);});
  }
  const partialChat=store.createChat('partial-task',{});
  const partial=await runtime.runChat('partial-task',partialChat,'Export 50 profiles PARTIAL_COMPLETE_FIXTURE',{allowContinuation:true,modelOverride:'openai/fixture'});

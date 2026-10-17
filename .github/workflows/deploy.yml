@@ -59,6 +59,13 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Opt-in deployed capability harness regression
+        if: contains(github.event.head_commit.message, '[harvey-harness]')
+        timeout-minutes: 3
+        run: flyctl ssh console -a marco-90-automation -C 'node /app/scripts/verify-harvey-capability-harness.mjs'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Opt-in retained browser failure metadata audit
         if: contains(github.event.head_commit.message, '[harvey-browser-live]')
         timeout-minutes: 2

@@ -34,7 +34,7 @@ export function isDiscovery(name:string,input:any):boolean {
   return ["business_tools","plugins","plugin_tools","saved_logins","COMPOSIO_SEARCH_TOOLS","COMPOSIO_GET_TOOL_SCHEMAS","COMPOSIO_WAIT_FOR_CONNECTIONS"].includes(name) || name==="computer"&&input.action==="tools";
 }
 function resourceScope(name:string,input:any):string {
-  if(name==="computer"||name==="use_saved_login")return "browser";
+  if(name==="computer"||name==="use_saved_login"||name==='inspect_screen')return "browser";
   if(name.startsWith("plugin_"))return stableCallKey("connection",input.connectionId);
   if(name==="COMPOSIO_MULTI_EXECUTE_TOOL")return stableCallKey("managed",[input.harvey_connection_scope,(input.tools||[]).map((t:any)=>String(t.tool_slug).split("_")[0]).sort()]);
   if(name==="business_call")return "business:"+String(input.tool||"").replace(/^(create|update|delete|get|list|search|find|read)_/,"").replace(/s$/,"");
@@ -45,6 +45,7 @@ function resourceScope(name:string,input:any):string {
 
 // Conservative classification: unknown tools are possible actions, not verified reads.
 export function isObservation(name: string, input: any): boolean {
+  if(name==='inspect_screen'||name==='capabilities')return true;
   if (name === "COMPOSIO_MULTI_EXECUTE_TOOL") {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
