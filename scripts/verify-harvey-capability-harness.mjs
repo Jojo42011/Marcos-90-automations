@@ -25,6 +25,9 @@ const server=http.createServer(async(req,res)=>{
   }else if(mode==='recovery'){
    if(n===0)message={role:'assistant',content:"I cannot extract virtualized table data."};
    else{assert(body.messages.some(m=>String(m.content).includes('CAPABILITY RECOVERY')));const steps=[['capabilities',{}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Read fixture records'],limitations:[]}]];message=n<=steps.length?tc(...steps[n-1]):{role:'assistant',content:'Read the records using the available route.'};}
+  }else if(mode==='profiles'){
+   const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_click',arguments:{target:'#notes'}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_click',arguments:{target:'#notes'}}],['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/people/2'}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_click',arguments:{target:'#notes'}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e8'],checks:['Different profile read back; same-page repeat refused'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Inspected both profiles.'};
   }else if(mode==='learn'){
    const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e1'],checks:['Observed fixture record'],limitations:[]}],['workflow',{action:'learn',name:'Inspect fixture record',steps:['Inspect the selected page and read its record'],checks:['Read the current record identifier'],prerequisites:['Authorized selected browser']}],['workflow',{action:'list'}],['report_verification',{status:'completed',evidenceIds:['e1','e3'],checks:['Read saved procedure'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Retained the verified method.'};
@@ -56,6 +59,13 @@ try{
  const native=await runAgentLoop({message:'Inspect native fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(_name,input)=>input.tool==='browser_take_screenshot'?{_image:{media_type:'image/png',data:'fixture-native-image'}}:{saved:true}}});
  assert.equal(native.verification.status,'completed');assert.equal(visionCalls,1,'Native model must not pay for an auxiliary vision call');
  console.log('ok native vision uses the same inspection tool without an extra model call');
+ mode='profiles';round=0;let profile='1',profileClicks=0;
+ const profiles=await runAgentLoop({message:'Read profile notes',modelOverride:'inception/mercury-2.5',workRuntime:{tools,context:'Fixture',execute:async(_name,input)=>{if(input.tool==='browser_navigate')profile='2';if(input.tool==='browser_click')profileClicks++;return {url:'https://fixture.invalid/people/'+profile,notes:'Observed fixture notes'};}}});
+ assert.equal(profileClicks,2);assert.equal(profiles.verification.status,'completed');
+ const locationProof=new (require(join(root,'harvey/reliability.js')).TurnVerification)();
+ locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=details'});const before=locationProof.browserLocation();
+ locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=notes#changed'});assert.equal(locationProof.browserLocation(),before,'Query/hash changes must not permit a duplicate write');
+ console.log('ok identical profile controls work across observed URLs while same-page replay stays refused');
  mode='recovery';round=0;let discovered=false;
  const recovered=await runAgentLoop({message:'Extract fixture records',modelOverride:'inception/mercury-2.5',allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(name)=>{if(name==='capabilities'){discovered=true;return {routes:['semantic snapshot']};}assert(discovered);return {records:[{id:'one'}]};}}});
  assert.equal(recovered.verification.status,'completed');console.log('ok unsupported capability claim triggers route discovery and successful recovery');

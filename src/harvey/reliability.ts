@@ -84,6 +84,16 @@ export class TurnVerification {
   private receipts: Receipt[] = [];
   private sources = new Map<string,unknown>();
   private report?: Omit<Verification, "receipts" | "basis">;
+  browserLocation():string|undefined {
+    for(const r of [...this.receipts].reverse()){
+      if(r.tool!=='computer'||!r.observation||r.outcome!=='returned'||r.limitation)continue;
+      const source:any=this.sources.get(r.id);
+      const raw=Array.isArray(source?.content)?source.content.filter((c:any)=>c.type==='text').map((c:any)=>c.text).join('\n'):'';
+      const url=source?.url||raw.match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1];
+      if(typeof url==='string'&&/^https?:\/\//.test(url))try{const page=new URL(url);return stableCallKey('observed_browser_location',[page.origin,page.pathname]);}catch{}
+    }
+    return undefined;
+  }
   projectRecords(records:any) {
     if(!Array.isArray(records)||!records.length||records.length>30)throw Error("Provide 1–30 records with observed IDs and field paths");
     return records.map((record:any)=>{

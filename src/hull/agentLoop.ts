@@ -438,6 +438,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   const screenAnalyses=new Map<string,unknown>();
   let capabilityRecoveryPrompted=false;
   let assistedVisionAt=0;
+  const unscopedBrowserActions=new Set<string>();
 
   /**
    * Run one tool call, refusing an identical repeat.
@@ -466,7 +467,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       scrollCheckpoint=verification.continuationCheckpoint();
       if(!scrollCheckpoint)return {error:"Scroll preflight failed: no successful current page observation. Inspect the returned snapshot error; this is not proof of lazy loading or missing data."};
     }
-    const sig = signature(name, input) + (scrolling?":"+scrollCheckpoint!.progressKey:"") + (opts.workRuntime && read ? `:${observationRevision}` : "");
+    // The same selector on another observed profile is a different operation.
+    // Same-page repeats (including uncertain submissions) remain refused.
+    const pageScope=opts.workRuntime&&name==='computer'&&!read?verification.browserLocation():undefined;
+    const operation=signature(name,input);
+    if(opts.workRuntime&&name==='computer'&&!read&&!pageScope)unscopedBrowserActions.add(operation);
+    const sig = operation + (pageScope&&!unscopedBrowserActions.has(operation)?':'+pageScope:'') + (scrolling?":"+scrollCheckpoint!.progressKey:"") + (opts.workRuntime && read ? `:${observationRevision}` : "");
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
     const polling = opts.workRuntime && name==="computer" && input.action==="call" && input.tool==="browser_wait_for";
