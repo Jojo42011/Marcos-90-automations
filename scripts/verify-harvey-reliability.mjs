@@ -34,6 +34,7 @@ const actions=new rel.TurnVerification();actions.record('schedule_agent',{action
 ok('unrelated successful read cannot verify a schedule write',()=>assert.throws(()=>actions.review({...review,evidenceIds:['e2']}),/affected service/));
 actions.record('schedule_agent',{action:'list'},[{id:'schedule'}]);actions.review({...review,evidenceIds:['e3']});
 ok('matching read-back permits review; later actions invalidate it',()=>{assert.equal(actions.result().status,'completed');actions.record('schedule_agent',{action:'update'},{id:'schedule'});assert.equal(actions.result().status,'needs_verification');});
+ok('repair guidance lists usable observations without truncated, failed or diagnostic receipts',()=>{const v=new rel.TurnVerification();v.record('computer',{action:'call',tool:'browser_navigate'},{truncated:true});v.record('computer',{action:'call',tool:'browser_read_table'},{rows:[{title:'Full title'}]});v.record('report_verification',{}, {error:'bad citation'});assert.deepEqual(v.reviewGuidance(),[{id:'e2',tool:'computer',scope:'browser'}]);assert.throws(()=>v.review({...review,evidenceIds:['e1']}),/smaller/);assert.equal(v.review({...review,evidenceIds:['e2']}).accepted,true);});
 const failed=new rel.TurnVerification();failed.record('plugin_call',{}, {data:{results:[{success:false,error:'fixture failure'}]}});
 ok('nested connector failures cannot serve as evidence',()=>assert.equal(failed.result().receipts[0].outcome,'failed'));
 const large=new rel.TurnVerification();large.record('workspace_files',{}, {text:'x'.repeat(13000)});

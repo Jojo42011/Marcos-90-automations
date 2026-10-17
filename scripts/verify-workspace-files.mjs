@@ -48,6 +48,7 @@ review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'
 console.log('ok every authored artifact requires its own current-hash content read-back');
 assert.equal(F.publicFileLinks('alice','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('bob','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](https://chatgpt.com/api/harvey/work/files/text/report.json)');
+assert.equal(F.publicFileLinks('alice','text','[report]( /api/harvey/work/files/text/report.json )'), '[report](/api/harvey/work/files/text/report.json)');
 const fixture=async()=>({stream:Readable.from([data.subarray(0,12),data.subarray(12)]),size:data.length,mime:'video/mp4'});
 const downloaded=await D.downloadFile(dir,{url:'https://fixture.invalid/asset',filename:'Background.mp4',expectedSize:data.length},undefined,fixture);
 assert.equal(downloaded.size,data.length);assert.equal(downloaded.sha256.length,64);assert.deepEqual(readFileSync(downloaded.path),data);
