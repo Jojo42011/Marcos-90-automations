@@ -66,14 +66,15 @@ export function workspaceFiles(owner:string,chat:string,input:any={}) {
 
 /** Correct only links to files actually present in this chat; never publish disk paths. */
 export function publicFileLinks(owner:string,chat:string,speech:string){
-  if(!speech.includes('`')&&!speech.includes(']('))return speech;
+  if(!speech.includes('`')&&!speech.includes('](')&&!speech.includes('http'))return speech;
   const links=new Map<string,string>();
   const downloads=new Set<string>();
-  for(const file of files(owner,chat)){links.set(file.name,file.download);links.set(file.path,file.download);links.set(file.path.replace(/^\/data\//,"/workspace/"),file.download);downloads.add(file.download);}
+  for(const file of files(owner,chat)){links.set(file.name,file.download);links.set(`/files/${chat}/${encodeURIComponent(file.name)}`,file.download);links.set(file.path,file.download);links.set(file.path.replace(/^\/data\//,"/workspace/"),file.download);downloads.add(file.download);}
   const resolve=(path:string)=>{
     if(links.has(path))return links.get(path);
-    try{const url=new URL(path,'https://harvey.invalid');if(downloads.has(url.pathname))return url.pathname;}catch{}
+    try{const url=new URL(path,'https://harvey.invalid');if(downloads.has(url.pathname))return url.pathname;if(links.has(url.pathname))return links.get(url.pathname);}catch{}
   };
   speech=speech.replace(/`([^`\n]+)`/g,(whole,path)=>{const download=resolve(path.trim());return download?`[${path.trim().split('/').at(-1)}](${download})`:whole;});
-  return speech.replace(/\]\(\s*([^)\s]+)\s*\)/g,(whole,path)=>{const download=resolve(path);return download?`](${download})`:whole;});
+  speech=speech.replace(/\]\(\s*([^)\s]+)\s*\)/g,(whole,path)=>{const download=resolve(path);return download?`](${download})`:whole;});
+  return speech.replace(/(^|[\s>])(https?:\/\/[^\s<>)]+)/g,(whole,prefix,path)=>{const download=resolve(path);return download?`${prefix}[${path.split('/').at(-1)}](${download})`:whole;});
 }

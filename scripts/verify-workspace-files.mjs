@@ -52,6 +52,9 @@ assert.equal(F.publicFileLinks('alice','text','[report]( /api/harvey/work/files/
 assert.equal(F.publicFileLinks('alice','text','Download: `/api/harvey/work/files/text/report.json`'), 'Download: [report.json](/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('alice','text','Saved `report.json`.'), 'Saved [report.json](/api/harvey/work/files/text/report.json).');
 assert.equal(F.publicFileLinks('bob','text','Saved `report.json`.'), 'Saved `report.json`.');
+assert.equal(F.publicFileLinks('alice','text','[report](sandbox:/api/harvey/work/files/text/report.json)'), '[report](/api/harvey/work/files/text/report.json)');
+assert.equal(F.publicFileLinks('alice','text','Download: https://api.harvey.work/files/text/report.json'), 'Download: [report.json](/api/harvey/work/files/text/report.json)');
+assert.equal(F.publicFileLinks('bob','text','Download: https://api.harvey.work/files/text/report.json'), 'Download: https://api.harvey.work/files/text/report.json');
 const fixture=async()=>({stream:Readable.from([data.subarray(0,12),data.subarray(12)]),size:data.length,mime:'video/mp4'});
 const downloaded=await D.downloadFile(dir,{url:'https://fixture.invalid/asset',filename:'Background.mp4',expectedSize:data.length},undefined,fixture);
 assert.equal(downloaded.size,data.length);assert.equal(downloaded.sha256.length,64);assert.deepEqual(readFileSync(downloaded.path),data);
