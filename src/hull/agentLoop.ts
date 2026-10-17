@@ -434,6 +434,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   const uninterrupted = !!opts.allowContinuation && !!opts.workRuntime;
   const stepBudget = uninterrupted ? Infinity : opts.fastMode || opts.voiceMode ? MAX_AGENT_STEPS_FAST : opts.workRuntime ? 32 : MAX_AGENT_STEPS;
   let idleToolRounds=0;
+  let lastObservationKey:string|undefined;
+  let unchangedObservationRounds=0;
+  let unchangedReminderAdded=false;
   let falseLimitReminders=0;
   const screenAnalyses=new Map<string,unknown>();
   let capabilityRecoveryPrompted=false;
@@ -552,13 +555,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           costUsd+=vision.usage.costUsd;promptTokens+=vision.usage.promptTokens;completionTokens+=vision.usage.completionTokens;cachedTokens+=vision.usage.cachedTokens||0;
           opts.onEvent?.({type:'usage',model:vision.modelUsed,promptTokens:vision.usage.promptTokens,completionTokens:vision.usage.completionTokens,cachedTokens:vision.usage.cachedTokens||0,costUsd:vision.usage.costUsd});
           if(!vision.text.trim())throw Error('Vision helper returned no visual observations');
-          let parsed:any;try{parsed=JSON.parse(vision.text.replace(/^\s*```(?:json)?\s*/i,'').replace(/\s*```\s*$/,''));}catch{}
-          result={analysis:typeof parsed?.summary==='string'?parsed.summary:vision.text,...(parsed?.data&&typeof parsed.data==='object'&&!Array.isArray(parsed.data)?{data:parsed.data}:{}),observerModel:vision.modelUsed,basis:'auxiliary_visual_observation',capturedAt:new Date().toISOString(),note:'Read-only interpretation of this viewport. Structured data is a visual interpretation, not an independent accuracy guarantee. Verify extracted fields and resulting actions; this is not full dataset coverage.'};
+          let parsed:any;try{parsed=JSON.parse(vision.text.replace(/^\s*```(?:json)?\s*/i,'').replace(/\s*```\s*$/,''));}catch{throw Error('Vision helper returned invalid or truncated JSON; ask a narrower visual question or use semantic observation');}
+          if(!parsed||Array.isArray(parsed)||typeof parsed.summary!=='string'||!parsed.summary.trim()||!parsed.data||typeof parsed.data!=='object'||Array.isArray(parsed.data))throw Error('Vision helper returned an invalid observation shape; expected a nonempty summary and data object');
+          result={analysis:parsed.summary,data:parsed.data,observerModel:vision.modelUsed,basis:'auxiliary_visual_observation',capturedAt:new Date(capturedAt).toISOString(),note:'Read-only interpretation of this viewport. Structured data is a visual interpretation, not an independent accuracy guarantee. Verify extracted fields and resulting actions; this is not full dataset coverage.'};
           screenAnalyses.set(key,result);
         }
         assistedVisionAt=capturedAt;
         if(sourcePage)result={...result,sourcePage:sourcePage.url,sourcePageObservedAt:sourcePage.observedAt,sourcePageNote:'Observed origin/path only; query, fragment and credentials omitted. Use an actual stable record ID when multiple records share this path.'};
-      }catch(e){result={error:'Screen inspection failed: '+(e instanceof ModelLayerError?e.summary:(e as Error).message),stage:'visual_observation',note:'This does not establish that the website cannot be automated. Try semantic snapshot/table or diagnose the specific capture/provider error.'};}
+      }catch(e){assistedVisionAt=0;result={error:'Screen inspection failed: '+(e instanceof ModelLayerError?e.summary:(e as Error).message),stage:'visual_observation',note:'This does not establish that the website cannot be automated. Try semantic snapshot/table or diagnose the specific capture/provider error.'};}
       opts.signal?.throwIfAborted();
       const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);
       return {...result,_harveyEvidence:receipt};
@@ -831,6 +835,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     hadToolOnly = !out.text.trim();
 
     const receiptStart=verification.result().receipts.length;
+    let remindUnchangedObservations=false;
     const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
     if (opts.workRuntime) {
       // Preserve dependency and evidence order, including verification tools that
@@ -841,7 +846,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if(continuation) return {speech:"Work is saved and will continue after the current step is ready.",continuation,verification:verification.result(),toolRounds:toolRounds+1,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
       }
       if(uninterrupted){
-        const progressed=verification.result().receipts.slice(receiptStart).some(r=>r.outcome==="returned");
+        const newReceipts=verification.result().receipts.slice(receiptStart);
+        const progressed=newReceipts.some(r=>r.outcome==="returned");
+        if(newReceipts.some(r=>r.observation&&!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool))){
+          const key=verification.continuationCheckpoint()?.progressKey;
+          unchangedObservationRounds=key&&key===lastObservationKey?unchangedObservationRounds+1:key?1:0;
+          lastObservationKey=key;
+          remindUnchangedObservations=unchangedObservationRounds>0&&unchangedObservationRounds%8===0;
+        }
         idleToolRounds=progressed?0:idleToolRounds+1;
         if(progressed)falseLimitReminders=0;
         if(idleToolRounds>=8){
@@ -865,6 +877,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
     messages.push({ role: "assistant", content: assistantContent });
     messages.push({ role: "user", content: toolResults });
+    if(remindUnchangedObservations&&!unchangedReminderAdded){
+      unchangedReminderAdded=true;
+      system+='\nRuntime notice — UNCHANGED OBSERVATIONS: repeated reads returned the same source content despite new receipt IDs or timestamps. Successful calls are not task progress. Change the relevant approach now: discover current schemas/routes, inspect the actual scroll region, use visual inspection, or check an authorized export/connector. Preserve saved records and uncertain-write safeguards. Continue independent work; do not invent a site limitation or ask the user to repeat continue. This notice does not stop the task or remove tools.';
+    }
     toolRounds++;
   }
 
