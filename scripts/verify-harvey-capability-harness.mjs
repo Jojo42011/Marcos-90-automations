@@ -73,8 +73,8 @@ try{
  store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});
  await runtime.runChat('fixture',chat,'yes, do it',{allowContinuation:true,workRequestId:'new',modelOverride:'inception/mercury-2.5'});
  const p=store.get('task_plan','fixture','retained');assert.equal(p.requestId,'new');assert.equal(p.blocker,'');assert.match(p.lastBlocker,/CAPTCHA/);assert.equal(p.contract.count,20);
- for(const text of ['yes, do it','Authorize Google Sheets, then do whatever you can','well just time it correctly and try again'])assert(execution.taskFollowup(text));
- assert(!execution.taskFollowup('stop'));assert(!execution.taskFollowup('just explain the plan'));
+ for(const text of ['yes, do it','Google Sheets is connected now','I authorized Google Sheets','Authorize Google Sheets, then do whatever you can','well just time it correctly and try again'])assert(execution.taskFollowup(text));
+ assert(!execution.taskFollowup('Are Google Sheets connected?'));assert(!execution.taskFollowup('stop'));assert(!execution.taskFollowup('just explain the plan'));
  console.log('ok follow-up retains exact contract and rechecks historical blockers without bypassing security');
  mode='contract';round=0;const other=store.createChat('fixture',{});
  const incomplete=await runtime.runChat('fixture',other,'Export two fixture records',{modelOverride:'inception/mercury-2.5'});

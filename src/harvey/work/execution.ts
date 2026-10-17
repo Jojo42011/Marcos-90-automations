@@ -9,7 +9,8 @@ export function needsTaskPlan(message:string):boolean {
 
 /** Short follow-ups inherit only an existing task, never an unrelated old request. */
 export function taskFollowup(message:string):boolean {
-  return executionRequest(message)&&(/^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|do it|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message)||message.length<300&&/\b(?:try again|retry|pick up where you left off|do whatever you can|(?:authorize|connect).{0,60}(?:then|and).{0,30}(?:do|finish|continue))\b/i.test(message));
+  const confirmedConnection=message.length<150&&!message.includes('?')&&/^\s*(?:(?:I(?:'ve| have)?\s+)?(?:connected|authorized|signed in|logged in)\b|(?:google sheets|sheets|google) (?:is|are) (?:connected|authorized)\b)/i.test(message);
+  return executionRequest(message)&&(confirmedConnection||/^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|do it|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message)||message.length<300&&/\b(?:try again|retry|pick up where you left off|do whatever you can|(?:authorize|connect).{0,60}(?:then|and).{0,30}(?:do|finish|continue))\b/i.test(message));
 }
 
 export function segmentLimit(reason:string):boolean {
