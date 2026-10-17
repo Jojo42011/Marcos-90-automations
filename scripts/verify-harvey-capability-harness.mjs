@@ -22,6 +22,9 @@ const server=http.createServer(async(req,res)=>{
    assert.equal(body.model,mainModel,'The main model must stay pinned');
    const steps=[['inspect_screen',{question:'Locate the visible fixture Save button'}],['computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e4'],checks:['Read back saved fixture state after click'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and checked.'};
+  }else if(mode==='compact'){
+   const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/catalog'}}],['work_records',{action:'save',collection:'compact',records:[{evidenceId:'e2',idPath:'/rows/0/id',fieldPaths:{name:'/rows/0/title'}}]}],['work_records',{action:'list',collection:'compact'}],['report_verification',{status:'completed',evidenceIds:['e2','e4'],checks:['Saved full structured title instead of the shortened snapshot label'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved the full source title.'};
   }else if(mode==='missing_readback'){
    const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/report'}}],['workspace_read',{file:'fixture.md'}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Attempted unrelated read-back'],limitations:[]}],['report_verification',{status:'completed',evidenceIds:['e2','e4'],checks:['Reviewed fresh selected-page observation and saved content'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Reviewed the page and saved content.'};
@@ -58,7 +61,7 @@ const server=http.createServer(async(req,res)=>{
    message=n===0?tc('task_plan',{action:'get'}):n===1?tc('report_verification',{status:'blocked',evidenceIds:[],checks:['Previous approval still needs inspection'],limitations:['No connected browser in this fixture']}):{role:'assistant',content:'The browser is disabled in this fixture; no site action ran.'};
   }else if(mode==='contract'){
    const steps=[['task_plan',{action:'save',objective:'Export two fixture records',steps:['Read records','Deliver file'],successCriteria:['Two unique records'],requiredSources:['fixture'],contract:{count:2,collection:'profiles',fields:['name'],exclusions:['Mojo FL'],destination:'CSV'}}],['task_plan',{action:'checkpoint',completedSteps:[0,1],nextStep:2}],['report_verification',{status:'completed',evidenceIds:['e1'],checks:['Attempted completion'],limitations:[]}],['report_verification',{status:'needs_verification',evidenceIds:[],checks:['Saved count was checked'],limitations:['Two requested profiles have not been saved']}]];
-   if(n===1)message=tc('task_plan',{action:'save',objective:'Export two fixture records',steps:['Read records','Deliver file'],successCriteria:['Two unique records'],requiredSources:['fixture'],contract:{destination:'Google Sheets'}});
+   if(n===1)message=tc('task_plan',{action:'save',contract:{destination:'Google Sheets'}});
    else message=(n>1?n-1:n)<steps.length?tc(...steps[n>1?n-1:n]):{role:'assistant',content:'The two profiles are still missing.'};
   }else throw Error('Unknown fixture');
  }
@@ -125,6 +128,9 @@ try{
  mode='missing_readback';round=0;let navigations=0,readbacks=0;
  const recoveredReadback=await runAgentLoop({message:'Read the fixture page and report',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>{if(name==='workspace_read')return {file:'fixture.md',content:'Observed fixture report'};if(input.tool==='browser_navigate')navigations++;if(input.tool==='browser_snapshot')readbacks++;return {url:'https://fixture.invalid/report',observed:'Fixture report'};}}});
  assert.equal(recoveredReadback.verification.status,'completed');assert.equal(navigations,1);assert.equal(readbacks,1);
+ mode='compact';round=0;let compactReads=0;
+ const compact=await runAgentLoop({message:'Export this catalog CSV',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='work_records')],context:'Fixture',execute:async(name,input)=>name==='work_records'?records.workRecords('fixture',chat.id,input):input.tool==='browser_read_table'?(compactReads++,{url:'https://fixture.invalid/catalog',rows:[{id:'one',title:'Full source title'}]}):{truncated:true,snapshotId:'long',nextOffset:6500,content:[{type:'text',text:'Shortened title ...'}]}}});
+ assert.equal(compact.verification.status,'completed');assert.equal(compactReads,1);assert.equal(records.workRecords('fixture',chat.id,{action:'list',collection:'compact'}).items[0].fields.name,'Full source title');
  console.log('ok real text artifacts read back, invalid projections retain diagnostics, and unverified success prose cannot escape the final gate');
  mode='resume';round=0;
  store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});

@@ -17,6 +17,8 @@ const budget=Number(process.env.HARVEY_QA_BUDGET_USD||0.25),results=[];
 for(const [index,test] of tests.entries()){
  const chat=S.createChat('random-qa',{mode:'work',model:test.model}),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),180000);
  let result;
+ for(const message of test.history||[])S.append('random-qa',chat.id,message);
+ for(const [file,content] of Object.entries(test.existingFiles||{}))F.writeWorkspaceFile('random-qa',chat.id,{file,content});
  try{
   let continuation,segments=0;
   do{
@@ -29,7 +31,7 @@ for(const [index,test] of tests.entries()){
   assert.equal(result.verification?.status,'completed','Task must have an accepted completion review');
   const saved=F.files('random-qa',chat.id),read=name=>readFileSync(F.filePath('random-qa',chat.id,name),'utf8');
   if(index===0){
-   const file=saved.find(f=>f.name.endsWith('.csv'));assert(file,'No CSV delivered');const csv=read(file.name);
+   const file=saved.find(f=>f.name.endsWith('.csv')&&result.speech.includes(f.download));assert(file,'No working CSV link delivered');const csv=read(file.name);
    for(const value of ['A Light in the Attic','Tipping the Velvet','Soumission','Sharp Objects','Sapiens','The Requiem Red','51.77','53.74','50.10','47.82','54.23','22.65'])assert(csv.includes(value),'Missing observed catalog value '+value);
    assert.equal(csv.trim().split(/\r?\n/).length,7,'Six book rows plus header');
   }else if(index===1){

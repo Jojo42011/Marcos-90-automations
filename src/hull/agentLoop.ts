@@ -402,6 +402,11 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let completionRepairs = 0;
   let forceVerification=false;
   let verificationReadbackRecovered=false;
+  const verificationProgress=new Set<string>();
+  const rememberVerificationProgress=()=>{
+    const key=verification.continuationCheckpoint()?.progressKey;
+    if(key&&!verificationProgress.has(key)){verificationProgress.add(key);completionRepairs=0;}
+  };
   let malformedRepairs = 0;
   const videoAttempts = new Map<string,number>();
   let hadToolOnly = false;
@@ -567,6 +572,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       }catch(e){assistedVisionAt=0;result={error:'Screen inspection failed: '+(e instanceof ModelLayerError?e.summary:(e as Error).message),stage:'visual_observation',note:'This does not establish that the website cannot be automated. Try semantic snapshot/table or diagnose the specific capture/provider error.'};}
       opts.signal?.throwIfAborted();
       const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);
+      rememberVerificationProgress();
       return {...result,_harveyEvidence:receipt};
     }
     if(opts.workRuntime && name==="continue_work"){
@@ -603,6 +609,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           const rejected=verification.record(name,input,error);opts.onEvidence?.(rejected);
           const observed=await executeTool('computer',{action:'call',tool:'browser_snapshot',arguments:{}});
           const receipt=verification.record('computer',{action:'call',tool:'browser_snapshot',arguments:{}},observed);opts.onEvidence?.(receipt);
+          rememberVerificationProgress();
           return {...error,currentObservation:{...(observed as any),_harveyEvidence:receipt}};
         }
       }
@@ -634,6 +641,15 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const receipt = verification.record(name, input, result);
     if (!receipt.observation) observationRevision++;
     opts.onEvidence?.(receipt);
+    if(name==='computer'&&input.action==='call'&&['browser_navigate','browser_snapshot'].includes(String(input.tool))&&(result as any)?.truncated===true&&/\b(?:csv|catalog|table|records|leads|contacts)\b/i.test(opts.message)){
+      // A long accessibility tree is a representation problem. Offer compact
+      // current DOM rows before the model falls back to shortened visual labels.
+      const readInput={action:'call',tool:'browser_read_table',arguments:{}};
+      const compact:any=await executeTool('computer',readInput);
+      const compactReceipt=verification.record('computer',readInput,compact);opts.onEvidence?.(compactReceipt);
+      if(compact?.rows?.length&&!compact.truncated&&!compact.error)result={snapshotId:(result as any).snapshotId,nextOffset:(result as any).nextOffset,originalSnapshotTruncated:true,structuredObservation:{...compact,_harveyEvidence:compactReceipt},note:'The long snapshot was replaced with compact current DOM records. Prefer full row.title/link titles over ellipsized display labels. Project source values from this structured receipt. Request a focused snapshot if controls or filters still need inspection.'};
+      else result={...(result as any),structuredRead:{...compact,_harveyEvidence:compactReceipt},structuredReadNote:'Optional compact DOM read did not yield complete records. This does not establish missing data or an automation limitation; inspect a focused region or use inspect_screen structured=true.'};
+    }
     if(name==="computer"&&input.action==="call"){
       browserFailureCount=receipt.outcome==="failed"?browserFailureCount+1:0;
       if(browserFailureCount>=2&&!browserRecoveryUsed&&opts.workRuntime.tools.some(t=>t.name==="computer")){
@@ -654,6 +670,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       }
     }
     if (result && typeof result === "object" && !Array.isArray(result)) {
+      rememberVerificationProgress();
       return { _harveyEvidence: receipt, ...Object.fromEntries(Object.entries(result).filter(([k]) => k !== "_harveyEvidence")) };
     }
     return { _harveyEvidence: receipt, data: result ?? null };
