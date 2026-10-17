@@ -38,6 +38,14 @@ assert.equal(F.readWorkspaceFile('alice','text',{file:'long.md'}).nextOffset,800
 assert.equal(F.readWorkspaceFile('alice','text',{file:'long.md',offset:8000}).content.length,3000);
 if(process.platform!=='win32'){symlinkSync(join(other,'secret.mp4'),join(F.filesDir('alice','text'),'escape.md'));assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'escape.md',content:'bad'}),/outside/);}
 console.log('ok chat-scoped authored text, actual content read-back, idempotence, revision conflicts, JSON validation and paginated reads');
+const {TurnVerification}=require('../dist/src/harvey/reliability.js'),review=new TurnVerification();
+review.record('workspace_write',{file:'a.md'},{file:'a.md',sha256:'one'});review.record('workspace_write',{file:'b.md'},{file:'b.md',sha256:'two'});
+review.record('workspace_read',{file:'b.md'},{file:'b.md',sha256:'two',content:'b'});
+const completion={status:'completed',evidenceIds:['e3'],checks:['Read files'],limitations:[]};
+assert.throws(()=>review.review(completion),/each authored file/);
+review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/current hash/);
+review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});
+console.log('ok every authored artifact requires its own current-hash content read-back');
 const fixture=async()=>({stream:Readable.from([data.subarray(0,12),data.subarray(12)]),size:data.length,mime:'video/mp4'});
 const downloaded=await D.downloadFile(dir,{url:'https://fixture.invalid/asset',filename:'Background.mp4',expectedSize:data.length},undefined,fixture);
 assert.equal(downloaded.size,data.length);assert.equal(downloaded.sha256.length,64);assert.deepEqual(readFileSync(downloaded.path),data);

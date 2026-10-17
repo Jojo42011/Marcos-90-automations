@@ -13,6 +13,7 @@ const {TurnVerification}=require('../dist/src/harvey/reliability.js');
 let writes=0;
 const server=http.createServer((req,res)=>{
  res.setHeader('Content-Type','text/html');
+ if(req.url==='/cards'){res.end('<h1>Catalog</h1>'+Array.from({length:6},(_,i)=>`<article><a href="/book/${i}" title="Full fixture title ${i}">Short title</a><p>Price ${i+10}.00</p><p>In stock</p></article>`).join(''));return;}
  if(req.url==='/write'){if(req.method==='POST')writes++;res.end('<h1>Saved exactly once</h1>');return;}
  if(req.url==='/login')res.setHeader('Set-Cookie','fixture_session=valid; HttpOnly; SameSite=Lax; Path=/');
  if(req.url==='/second'){res.end('<h1>Second tab '+(req.headers.cookie?.includes('fixture_session=valid')?'authenticated':'signed out')+'</h1>');return;}
@@ -86,5 +87,8 @@ try{
  r=await B.browserCall('alice','save-warning','browser_navigate',{url:base+'/second'});assert(!r.error,txt(r));assert(r.persistenceWarning);
  rmdirSync(join(dir,'auth-state.json.pending'));
  console.log('ok checkpoint failure is separate from action outcome; explicit Close remains closed');
+ await B.browserCall('alice','cards','browser_navigate',{url:base+'/cards'});
+ const cards=await B.browserCall('alice','cards','browser_read_table',{});assert.equal(cards.layout,'cards');assert.equal(cards.rows.length,6);assert.equal(cards.rows[0].links[0].title,'Full fixture title 0');assert(cards.rows[0].id.endsWith('/book/0'));assert(!cards.truncated);
+ console.log('ok rendered article cards expose literal full titles, prices and stable profile links without vision');
  assert.equal(writes,1);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,fixtureWrites:writes}));
 }finally{await B.closeBrowsers();server.closeAllConnections();await new Promise(r=>server.close(r));}

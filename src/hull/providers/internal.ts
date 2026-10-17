@@ -18,6 +18,7 @@ export interface ProviderRequest {
   /** Anthropic-shaped, always. Translation happens inside the provider. */
   messages: unknown[];
   tools?: unknown[];
+  toolChoice?: string;
   maxTokens: number;
   temperature?: number;
   /** When present the provider streams and calls this per text delta. */

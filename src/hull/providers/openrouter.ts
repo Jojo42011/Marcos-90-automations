@@ -113,6 +113,7 @@ function buildBody(req: ProviderRequest, stream: boolean): Record<string, unknow
      tools untouched, since they cache prefixes implicitly. */
   const tools = withCachedOpenAiTools(toOpenAiTools(req.tools), req.model);
   if (tools) body.tools = tools;
+  if(tools&&req.toolChoice)body.tool_choice={type:'function',function:{name:req.toolChoice}};
   if (stream) body.stream_options = { include_usage: true };
 
   if (req.maxCostUsd && req.maxCostUsd > 0) {

@@ -100,6 +100,7 @@ export async function callAnthropic(req: ProviderRequest): Promise<ProviderRespo
   if (system) params.system = system;
   const tools = withCachedTools(req.tools as unknown[] | undefined, slug);
   if (Array.isArray(tools) && tools.length) params.tools = tools;
+  if(Array.isArray(tools)&&tools.length&&req.toolChoice)params.tool_choice={type:'tool',name:req.toolChoice};
   if (typeof req.temperature === "number") params.temperature = req.temperature;
 
   try {

@@ -22,6 +22,13 @@ const server=http.createServer(async(req,res)=>{
    assert.equal(body.model,mainModel,'The main model must stay pinned');
    const steps=[['inspect_screen',{question:'Locate the visible fixture Save button'}],['computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e4'],checks:['Read back saved fixture state after click'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and checked.'};
+  }else if(mode==='artifact'){
+   const steps=[['workspace_write',{file:'fixture.json',content:'{"total":375}'}],['workspace_read',{file:'fixture.json'}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Read back saved total 375'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and read back the requested JSON.'};
+  }else if(mode==='unverified'){
+   message=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):{role:'assistant',content:'Both actions completed successfully.'};
+  }else if(mode==='invalid_projection'){
+   message=n===0?tc('work_records',{action:'save',collection:'bad',records:[{evidenceId:'e999',idPath:'/id',fieldPaths:{name:'/name'}}]}):n===1?tc('report_verification',{status:'blocked',evidenceIds:[],checks:['Missing source reference is retained'],limitations:['No valid source receipt in this fixture']}):{role:'assistant',content:'The save had no valid source evidence.'};
   }else if(mode==='stagnant'){
    if(n===8)assert(body.messages.some(m=>String(m.content).includes('UNCHANGED OBSERVATIONS')),'Repeated identical observations must trigger a strategy change');
    message=n<9?tc('computer',{action:'call',tool:n===8?'browser_read_table':'browser_read_snapshot',arguments:n===8?{}:{offset:n*100}}):n===9?tc('report_verification',{status:'completed',evidenceIds:['e9'],checks:['Changed route and read actual fixture records'],limitations:[]}):{role:'assistant',content:'Retrieved records through another observation route.'};
@@ -97,6 +104,17 @@ try{
  assert.equal(reads,8);assert.equal(unstuck.verification.status,'completed');assert(!unstuck.continuation);
  console.log('ok repeated unchanged observations trigger a different route without a task cutoff or another user continue');
  mode='resume';round=0;const chat=store.createChat('fixture',{});
+ mode='artifact';round=0;const fileTools=runtime.WORK_TOOLS.filter(t=>['workspace_write','workspace_read'].includes(t.name)),fileApi=require(join(root,'harvey/work/files.js'));
+ const authored=await runAgentLoop({message:'Create the fixture JSON file',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:fileTools,context:'Fixture',execute:async(name,input)=>name==='workspace_write'?fileApi.writeWorkspaceFile('fixture',chat.id,input):fileApi.readWorkspaceFile('fixture',chat.id,input)}});
+ assert.equal(authored.verification.status,'completed');assert.equal(fileApi.readWorkspaceFile('fixture',chat.id,{file:'fixture.json'}).content,'{"total":375}');
+ mode='invalid_projection';round=0;
+ const invalid=await runAgentLoop({message:'Save fixture records',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:runtime.WORK_TOOLS.filter(t=>t.name==='work_records'),context:'Fixture',execute:async()=>{throw Error('Invalid projection must not reach storage');}}});
+ assert(invalid.verification.receipts.some(r=>r.tool==='work_records'&&r.outcome==='failed'&&r.diagnostic));
+ mode='unverified';round=0;
+ const unverified=await runAgentLoop({message:'Open the fixture and verify both actions',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
+ assert.equal(unverified.verification.status,'needs_verification');assert(!unverified.speech.includes('completed successfully'));
+ console.log('ok real text artifacts read back, invalid projections retain diagnostics, and unverified success prose cannot escape the final gate');
+ mode='resume';round=0;
  store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});
  await runtime.runChat('fixture',chat,'yes, do it',{allowContinuation:true,workRequestId:'new',modelOverride:'inception/mercury-2.5'});
  const p=store.get('task_plan','fixture','retained');assert.equal(p.requestId,'new');assert.equal(p.blocker,'');assert.match(p.lastBlocker,/CAPTCHA/);assert.equal(p.contract.count,20);

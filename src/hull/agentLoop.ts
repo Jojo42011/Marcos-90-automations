@@ -400,6 +400,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
   let toolRounds = 0;
   let completionRepairs = 0;
+  let forceVerification=false;
   let malformedRepairs = 0;
   const videoAttempts = new Map<string,number>();
   let hadToolOnly = false;
@@ -589,10 +590,13 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       }
       if(input.status==='completed'){
         const incomplete=opts.workRuntime.completionCheck?.();
-        if(incomplete)return {error:incomplete};
+        if(incomplete){
+          const result={error:incomplete,plan:opts.workRuntime.tools.some(t=>t.name==='task_plan')?await opts.workRuntime.execute('task_plan',{action:'get'}):undefined,note:'Checkpoint only the genuinely completed zero-based plan steps with task_plan action=checkpoint, then report_verification again. If work remains, execute it; do not mark it complete just to satisfy this check.'};
+          const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};
+        }
       }
       if(opts.allowContinuation && input.status==="blocked" && segmentLimit(JSON.stringify(input.limitations||[])))return {error:"The turn limit does not block this saved job. Inspect current state, retain unfinished task_plan steps and continue_work automatically."};
-      try { return verification.review(input); } catch (e) { return {error: (e as Error).message}; }
+      try { return verification.review(input); } catch (e) {const result={error:(e as Error).message,inputSchema:VERIFICATION_TOOL.input_schema};const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};}
     }
     if(opts.workRuntime&&name==="work_records"&&input.action==="save"){
       try{input={...input,_verifiedRecords:verification.projectRecords(input.records)};}catch(e){
@@ -671,6 +675,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         system: stepSystem,
         messages,
         tools: stepTools,
+        toolChoice:forceVerification&&stepTools?.some(t=>t.name==='report_verification')?'report_verification':undefined,
         maxTokens,
         sessionId: opts.sessionId,
         onToken: opts.workRuntime ? undefined : opts.onToken,
@@ -729,6 +734,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     cachedTokens += out.usage.cachedTokens || 0;
     lastPlan = out.contextPlan;
     lastModelUsed = out.modelUsed;
+    forceVerification=false;
     if (out.substituted) substituted = out.substituted;
     opts.onEvent?.({
       type: "usage",
@@ -800,11 +806,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
       if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && (opts.allowContinuation?evidence.status==='needs_verification':!evidence.checks.length) && (evidence.receipts.length > 0 || actionRequested)) {
         completionRepairs++;
+        if(opts.allowContinuation)forceVerification=true;
         // Do not append an unanswered assistant turn: some providers interpret
         // that as unsupported prefill. The last real user/tool-result stays last.
         // Runtime bookkeeping belongs in system context, never as a fabricated user turn.
         system += "\n\n" + (evidence.receipts.length
-          ? "Runtime verification reminder: inspect the actual receipts returned this turn. For a read, report_verification may cite its complete observation directly; no extra read-back is required. Retrieve smaller results when truncated (crm_api supports select for top-level fields). For writes, perform the necessary read-back without repeating the write. Then report the verified outcome or explain the observed blocker."
+          ? "Runtime finish check: call report_verification now with status completed only when the full requested outcome is actually checked, current successful evidenceIds, specific checks and limitations: []. Otherwise report needs_verification with the exact missing work, or blocked only for an observed blocker. For writes cite actual content/action read-backs. Unfinished task_plan steps must be checkpointed after they are genuinely complete. After a rejected review, correct its concrete error using available tools; do not repeat external writes. This is a verification step, not permission to stop early."
           : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
         continue;
       }

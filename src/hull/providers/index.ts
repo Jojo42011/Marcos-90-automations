@@ -259,6 +259,7 @@ export async function complete(req: CompletionRequest): Promise<CompletionOutcom
       system: req.system,
       messages: planned.messages,
       tools: req.tools,
+      toolChoice: req.toolChoice,
       maxTokens,
       temperature: req.temperature,
       onToken: req.onToken,
