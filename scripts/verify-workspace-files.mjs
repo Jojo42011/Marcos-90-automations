@@ -46,6 +46,19 @@ assert.throws(()=>review.review(completion),/each authored file/);
 review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/current hash/);
 review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});
 console.log('ok every authored artifact requires its own current-hash content read-back');
+const paged=new TurnVerification(),pagedWrite=F.writeWorkspaceFile('alice','text',{file:'paged.csv',content:'name,history\n'+('Fixture lead,Observed history\n'.repeat(40000))});
+paged.record('workspace_write',{file:'paged.csv'},pagedWrite);
+const firstPage=F.readWorkspaceFile('alice','text',{file:'paged.csv'});paged.record('workspace_read',{file:'paged.csv'},firstPage);
+assert.throws(()=>paged.review({...completion,evidenceIds:['e2']}),/smaller/);
+let offset=firstPage.nextOffset,lastReceipt;
+while(offset!==null){const page=F.readWorkspaceFile('alice','text',{file:'paged.csv',offset});lastReceipt=paged.record('workspace_read',{file:'paged.csv',offset},page);offset=page.nextOffset;}
+assert(paged.result().receipts.length>100);assert.equal(require('../dist/src/harvey/reliability.js').canResumeFromReceipts(paged.result().receipts),true);assert.equal(lastReceipt.completeFileRead,true);assert.equal(paged.review({...completion,evidenceIds:[lastReceipt.id],checks:['Read all source characters at the saved hash']}).accepted,true);
+const gapped=new TurnVerification();gapped.record('workspace_read',{},firstPage);gapped.record('workspace_read',{},F.readWorkspaceFile('alice','text',{file:'paged.csv',offset:10000}));
+assert.throws(()=>gapped.review({...completion,evidenceIds:['e2']}),/smaller/);
+const revised=F.writeWorkspaceFile('alice','text',{file:'paged.csv',content:'changed,'+'x'.repeat(21000),expectedSha256:pagedWrite.sha256});
+const revisionPage=paged.record('workspace_read',{file:'paged.csv'},F.readWorkspaceFile('alice','text',{file:'paged.csv'}));assert(!revisionPage.completeFileRead);assert.throws(()=>paged.review({...completion,evidenceIds:[revisionPage.id]}),/smaller/);
+console.log('ok long file completion requires contiguous source coverage at one hash; gaps and mixed revisions remain incomplete');
+
 assert.equal(F.publicFileLinks('alice','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('bob','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](https://chatgpt.com/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('alice','text','[report]( /api/harvey/work/files/text/report.json )'), '[report](/api/harvey/work/files/text/report.json)');

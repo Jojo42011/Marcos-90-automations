@@ -18,7 +18,7 @@ export function stableCallKey(name: string, input: unknown): string {
   return createHash("sha256").update(name + ":" + JSON.stringify(canonical(input))).digest("hex");
 }
 export type VerificationStatus = "completed" | "blocked" | "needs_verification";
-export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; actionOutcome?: "not_executed" | "unknown"; limitation?: string; diagnostic?: {code:string;message:string;detail:string} }
+export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; completeFileRead?: boolean; actionOutcome?: "not_executed" | "unknown"; limitation?: string; diagnostic?: {code:string;message:string;detail:string} }
 export interface Verification { status: VerificationStatus; evidenceIds: string[]; checks: string[]; limitations: string[]; receipts: Receipt[]; basis: "agent_review_with_receipt_checks" }
 export const VERIFICATION_TOOL: Tool = {
   name: "report_verification", description: "Record task verification before final response. Receipt references are checked by the runtime. This records your review; it does not independently prove factual truth. No passwords or sensitive record contents. After a possible write, include a subsequent read-back observation. Mark partial/truncated results needs_verification.",
@@ -81,7 +81,7 @@ export function canResumeFromReceipts(receipts: Receipt[], allowEmpty = false) {
   if(!relevant.length)return allowEmpty;
   const last=relevant.at(-1)!;
   return last.observation && last.outcome==='returned' && !last.limitation && relevant.every((r,i)=>
-    r.observation || r.actionOutcome==='not_executed' || r.outcome==='returned' && relevant.slice(i+1).some(next=>next.observation&&next.scope===r.scope&&next.outcome==='returned'&&!next.limitation&&!next.truncated));
+    r.observation || r.actionOutcome==='not_executed' || r.outcome==='returned' && relevant.slice(i+1).some(next=>next.observation&&next.scope===r.scope&&next.outcome==='returned'&&!next.limitation&&(!next.truncated||next.completeFileRead)));
 }
 export class TurnVerification {
   private receipts: Receipt[] = [];
@@ -154,6 +154,7 @@ export class TurnVerification {
     else if(name==="computer"&&result?.recovery)receipt.diagnostic={code:"browser_"+String(result.recovery.kind||"unknown").slice(0,60),message:receipt.diagnostic?.message||"Browser action needs recovery",detail:JSON.stringify({action:input.tool,actionOutcome:result.recovery.actionOutcome,safeToRetry:result.recovery.safeToRetry===true})};
     this.receipts.push(receipt);
     if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,source);
+    if(receipt.truncated&&this.completeFileCoverage(receipt))receipt.completeFileRead=true;
     return receipt;
   }
   verifyValues(input:any) {
@@ -171,6 +172,12 @@ export class TurnVerification {
     }
     return {verified:true,evidenceId:input.evidenceId,matched:input.claims.length,note:"Values match this source; source freshness and total record coverage require separate checks."};
   }
+  private completeFileCoverage(receipt:Receipt) {
+    const file:any=this.sources.get(receipt.id);
+    if(receipt.tool!=='workspace_read'||typeof file?.file!=='string'||typeof file?.sha256!=='string'||!Number.isSafeInteger(file?.totalCharacters)||file.totalCharacters<0)return false;
+    const ranges=this.receipts.filter(r=>r.tool==='workspace_read'&&r.outcome==='returned').map(r=>this.sources.get(r.id) as any).filter(p=>p?.file===file.file&&p?.sha256===file.sha256&&p?.totalCharacters===file.totalCharacters&&typeof p?.content==='string'&&Number.isSafeInteger(p?.offset)&&p.offset>=0&&p.offset+p.content.length<=file.totalCharacters).map(p=>[p.offset,p.offset+p.content.length]).sort((a,b)=>a[0]-b[0]);
+    let end=0;for(const [start,stop] of ranges){if(start>end)return false;end=Math.max(end,stop);}return end===file.totalCharacters;
+  }
   unfinishedReason() {
     const state=this.result();
     if(state.checks.length&&state.limitations.length)return state.limitations.join(' ');
@@ -180,9 +187,9 @@ export class TurnVerification {
     return details.filter(Boolean).join(' ');
   }
   reviewGuidance() {
-    return this.receipts.filter(r=>r.observation&&!r.discovery&&r.outcome==='returned'&&!r.truncated&&!r.limitation&&r.tool!=='report_verification').slice(-30).map(r=>{
+    return this.receipts.filter(r=>r.observation&&!r.discovery&&r.outcome==='returned'&&(!r.truncated||r.completeFileRead)&&!r.limitation&&r.tool!=='report_verification').slice(-30).map(r=>{
       const source:any=this.sources.get(r.id);
-      return {id:r.id,tool:r.tool,scope:r.scope,...(r.tool==='workspace_read'?{file:source?.file,sha256:source?.sha256}:{} )};
+      return {id:r.id,tool:r.tool,scope:r.scope,...(r.tool==='workspace_read'?{file:source?.file,sha256:source?.sha256,...(r.completeFileRead?{completeFileRead:true}:{} )}:{} )};
     });
   }
   review(input: any) {
@@ -194,7 +201,7 @@ export class TurnVerification {
     if (cited.some((r: Receipt | undefined) => !r || r.outcome !== "returned")) throw new Error("Evidence must reference successful tool receipts from this turn");
     if (input.status === "completed") {
       if (!cited.length || !input.checks.some((s: string) => s.trim()) || input.limitations.length) throw new Error("Completion requires evidence, concrete checks and no unresolved limitations");
-      if (cited.some((r: Receipt) => r.truncated)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
+      if (cited.some((r: Receipt) => r.truncated&&!r.completeFileRead)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
       if (cited.some((r: Receipt) => r.limitation)) throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
       for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery&&r.actionOutcome!=='not_executed'&&!['task_plan','continuity'].includes(r.tool))) {
         if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error(`Read back each affected service after its action before claiming completion. Missing ${action.scope} observation after ${action.tool} (${action.id}). For browser use computer browser_snapshot or inspect_screen and cite that receipt; for saved text use workspace_read for the affected file.`);

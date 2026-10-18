@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-18: Paginated workspace reads track contiguous character coverage for the same file and content hash within the current execution. Only a final read with proven complete coverage can support completion while its individual page remains partial. Gaps, mixed revisions, browser truncation and unseen content remain unverified; this removes the impossible single-page read-back requirement for long CSV/text attachments without increasing per-call payloads.
+
 - 2026-10-18: Invalid navigation returns a structured not-executed recovery result before touching the selected browser, distinguishing unsupported/local attachment URLs from credential-bearing URLs without retaining raw values. Hosted and local browsers share this validation. Receipts retain known action outcomes so confirmed unexecuted calls do not poison safe continuation or require a phantom write read-back; unknown writes remain guarded. Unfinished final replies surface the recorded completion rejection and last tool diagnostic instead of the generic verification banner. This does not establish the input or effects of the reported Wesley run without its saved trace.
 
 - 2026-10-17: Final replies turn inline-code names or paths of files actually present in the current owner/chat into authenticated clickable downloads; unknown files and other owners remain unchanged. This closes the live catalog delivery gap after content verification.
