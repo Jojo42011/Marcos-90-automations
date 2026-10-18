@@ -1,3 +1,4 @@
+import {navigationProblem} from './browserState.js';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {Chat,get,put,workDb} from './store.js';
 
@@ -72,6 +73,7 @@ export async function localBrowserCall(owner:string,chat:string,name:string,args
  if(!LOCAL_BROWSER_TOOLS.some(t=>t.name===name)||!args||typeof args!=='object'||Array.isArray(args)||JSON.stringify(args).length>32000)return {error:'Unsupported local browser action or arguments'};
  const schema=LOCAL_BROWSER_TOOLS.find(t=>t.name===name)!.inputSchema;
  if(!validArgs(args,schema))return {error:'Invalid arguments',schema};
+ if(name==='browser_navigate'){const problem=navigationProblem(args.url);if(problem)return problem;}
  if(s.pending)return {error:'Another browser action is still running. Inspect its result before continuing.'};
  return new Promise<any>(resolve=>{
   const abort=()=>revoke(s,'Browser action cancelled. Reconnect before continuing.');

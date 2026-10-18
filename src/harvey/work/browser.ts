@@ -6,7 +6,7 @@ import { createHash, randomUUID } from "crypto";
 import { mkdirSync, chownSync, existsSync, renameSync, chmodSync, writeFileSync, readFileSync, realpathSync, statSync } from "fs";
 import { join, resolve, sep } from "path";
 import { get, list, put, seal, unseal, workDir, text } from "./store.js";
-import {browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
+import {navigationProblem, browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
 
 import { browserArguments } from "./browserArguments.js";
 import { uploadArguments } from "./uploadFiles.js";
@@ -244,7 +244,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
   }
   if(name==="browser_read_snapshot"){const s=await session(owner,chat);if(s.snapshot?.id!==args.snapshotId)throw new Error("Snapshot changed; request a fresh focused snapshot");return pageSlice(s,args.offset);}
   if(!ALLOWED.has(name))throw new Error("Unsupported browser action");
-  if(name==="browser_navigate" || name==="browser_tabs"&&args.url){const url=new URL(text(args.url,"URL",4000));if(!["https:","http:"].includes(url.protocol)||url.username||url.password)throw new Error("Use an HTTP(S) URL without embedded credentials");}
+  if(name==="browser_navigate" || name==="browser_tabs"&&args.url){const problem=navigationProblem(args.url);if(problem)return problem;}
   const filesDir=join(browserDirectory(owner,chat),"files");
   if(name==="browser_file_upload")args=uploadArguments(filesDir,args);
   if(name==="browser_take_screenshot"||name==="browser_snapshot")delete args.filename;

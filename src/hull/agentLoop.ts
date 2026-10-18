@@ -602,7 +602,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};
         }
         const receipts=verification.result().receipts,cited=new Set(Array.isArray(input.evidenceIds)?input.evidenceIds:[]);
-        const missingBrowser=receipts.some((r,i)=>r.scope==='browser'&&!r.observation&&!r.discovery&&!receipts.slice(i+1).some(o=>cited.has(o.id)&&o.scope==='browser'&&o.observation&&o.outcome==='returned'&&!o.limitation&&!o.truncated));
+        const missingBrowser=receipts.some((r,i)=>r.scope==='browser'&&!r.observation&&!r.discovery&&r.actionOutcome!=='not_executed'&&!receipts.slice(i+1).some(o=>cited.has(o.id)&&o.scope==='browser'&&o.observation&&o.outcome==='returned'&&!o.limitation&&!o.truncated));
         if(missingBrowser&&!verificationReadbackRecovered&&opts.workRuntime.tools.some(t=>t.name==='computer')){
           verificationReadbackRecovered=true;
           const error={error:'Browser read-back was missing from the completion evidence. Review the fresh current-page observation below and cite its receipt if it verifies the actual requested outcome. A saved file does not verify a browser action. No external write was retried.'};
@@ -847,7 +847,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         continue;
       }
       if(opts.allowContinuation&&opts.workRuntime&&executionRequest(opts.message)&&evidence.receipts.length&&evidence.status==='needs_verification'&&completionRepairs>=3&&!plainStatusRewrite){
-        return {speech:'The task is not verified complete. I could not finish the required source, saved-content or action read-back checks. Saved work is retained.',verification:evidence,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+        return {speech:'Work is unfinished. '+verification.unfinishedReason()+' Saved work is retained.',verification:evidence,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
       }
       const statusQuestion=opts.message.length<300 && /\b(?:where\b.{0,30}\b(?:stop|are we)|what(?:'s| is) left|what happened|did it work|status)\b/i.test(opts.message) && !/\b(?:detailed|technical report|table|breakdown)\b/i.test(opts.message);
       if(opts.workRuntime && statusQuestion && !plainStatusRewrite && !lastRound && (out.text.length>600 || /^\s*#{1,6}\s/m.test(out.text))){

@@ -29,8 +29,19 @@ const txt=r=>JSON.stringify(r);
 try{
  const catalog=await B.browserTools('alice','catalog-only','browser_snapshot');assert.equal(catalog[0].name,'browser_snapshot');assert.equal(await B.browserMetrics('alice','catalog-only'),undefined);
  console.log('ok schema discovery does not allocate a browser session');
+ for(const url of ['file:///private-fixture.csv','data:text/html,fixture','sandbox:/private-sheet.csv','https://fixture-user:fixture-password@example.com/','not-a-url']){
+   const rejected=await B.browserCall('alice','invalid-only','browser_navigate',{url});assert.equal(rejected.recovery.actionOutcome,'not_executed');assert.equal(await B.browserMetrics('alice','invalid-only'),undefined);assert(!txt(rejected).includes('fixture-password'));assert(!txt(rejected).includes('private-fixture'));
+ }
+ console.log('ok invalid navigation is rejected before browser allocation with redacted actionable recovery');
+
  const started=Date.now();let r=await call('browser_navigate',{url:base+'/login'});assert(!r.error,txt(r));
- const baseline=await B.browserMetrics('alice','recovery');
+ let baseline=await B.browserMetrics('alice','recovery');
+ const invalid=await call('browser_navigate',{url:'file:///private-sheet.csv'});assert.equal(invalid.recovery.actionOutcome,'not_executed');assert.match(invalid.error,/URL type/);assert(!/embedded credentials/.test(invalid.error));
+ const retainedPage=await call('browser_snapshot',{target:'h1'});assert.match(txt(retainedPage),/Recovery fixture/);
+ await call('browser_navigate',{url:base+'/second'});assert.match(txt(await call('browser_snapshot',{target:'h1'})),/authenticated/);await call('browser_navigate',{url:base+'/login'});
+ console.log('ok rejected attachment navigation leaves current signed-in browser and cookies intact');
+ baseline=await B.browserMetrics('alice','recovery');
+
  r=await call('browser_snapshot',{target:'#one'});assert(!r.error,txt(r));
  const before=await B.browserMetrics('alice','recovery');
  assert.equal(before.checkpoints,baseline.checkpoints,'Read-only snapshot must not save browser storage');

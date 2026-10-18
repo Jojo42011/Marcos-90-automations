@@ -18,7 +18,7 @@ export function stableCallKey(name: string, input: unknown): string {
   return createHash("sha256").update(name + ":" + JSON.stringify(canonical(input))).digest("hex");
 }
 export type VerificationStatus = "completed" | "blocked" | "needs_verification";
-export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; limitation?: string; diagnostic?: {code:string;message:string;detail:string} }
+export interface Receipt { id: string; tool: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; actionOutcome?: "not_executed" | "unknown"; limitation?: string; diagnostic?: {code:string;message:string;detail:string} }
 export interface Verification { status: VerificationStatus; evidenceIds: string[]; checks: string[]; limitations: string[]; receipts: Receipt[]; basis: "agent_review_with_receipt_checks" }
 export const VERIFICATION_TOOL: Tool = {
   name: "report_verification", description: "Record task verification before final response. Receipt references are checked by the runtime. This records your review; it does not independently prove factual truth. No passwords or sensitive record contents. After a possible write, include a subsequent read-back observation. Mark partial/truncated results needs_verification.",
@@ -81,7 +81,7 @@ export function canResumeFromReceipts(receipts: Receipt[], allowEmpty = false) {
   if(!relevant.length)return allowEmpty;
   const last=relevant.at(-1)!;
   return last.observation && last.outcome==='returned' && !last.limitation && relevant.every((r,i)=>
-    r.observation || r.outcome==='returned' && relevant.slice(i+1).some(next=>next.observation&&next.scope===r.scope&&next.outcome==='returned'&&!next.limitation&&!next.truncated));
+    r.observation || r.actionOutcome==='not_executed' || r.outcome==='returned' && relevant.slice(i+1).some(next=>next.observation&&next.scope===r.scope&&next.outcome==='returned'&&!next.limitation&&!next.truncated));
 }
 export class TurnVerification {
   private receipts: Receipt[] = [];
@@ -146,6 +146,7 @@ export class TurnVerification {
     const receipt: Receipt = { id: `e${this.receipts.length + 1}`, tool: name, at: new Date().toISOString(),
       outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
       observation: isObservation(name, input), discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated===true };
+    if(name==='computer'&&['not_executed','unknown'].includes(result?.recovery?.actionOutcome))receipt.actionOutcome=result.recovery.actionOutcome;
     receipt.diagnostic=toolFailure(name,input,result);
     if(result?.imageUnavailableToModel===true)receipt.limitation="The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
     if(["edit_video","inspect_video"].includes(name) && result?.diagnostic)receipt.diagnostic={code:String(result.diagnostic.code||"").slice(0,80),message:String(result.diagnostic.message||"").slice(0,500),detail:String(result.diagnostic.detail||"").slice(0,1800)};
@@ -170,6 +171,14 @@ export class TurnVerification {
     }
     return {verified:true,evidenceId:input.evidenceId,matched:input.claims.length,note:"Values match this source; source freshness and total record coverage require separate checks."};
   }
+  unfinishedReason() {
+    const state=this.result();
+    if(state.checks.length&&state.limitations.length)return state.limitations.join(' ');
+    const rejection=[...this.receipts].reverse().find(r=>r.tool==='report_verification'&&r.outcome==='failed'&&r.diagnostic);
+    const failure=[...this.receipts].reverse().find(r=>r.outcome==='failed'&&r.diagnostic&&!['report_verification','task_plan','continuity'].includes(r.tool));
+    const details=[rejection?`Completion check: ${rejection.diagnostic!.message}`:'No completion review was accepted after the latest operations.',failure?`Last recorded tool error: ${failure.diagnostic!.message}`:''];
+    return details.filter(Boolean).join(' ');
+  }
   reviewGuidance() {
     return this.receipts.filter(r=>r.observation&&!r.discovery&&r.outcome==='returned'&&!r.truncated&&!r.limitation&&r.tool!=='report_verification').slice(-30).map(r=>{
       const source:any=this.sources.get(r.id);
@@ -187,7 +196,7 @@ export class TurnVerification {
       if (!cited.length || !input.checks.some((s: string) => s.trim()) || input.limitations.length) throw new Error("Completion requires evidence, concrete checks and no unresolved limitations");
       if (cited.some((r: Receipt) => r.truncated)) throw new Error("Retrieve smaller complete results before citing them as completion evidence");
       if (cited.some((r: Receipt) => r.limitation)) throw new Error("Unavailable image evidence cannot verify completion. Inspect a semantic snapshot for page text or use a vision-capable model for pixels.");
-      for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery&&!['task_plan','continuity'].includes(r.tool))) {
+      for(const action of this.receipts.filter(r=>!r.observation&&!r.discovery&&r.actionOutcome!=='not_executed'&&!['task_plan','continuity'].includes(r.tool))) {
         if(!cited.some((r:Receipt)=>r.observation&&r.scope===action.scope&&this.receipts.indexOf(r)>this.receipts.indexOf(action)))throw new Error(`Read back each affected service after its action before claiming completion. Missing ${action.scope} observation after ${action.tool} (${action.id}). For browser use computer browser_snapshot or inspect_screen and cite that receipt; for saved text use workspace_read for the affected file.`);
         if(action.tool==='workspace_write'&&action.outcome==='returned'){
           const file:any=this.sources.get(action.id),after=this.receipts.slice(this.receipts.indexOf(action)+1);

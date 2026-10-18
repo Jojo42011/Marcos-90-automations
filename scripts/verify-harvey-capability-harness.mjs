@@ -22,6 +22,12 @@ const server=http.createServer(async(req,res)=>{
    assert.equal(body.model,mainModel,'The main model must stay pinned');
    const steps=[['inspect_screen',{question:'Locate the visible fixture Save button'}],['computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e4'],checks:['Read back saved fixture state after click'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and checked.'};
+  }else if(mode==='rejected_review'){
+   message=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n<5?tc('report_verification',{status:'completed',evidenceIds:['missing-'+n],checks:['Attempted unsupported completion'],limitations:[]}):{role:'assistant',content:'The task is complete.'};
+  }else if(mode==='navigation_recovery'){
+   const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['computer',{action:'call',tool:'browser_navigate',arguments:{url:'file:///private-sheet.csv'}}],['workspace_read',{file:'fixture.csv'}],['report_verification',{status:'completed',evidenceIds:['e1','e3'],checks:['Kept the authenticated page and read the attachment through its workspace tool; no browser navigation ran'],limitations:[]}]];
+   if(n===2){const result=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(result.recovery.actionOutcome,'not_executed');assert.match(result.error,/URL type/);}
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Read the attached sheet while retaining the existing signed-in browser.'};
   }else if(mode==='compact'){
    if(n===1){const result=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(result._harveyEvidence.id,'e2');assert.equal(result._harveyEvidence.truncated,false);assert.equal(result.rows[0].title,'Full source title');}
    const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/catalog'}}],['work_records',{action:'save',collection:'compact',records:[{evidenceId:'e2',idPath:'/rows/0/id',fieldPaths:{name:'/rows/0/title'}}]}],['work_records',{action:'list',collection:'compact'}],['report_verification',{status:'completed',evidenceIds:['e2','e4'],checks:['Saved full structured title instead of the shortened snapshot label'],limitations:[]}]];
@@ -129,6 +135,14 @@ try{
  mode='missing_readback';round=0;let navigations=0,readbacks=0;
  const recoveredReadback=await runAgentLoop({message:'Read the fixture page and report',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>{if(name==='workspace_read')return {file:'fixture.md',content:'Observed fixture report'};if(input.tool==='browser_navigate')navigations++;if(input.tool==='browser_snapshot')readbacks++;return {url:'https://fixture.invalid/report',observed:'Fixture report'};}}});
  assert.equal(recoveredReadback.verification.status,'completed');assert.equal(navigations,1);assert.equal(readbacks,1);
+ mode='rejected_review';round=0;
+ const rejectedReview=await runAgentLoop({message:'Finish and verify the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
+ assert.equal(rejectedReview.verification.status,'needs_verification');assert.match(rejectedReview.speech,/Evidence must reference successful tool receipts/);assert(!rejectedReview.speech.includes('The task is complete.'));
+ console.log('ok unaccepted completion names its actual recorded rejection instead of a generic banner or unsupported success claim');
+ mode='navigation_recovery';round=0;let rejectedNavigations=0;
+ const navigation=await runAgentLoop({message:'Read the attached sheet using the already signed-in browser',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>name==='workspace_read'?{file:'fixture.csv',content:'name,notes\nFixture Person,Observed history'}:input.tool==='browser_navigate'?(rejectedNavigations++,require(join(root,'harvey/work/browserState.js')).navigationProblem(input.arguments.url)):{url:'https://fixture.invalid/dashboard',authenticated:true}}});
+ assert.equal(navigation.verification.status,'completed');assert.equal(rejectedNavigations,1);assert(navigation.verification.receipts.some(r=>r.actionOutcome==='not_executed'));assert(!navigation.continuation);
+ console.log('ok invalid attachment navigation recovers through workspace reading without losing the signed-in page or poisoning completion');
  mode='compact';round=0;let compactReads=0;
  const compact=await runAgentLoop({message:'Export this catalog CSV',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='work_records')],context:'Fixture',execute:async(name,input)=>name==='work_records'?records.workRecords('fixture',chat.id,input):input.tool==='browser_read_table'?(compactReads++,{url:'https://fixture.invalid/catalog',rows:[{id:'one',title:'Full source title'}]}):{truncated:true,snapshotId:'long',nextOffset:6500,content:[{type:'text',text:'Shortened title ...'}]}}});
  assert.equal(compact.verification.status,'completed');assert.equal(compactReads,1);assert.equal(records.workRecords('fixture',chat.id,{action:'list',collection:'compact'}).items[0].fields.name,'Full source title');
