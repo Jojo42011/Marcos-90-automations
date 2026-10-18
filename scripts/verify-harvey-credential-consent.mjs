@@ -56,6 +56,7 @@ const store = {
   unlockChat: (_owner,_id,k) => locks.delete(k)
 };
 const runtime = load("harvey/work/runtime.js", {
+  "./spreadsheet.js":{readWorkspaceSheet:()=>{throw Error("Credential settings must not read workbook files");}},
   "./localBrowser.js":{localBrowserSelected:()=>false},
   "./capabilities.js":load("harvey/work/capabilities.js"), "./modelAdvice.js":{}, "./records.js":{}, "./execution.js":load("harvey/work/execution.js"),
   "./failureReport.js":load("harvey/work/failureReport.js",{"./store.js":store}),

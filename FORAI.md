@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-18: Native XLSX input support adds workspace_sheet for native owner/chat-scoped workbook inspection, rectangular source ranges and long-cell pagination. Parsed values retain nulls, dates, hyperlinks and explicit formula-cache metadata; nothing is evaluated, uploaded or written back. Cell coverage is scoped by file hash, sheet and cell. The capability map directs uploaded Excel inputs to this route. This addresses the missing reader found in LOOK, not certification of its destination CRM updates.
+
 - 2026-10-18: Paginated workspace reads track contiguous character coverage for the same file and content hash within the current execution. Only a final read with proven complete coverage can support completion while its individual page remains partial. Gaps, mixed revisions, browser truncation and unseen content remain unverified; this removes the impossible single-page read-back requirement for long CSV/text attachments without increasing per-call payloads.
 
 - 2026-10-18: Invalid navigation returns a structured not-executed recovery result before touching the selected browser, distinguishing unsupported/local attachment URLs from credential-bearing URLs without retaining raw values. Hosted and local browsers share this validation. Receipts retain known action outcomes so confirmed unexecuted calls do not poison safe continuation or require a phantom write read-back; unknown writes remain guarded. Unfinished final replies surface the recorded completion rejection and last tool diagnostic instead of the generic verification banner. This does not establish the input or effects of the reported Wesley run without its saved trace.

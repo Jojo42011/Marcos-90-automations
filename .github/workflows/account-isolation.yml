@@ -28,6 +28,7 @@ jobs:
       - run: node scripts/verify-harvey-credential-consent.mjs
       - run: node scripts/verify-harvey-capability-harness.mjs
       - run: node scripts/verify-workspace-files.mjs
+      - run: node scripts/verify-workspace-sheet.mjs
       - run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - run: node scripts/verify-video-edit.mjs
       - run: node scripts/verify-harvey-job-ui.mjs
