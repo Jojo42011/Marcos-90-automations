@@ -29,6 +29,7 @@ export const VERIFICATION_TOOL: Tool = {
     limitations: { type: "array", items: { type: "string" }, description: "Unmet requirements preventing the requested outcome. User-authorized exclusions or intentionally skipped ambiguous records belong in the outcome report, not unresolved limitations. Continue independent records before reporting a blocker." },
   }, required: ["status", "checks", "limitations"] },
 };
+export const OUTCOME_REVIEW_TOOL: Tool = {name:'submit_outcome_review',description:'Return a read-only verdict. This does not execute any action or grant authorization.',input_schema:{type:'object',properties:{passed:{type:'boolean'},issues:{type:'array',items:{type:'string'},maxItems:10}},required:['passed','issues'],additionalProperties:false}};
 export const SOURCE_CHECK_TOOL: Tool = {name:"verify_source_values",description:"Check extracted values against exact JSON-pointer paths in a returned tool result. Use for CRM addresses, IDs, statuses, counts and metrics before presenting them. This checks values, not whether every page was retrieved. Paths start with /; use ~1 for / and ~0 for ~. String JSON bodies are parsed when traversed.",input_schema:{type:"object",properties:{evidenceId:{type:"string"},claims:{type:"array",items:{type:"object",properties:{path:{type:"string"},expected:{}},required:["path","expected"]}}},required:["evidenceId","claims"]}};
 export function isDiscovery(name:string,input:any):boolean {
   return ["capabilities","business_tools","plugins","plugin_tools","saved_logins","COMPOSIO_SEARCH_TOOLS","COMPOSIO_GET_TOOL_SCHEMAS","COMPOSIO_WAIT_FOR_CONNECTIONS"].includes(name) || name==="computer"&&input.action==="tools";
@@ -63,6 +64,7 @@ export function isObservation(name: string, input: any): boolean {
   if(name==="workflow")return ["list","get"].includes(input.action);
   if(name==="agent_team")return input.action==="status";
   if(name==="model_advice")return true;
+  if(name==="chat_agents")return input.action==="list";
   if(name==="work_records")return input.action==="list";
   if(name==="continuity"||name==="task_plan")return input.action==="get";
   if (["schedule_agent", "projects"].includes(name)) return input.action === "list" || input.action==="list_chats";
@@ -170,11 +172,16 @@ export class TurnVerification {
     };
     const evidence:any[]=[],seen=new Set<string>();let characters=0,omitted=0;
     const useful=this.receipts.filter(r=>r.outcome==='returned'&&!r.discovery&&!r.limitation&&!['task_plan','continuity','report_verification','verify_source_values'].includes(r.tool));
+    const textOf=(source:any)=>Array.isArray(source?.content)?source.content.filter((c:any)=>c.type==='text').map((c:any)=>c.text).join('\n'):'';
+    const latestTrees=new Map<string,string>();
+    for(const r of useful)if(r.tool==='computer'){const raw=textOf(this.sources.get(r.id)),page=raw.match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1];if(page&&raw.includes('### Snapshot'))latestTrees.set(page,r.id);}
     // Source lists/ranges and saved artifacts have priority over redundant page trees.
     const priority=(r:Receipt)=>r.tool==='workspace_sheet'?0:r.tool==='workspace_read'?1:r.tool==='computer'&&(this.sources.get(r.id) as any)?.rows?2:r.tool==='work_records'?3:4;
     for(const receipt of [...useful].sort((a,b)=>priority(a)-priority(b))){
-      const source:any=this.sources.get(receipt.id);if(!source||receipt.tool==='computer'&&receipt.operation==='browser_take_screenshot')continue;
-      if(!receipt.observation&&!source.preservedFields&&!source.sourceValueBindings&&receipt.tool!=='work_records')continue;
+      let source:any=this.sources.get(receipt.id);if(!source||receipt.tool==='computer'&&receipt.operation==='browser_take_screenshot')continue;
+      const raw=textOf(source),page=raw.match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1],tree=receipt.tool==='computer'&&raw.includes('### Snapshot');
+      if(tree&&page&&latestTrees.get(page)!==receipt.id){if(source.preservedFields||source.sourceValueBindings)source={url:page,preservedFields:source.preservedFields,sourceValueBindings:source.sourceValueBindings,note:'Input hashes, not saved-state proof'};else continue;}
+      if(!receipt.observation&&!tree&&!source.preservedFields&&!source.sourceValueBindings&&receipt.tool!=='work_records')continue;
       const item={tool:receipt.tool,operation:receipt.operation,partial:receipt.truncated&&!receipt.completeFileRead&&!receipt.completeCellRead,data:redact(source)};
       const encoded=JSON.stringify(item),hash=stableCallKey('audit-source',item);if(seen.has(hash))continue;seen.add(hash);
       if(characters+encoded.length>40000){omitted++;continue;}evidence.push(item);characters+=encoded.length;
@@ -204,7 +211,7 @@ export class TurnVerification {
       outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
       observation: isObservation(name, input), discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated===true };
     if(name==='computer'&&typeof input.tool==='string'&&/^[a-z_]{1,80}$/.test(input.tool))receipt.operation=input.tool;
-    if(name==='computer'&&['not_executed','unknown'].includes(result?.recovery?.actionOutcome))receipt.actionOutcome=result.recovery.actionOutcome;
+    if(['computer','chat_agents'].includes(name)&&['not_executed','unknown'].includes(result?.recovery?.actionOutcome))receipt.actionOutcome=result.recovery.actionOutcome;
     receipt.diagnostic=toolFailure(name,input,result);
     if(result?.imageUnavailableToModel===true)receipt.limitation="The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
     if(["edit_video","inspect_video"].includes(name) && result?.diagnostic)receipt.diagnostic={code:String(result.diagnostic.code||"").slice(0,80),message:String(result.diagnostic.message||"").slice(0,500),detail:String(result.diagnostic.detail||"").slice(0,1800)};

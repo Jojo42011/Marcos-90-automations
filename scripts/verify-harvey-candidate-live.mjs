@@ -45,6 +45,8 @@ const run=async(chat,message)=>{
  }catch(error){console.log('CANDIDATE_TRACE '+JSON.stringify({model:chat.model,receipts:receiptTrace,browser:browserTrace}));throw error;}finally{clearTimeout(timer);}
 };
 try{
+ const provider=require('../dist/src/hull/providers/index.js'),{OUTCOME_REVIEW_TOOL}=require('../dist/src/harvey/reliability.js');
+ const preflight=await provider.complete({job:'agent',modelOverride:process.env.HARVEY_OUTCOME_AUDIT_MODEL,maxTokens:250,maxCostUsd:.01,tools:[OUTCOME_REVIEW_TOOL],toolChoice:OUTCOME_REVIEW_TOOL.name,system:'OUTCOME AUDIT. Compare expected and saved values. Return only the verdict through submit_outcome_review. Wrong or missing selected IDs require passed:false and a concrete issue.',messages:[{role:'user',content:JSON.stringify({expected:['one','two'],saved:['wrong']})}]});cost+=preflight.usage.costUsd;calls++;const verdict=preflight.toolUses.find(t=>t.name===OUTCOME_REVIEW_TOOL.name)?.input;assert.equal(verdict?.passed,false,'Real reviewer must return a structured failed verdict for a wrong selection');assert(verdict.issues?.length);console.log('CANDIDATE_PASS '+JSON.stringify({model:preflight.modelUsed,test:'structured-outcome-review-preflight',costUsd:preflight.usage.costUsd,status:'passed'}));
  for(const model of ['inception/mercury-2.5','~openai/gpt-luna-latest']){
   records=source.map((r,i)=>({...r,notes:i===0?r.notes:i===1?'Keep prior history':'',due:i===0?r.due:'',relationship:i===0?r.relationship:''}));writes=0;writtenIds=new Set();
   const chat=S.createChat('candidate-qa',{mode:'work',model});

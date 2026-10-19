@@ -15,12 +15,16 @@ const tc=(name,input)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+rou
 const server=http.createServer(async(req,res)=>{
  if(req.method==='GET'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[]}));return;}
  let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw);let message;
- if(!body.tools?.length&&body.messages.some(m=>typeof m.content==='string'&&m.content.includes('OUTCOME AUDIT'))){outcomeReviews++;const data=JSON.parse(body.messages.find(m=>m.role==='user').content),saved=data.evidence.filter(e=>e.tool==='workspace_read'&&e.data.file==='selection.json').at(-1)?.data.content;message={role:'assistant',content:JSON.stringify({passed:saved==='["one","two"]',issues:saved==='["one","two"]'?[]:['The saved selection contains an unobserved record. Replace it with the actual first two observed IDs, one and two.']})};}
+ if(body.tools?.length===1&&body.tools[0].function.name==='submit_outcome_review'&&body.messages.some(m=>typeof m.content==='string'&&m.content.includes('OUTCOME AUDIT'))){outcomeReviews++;const data=JSON.parse(body.messages.find(m=>m.role==='user').content),saved=data.evidence.filter(e=>e.tool==='workspace_read'&&e.data.file==='selection.json').at(-1)?.data.content;assert.equal(body.tool_choice.function.name,'submit_outcome_review');message=tc('submit_outcome_review',{passed:saved==='["one","two"]',issues:saved==='["one","two"]'?[]:['The saved selection contains an unobserved record. Replace it with the actual first two observed IDs, one and two.']});}
  else if(!body.tools?.length&&body.messages.some(m=>typeof m.content==='string'&&m.content.includes('READ-ONLY RECOVERY REVIEW'))){recoveryReviews++;message={role:'assistant',content:'Inspect the current state using available tools. Use automaticEvidence:true for completion and keep the original scope; do not replay a write.'};}
  else if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
-  if(mode==='revisit'){
+  if(mode==='unavailable'){
+   const steps=[['unavailable_fixture_tool',{action:'write'}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',automaticEvidence:true,checks:['The unavailable operation never ran; the supported source was read'],limitations:[]}]];
+   if(n===1){const r=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(r._harveyEvidence.actionOutcome,'not_executed');}
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Recovered with the actual available capability.'};
+  }else if(mode==='revisit'){
    message=n<6?tc('computer',{action:'call',tool:n%2?'browser_snapshot':'browser_navigate',arguments:n%2?{}:{url:'https://fixture.invalid/list'}}):n===6?tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Revisited and observed the same source page three times without replaying any form submission'],limitations:[]}):{role:'assistant',content:'Verified revisited page.'};
   }else if(mode==='deliverable'){
    const steps=[['workspace_write',{file:'delivered.md',content:'Real saved report'}],['workspace_read',{file:'delivered.md'}],['task_plan',{action:'checkpoint',completedSteps:[0,1],nextStep:2}],['report_verification',{status:'completed',automaticEvidence:true,checks:['Saved and read the requested report'],limitations:[]}]];
@@ -274,6 +278,9 @@ try{
  const learned=await runAgentLoop({message:'Retain a verified method',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='workflow')],execute:async(name,input)=>name==='workflow'?input.action==='learn'?learning.learnWorkflow('fixture',chat.id,input):{workflows:learning.workflows('fixture',chat.id)}:{id:'observed-fixture-record'}}});
  assert.equal(learned.verification.status,'completed');assert.equal(learning.workflows('fixture',chat.id)[0].basis,'verified_execution_require_current_prerequisites');assert.equal(learning.workflows('other-owner',store.createChat('other-owner',{}).id).length,0);
  console.log('ok a completed observed procedure is retained and read back without crossing owners');
+ mode='unavailable';round=0;let unavailableExecuted=false;
+ const available=await runAgentLoop({message:'Inspect the supported source',modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async(name)=>{if(name==='unavailable_fixture_tool')unavailableExecuted=true;return {url:'https://fixture.invalid/list',text:'Actual observed source'};}}});assert.equal(available.verification.status,'completed');assert.equal(unavailableExecuted,false);
+ console.log('ok an unavailable tool is confirmed unexecuted and cannot poison completion as an unknown external write');
  mode='revisit';round=0;let revisits=0;
  const revisited=await runAgentLoop({message:'Recheck the source page',modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async(name,input)=>{if(input.tool==='browser_navigate')revisits++;return {url:'https://fixture.invalid/list',text:'Same current source'};}}});assert.equal(revisits,3);assert.equal(revisited.verification.status,'completed');
  console.log('ok observed source pages can be revisited while form submissions retain independent replay protection');
