@@ -85,7 +85,9 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
       usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0}};
     if(result.continuation&&!controller.signal.aborted&&!result.modelError&&!result.budgetRefused&&!job.originChatId){
       if(result.continuation.recovery==='model_response'){
-        job.modelRecoveryCount=(job.modelRecoveryCount||0)+1;
+        // Count a streak without progress, not unrelated failures over the task's life.
+        const advanced=result.continuation.progressKey&&result.continuation.progressKey!==job.lastProgressKey;
+        job.modelRecoveryCount=advanced?1:(job.modelRecoveryCount||0)+1;
         if(job.modelRecoveryCount>3){job.status="needs_attention";job.result={...job.result,text:"The AI service repeatedly returned unusable responses after automatic recovery. Saved work is retained; no uncertain action was replayed.",needsAttention:true,failure:{kind:"invalid_model_response",model:result.modelUsed||result.model}};return;}
       }else job.modelRecoveryCount=0;
       const progressKey=result.continuation.progressKey;

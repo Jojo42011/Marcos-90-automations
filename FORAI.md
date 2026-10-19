@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Model-response continuation recovery carries a native observed-state fingerprint. The saved job counts consecutive format failures without progress rather than accumulating unrelated failures over a long task; unchanged/no-progress failures remain bounded, and uncertain writes remain non-replayable.
+
 - date_only source bindings validate actual month/day and Gregorian leap-year rules before task inputs or exports. Impossible source dates fail explicitly; valid observed calendar dates are retained without timezone shifting or inferred corrections.
 
 - Unchanged-save suppression requires a single unambiguous actual form. A comparison in one form cannot suppress another form's Save; other potentially mutating controls invalidate the comparison rather than hiding pending work. A real Chromium two-form regression reproduces and covers this case.

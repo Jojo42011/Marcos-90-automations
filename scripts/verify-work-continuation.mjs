@@ -84,6 +84,17 @@ for(let i=0;i<4;i++){
  await J.executeJob('alice',broken.id,async()=>({speech:'Recovering',continuation:{delaySeconds:10,reason:'Inspect saved progress',recovery:'model_response'},costUsd:.01}));
 }
 assert.equal(S.get('job','alice',broken.id).status,'needs_attention');assert.equal(S.get('job','alice',broken.id).result.failure.kind,'invalid_model_response');
+const progressingChat=S.createChat('alice',{}),progressing=J.enqueueJob('alice',progressingChat.id,{requestId:'progress-between-model-repairs',message:'Extract every remaining profile'});
+for(let i=0;i<6;i++){
+ if(i===2){S.closeStore();J.recoverJobs();}
+ if(i)S.put('job','alice',{...S.get('job','alice',progressing.id),nextRunAt:new Date(0).toISOString()});
+ const observed=new TurnVerification();observed.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/profiles/'+i,text:'Distinct verified profile '+i});
+ await J.executeJob('alice',progressing.id,async()=>({speech:'Recovering after saved profile '+i,continuation:{delaySeconds:10,reason:'Inspect the next distinct profile from saved progress',recovery:'model_response',progressKey:observed.continuationCheckpoint().progressKey},verification:observed.result()}));
+ assert.equal(S.get('job','alice',progressing.id).status,'waiting','Genuine observed progress must not accumulate unrelated model-format failures into a task cutoff');
+}
+S.put('job','alice',{...S.get('job','alice',progressing.id),nextRunAt:new Date(0).toISOString()});await J.executeJob('alice',progressing.id,async()=>({speech:'All profiles verified',verification:{status:'completed'}}));assert.equal(S.get('job','alice',progressing.id).status,'completed');
+const unchangedChat=S.createChat('alice',{}),unchanged=J.enqueueJob('alice',unchangedChat.id,{requestId:'unchanged-model-repairs',message:'Finish source retrieval'});const sameState=new TurnVerification();sameState.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/same',text:'The same unchanged source'});for(let i=0;i<4;i++){if(i)S.put('job','alice',{...S.get('job','alice',unchanged.id),nextRunAt:new Date(0).toISOString()});await J.executeJob('alice',unchanged.id,async()=>({speech:'Recovering unchanged state',continuation:{delaySeconds:10,reason:'No new observation',recovery:'model_response',progressKey:sameState.continuationCheckpoint().progressKey}}));}assert.equal(S.get('job','alice',unchanged.id).status,'needs_attention');assert.equal(S.get('job','alice',unchanged.id).result.failure.kind,'invalid_model_response');
+console.log('ok six distinct observed checkpoints survive separate model repairs; unchanged or missing progress still stops persistent unusable responses');
 console.log('ok 30 batches retain distinct source/destination and job identity without duplicate records; persistent malformed service responses stop after bounded automatic recovery');
 const oldChat=S.createChat('alice',{}),old=J.enqueueJob('alice',oldChat.id,{requestId:'uncapped-age',message:'Finish all remaining profiles'});
 S.put('job','alice',{...S.get('job','alice',old.id),createdAt:new Date(Date.now()-72*60*60_000).toISOString(),continuationCount:1000});

@@ -313,7 +313,7 @@ try{
  for(const unknownWrite of [false,true]){
    let actions=0;
    const recovered=await runAgentLoop({message:'Finish BROKEN_BATCH_FIXTURE '+(unknownWrite?'UNKNOWN_WRITE':''),fullMode:true,allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{actions++;return {text:'Source account and destination account inspected; completed batch retained.'};}}});
-   ok('malformed batch resumes only after safe observation '+unknownWrite,()=>{assert.equal(actions,1);assert.equal(recovered.continuation?.recovery,unknownWrite?undefined:'model_response');assert.equal(!!recovered.modelError,unknownWrite);});
+   ok('malformed batch resumes only after safe observation '+unknownWrite,()=>{assert.equal(actions,1);assert.equal(recovered.continuation?.recovery,unknownWrite?undefined:'model_response');assert.equal(!!recovered.modelError,unknownWrite);if(!unknownWrite)assert.match(recovered.continuation.progressKey,/^[a-f0-9]{64}$/, 'Recovery progress must come from a native observed-state fingerprint');});
  }
  let written=false,writeCount=0;
  const ordered=await runAgentLoop({message:'ORDERED_TOOLS_FIXTURE',fullMode:true,modelOverride:'inception/mercury-2.5',workRuntime:{tools:[{name:'schedule_agent',description:'Fixture',input_schema:{type:'object',properties:{action:{type:'string'}}}}],context:'Fixture',execute:async(_n,i)=>{if(i.action==='create'){await new Promise(r=>setTimeout(r,30));written=true;writeCount++;return {id:'one'};}assert(written);return [{id:'one'}];}}});
