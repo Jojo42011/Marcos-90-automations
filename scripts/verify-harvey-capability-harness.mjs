@@ -10,12 +10,13 @@ for(const key of Object.keys(process.env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN
 Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:join(dir,'budget.db'),HARVEY_BROWSER_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(dir,'missing')});
 const originalFetch=global.fetch;
 global.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url||String(url));assert(['localhost','127.0.0.1'].includes(u.hostname),'External call refused');return originalFetch(url,...args);};
-let mode='',round=0,visionCalls=0,mainCalls=0,mainModel='inception/mercury-2.5',visionReply;
+let mode='',round=0,visionCalls=0,mainCalls=0,mainModel='inception/mercury-2.5',visionReply,recoveryReviews=0,reviewBaseline=0;
 const tc=(name,input)=>({role:'assistant',content:'',tool_calls:[{id:'call-'+round,type:'function',function:{name,arguments:JSON.stringify(input)}}]});
 const server=http.createServer(async(req,res)=>{
  if(req.method==='GET'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[]}));return;}
  let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw);let message;
- if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
+ if(!body.tools?.length&&body.messages.some(m=>typeof m.content==='string'&&m.content.includes('READ-ONLY RECOVERY REVIEW'))){recoveryReviews++;message={role:'assistant',content:'Inspect the current state using available tools. Use automaticEvidence:true for completion and keep the original scope; do not replay a write.'};}
+ else if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
   if(mode==='visual'){
@@ -59,6 +60,13 @@ const server=http.createServer(async(req,res)=>{
    if(n===0||n===2)message=tc('inspect_screen',{question:'Read the fixture rows',structured:true});
    else if(n===1)message=tc('computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}});
    else message={role:'assistant',content:'Visual observation remains unavailable; no action was verified.'};
+  }else if(mode==='final_review_recovery'){
+   const previous=body.messages.filter(m=>m.role==='tool').at(-1);const accepted=previous&&/"accepted"\s*:\s*true/.test(String(previous.content));
+   message=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n<4?tc('report_verification',{status:'completed',evidenceIds:['missing'+n],checks:['Attempted incorrect citation'],limitations:[]}):recoveryReviews===reviewBaseline?{role:'assistant',content:'The internal review remains unaccepted.'}:accepted?{role:'assistant',content:'Reviewed the actual current evidence.'}:tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Reviewed actual current state after repairing citation bookkeeping'],limitations:[]});
+  }else if(mode==='recovery_review'){
+   message=n<9?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{target:'#phase'+n}}):n===9?tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Read the current fixture after diagnosis without replaying writes'],limitations:[]}):{role:'assistant',content:'Recovered and checked the fixture.'};
+  }else if(mode==='automatic_review'){
+   message=n===0?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===1?tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Reviewed the current fixture state'],limitations:[]}):{role:'assistant',content:'Reviewed actual state without guessing receipt IDs.'};
   }else if(mode==='recovery_episodes'){
    const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],...['#a','#b'].map(target=>['computer',{action:'call',tool:'browser_click',arguments:{target}}]),['computer',{action:'call',tool:'browser_snapshot',arguments:{target:'main'}}],...['#c','#d'].map(target=>['computer',{action:'call',tool:'browser_click',arguments:{target}}]),['computer',{action:'call',tool:'browser_snapshot',arguments:{target:'body'}}],...['#e','#f'].map(target=>['computer',{action:'call',tool:'browser_click',arguments:{target}}]),['computer',{action:'call',tool:'browser_snapshot',arguments:{target:'section'}}],['report_verification',{status:'completed',evidenceIds:['e12'],checks:['Read current state after two distinct recovery episodes; unchanged observations did not rearm recovery or replay writes'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Inspected the final fixture state.'};
@@ -129,6 +137,16 @@ try{
  locationProof.record('computer',{action:'call',tool:'browser_click'},{error:'Connection lost after submission'});assert.equal(locationProof.browserLocation(),undefined,'An uncertain write still invalidates prior page identity');
 
  console.log('ok identical profile controls work across observed URLs while same-page replay stays refused');
+ mode='automatic_review';round=0;
+ const automatic=await runAgentLoop({message:'Read the fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async()=>({url:'https://fixture.invalid/',observed:true})}});assert.equal(automatic.verification.status,'completed');assert.deepEqual(automatic.verification.evidenceIds,['e1']);
+ const automaticGuard=new (require(join(root,'harvey/reliability.js')).TurnVerification)();automaticGuard.record('task_plan',{action:'get'},{steps:['Only a plan']});assert.throws(()=>automaticGuard.review({status:'completed',automaticEvidence:true,checks:['Attempted plan-only completion'],limitations:[]}),/Completion requires/);
+ automaticGuard.record('computer',{action:'call',tool:'browser_click'},{error:'Unknown submission outcome'});automaticGuard.record('workspace_read',{file:'unrelated.txt'},{file:'unrelated.txt',content:'Unrelated file read'});assert.throws(()=>automaticGuard.review({status:'completed',automaticEvidence:true,checks:['Uncertain write remains unresolved'],limitations:[]}),/Completion requires|affected service/);
+ mode='final_review_recovery';round=0;reviewBaseline=recoveryReviews;
+ const reviewedStop=await runAgentLoop({message:'Read and verify the fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async()=>({url:'https://fixture.invalid/',observed:true})}});assert.equal(reviewedStop.verification.status,'completed');assert(!reviewedStop.toolFailure);assert.equal(recoveryReviews-reviewBaseline,1);
+ mode='recovery_review';round=0;const reviewBefore=recoveryReviews,reviewEvents=[];let actualMutations=0;
+ const consulted=await runAgentLoop({message:'Read and finish the fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(name,input)=>{if(input.action==='tools')return {tools:[]};if(input.tool!=='browser_snapshot')actualMutations++;return recoveryReviews===reviewBefore?{error:'Fixture browser temporarily unavailable'}:{url:'https://fixture.invalid/',observed:true};}},onEvent:e=>reviewEvents.push(e)});
+ assert.equal(consulted.verification.status,'completed');assert.equal(recoveryReviews-reviewBefore,1);assert.equal(actualMutations,0);assert.equal(consulted.modelUsed,mainModel);assert(reviewEvents.some(e=>e.type==='usage'&&e.model!==mainModel));
+ console.log('ok automatic evidence uses actual current observations, excludes plan-only proof, and a separately accounted read-only recovery consultation preserves the selected main model');
  mode='recovery_episodes';round=0;let episode=0,diagnosticSnapshots=0,clickSchemas=0,attempts=0;
  const episodes=await runAgentLoop({message:'Inspect and finish the fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(name,input)=>{
    assert.equal(name,'computer');
@@ -235,5 +253,5 @@ try{
  const learned=await runAgentLoop({message:'Retain a verified method',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='workflow')],execute:async(name,input)=>name==='workflow'?input.action==='learn'?learning.learnWorkflow('fixture',chat.id,input):{workflows:learning.workflows('fixture',chat.id)}:{id:'observed-fixture-record'}}});
  assert.equal(learned.verification.status,'completed');assert.equal(learning.workflows('fixture',chat.id)[0].basis,'verified_execution_require_current_prerequisites');assert.equal(learning.workflows('other-owner',store.createChat('other-owner',{}).id).length,0);
  console.log('ok a completed observed procedure is retained and read back without crossing owners');
- console.log(`PASS ${mainCalls} local model calls, ${visionCalls} local vision calls; $0 provider spend; no customer data accessed`);
+ console.log(`PASS ${mainCalls} local model calls, ${visionCalls} local vision calls, ${recoveryReviews} read-only recovery reviews; $0 provider spend; no customer data accessed`);
 }finally{global.fetch=originalFetch;store.closeStore();server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -47,10 +47,14 @@ const {TurnVerification}=require('../dist/src/harvey/reliability.js'),review=new
 review.record('workspace_write',{file:'a.md'},{file:'a.md',sha256:'one'});review.record('workspace_write',{file:'b.md'},{file:'b.md',sha256:'two'});
 review.record('workspace_read',{file:'b.md'},{file:'b.md',sha256:'two',content:'b'});
 const completion={status:'completed',evidenceIds:['e3'],checks:['Read files'],limitations:[]};
-assert.throws(()=>review.review(completion),/each authored file/);
+assert.throws(()=>review.review(completion),/each authored file/);assert.throws(()=>review.review({...completion,automaticEvidence:true}),/each authored file/);
 review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/current hash/);
-review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});
+review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});assert.equal(review.review({...completion,automaticEvidence:true}).accepted,true);
 console.log('ok every authored artifact requires its own current-hash content read-back');
+const manyFiles=new TurnVerification();for(let i=0;i<250;i++){manyFiles.record('workspace_write',{file:'part-'+i+'.md'},{file:'part-'+i+'.md',sha256:'hash-'+i});manyFiles.record('workspace_read',{file:'part-'+i+'.md'},{file:'part-'+i+'.md',sha256:'hash-'+i,content:'Fixture content'});}
+const manyReview=manyFiles.review({status:'completed',automaticEvidence:true,checks:['Read all 250 authored files at their current hashes'],limitations:[]});assert.equal(manyReview.evidenceCount,250);assert.equal(manyFiles.result().evidenceIds.length,250);assert(manyReview.evidenceIds.length<=20);
+console.log('ok automatic review verifies more than 100 files without a model-managed receipt cap or an oversized reply');
+
 const paged=new TurnVerification(),pagedWrite=F.writeWorkspaceFile('alice','text',{file:'paged.csv',content:'name,history\n'+('Fixture lead,Observed history\n'.repeat(40000))});
 paged.record('workspace_write',{file:'paged.csv'},pagedWrite);
 const firstPage=F.readWorkspaceFile('alice','text',{file:'paged.csv'});paged.record('workspace_read',{file:'paged.csv'},firstPage);

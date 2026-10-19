@@ -30,3 +30,10 @@ jobs:
         run: flyctl ssh console -a marco-90-automation -C "sh -c 'cd /tmp/harvey-qa-${{ github.run_id }} && NODE_PATH=/tmp/harvey-qa-${{ github.run_id }}/candidate-input-deps/node_modules node scripts/verify-harvey-candidate-live.mjs'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Visual-only record extraction with Mercury and Luna; $0.03 per model
+        run: |
+          for model in inception/mercury-2.5 '~openai/gpt-luna-latest'; do
+            flyctl ssh console -a marco-90-automation -C "sh -c 'cd /tmp/harvey-qa-${{ github.run_id }} && NODE_PATH=/tmp/harvey-qa-${{ github.run_id }}/candidate-input-deps/node_modules HARVEY_HARNESS_SMOKE_MODEL=$model node scripts/smoke-harvey-harness-live.mjs'"
+          done
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

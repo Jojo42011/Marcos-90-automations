@@ -9,7 +9,7 @@ import http from 'node:http';
 const require=createRequire(import.meta.url),dir=mkdtempSync(join(tmpdir(),'harvey-candidate-'));chmodSync(dir,0o755);
 assert(process.env.OPENROUTER_API_KEY,'Configured model access required');
 const sharedBudget=process.env.SHARED_OPENROUTER_BUDGET_DB_PATH||join(process.env.TENANT_DATA_ROOT||'/data','openrouter-budget.db');
-for(const key of Object.keys(process.env))if(/API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|COMPOSIO|TENANT_OWNER_ID|DB_JSON_PATH/.test(key)&&key!=='OPENROUTER_API_KEY')delete process.env[key];
+for(const key of Object.keys(process.env))if(/API_KEY|TOKEN|PASSWORD|SECRET|COMPOSIO|TENANT_OWNER_ID|DB_JSON_PATH/.test(key)&&key!=='OPENROUTER_API_KEY')delete process.env[key];
 Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:sharedBudget,DOTENV_CONFIG_PATH:join(dir,'missing'),HARVEY_BROWSER_ENABLED:'true',HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_MAX_SESSIONS:'1',AETHON_MAX_TOKENS:'4500'});
 const S=require('../dist/src/harvey/work/store.js'),B=require('../dist/src/harvey/work/browser.js'),F=require('../dist/src/harvey/work/files.js'),R=require('../dist/src/harvey/work/runtime.js'),Excel=require('exceljs');
 const originalFetch=global.fetch;
