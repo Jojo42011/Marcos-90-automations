@@ -29,6 +29,8 @@ const server=http.createServer(async(req,res)=>{
 const parseCSV=text=>{const rows=[];let row=[],value='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(value);value='';}else if(c==='\n'&&!quoted){row.push(value.replace(/\r$/,''));rows.push(row);row=[];value='';}else value+=c;}if(value||row.length){row.push(value);rows.push(row);}return rows;};
 const decode=s=>s.replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,'&');
 const onlyCrm=process.env.HARVEY_QA_CASE==='crm',onlyBooks=process.env.HARVEY_QA_CASE==='books';
+const qaModels=['inception/mercury-2.5','~openai/gpt-luna-latest'];
+assert(!process.env.HARVEY_QA_MODEL||qaModels.includes(process.env.HARVEY_QA_MODEL),'Unknown QA model');
 assert(!process.env.HARVEY_QA_CASE||onlyCrm||onlyBooks,'Unknown QA case');
 const home=onlyCrm?'':await(await fetch('https://books.toscrape.com/')).text(),expectedBooks=[];
 for(const [,href,title]of [...home.matchAll(/<h3>\s*<a href="([^"]+)" title="([^"]+)"/g)].slice(0,10)){
@@ -60,7 +62,7 @@ try{
  if(!onlyBooks)await checkReview('outcome-distinct-history-required-preflight',goal,[sourceFacts,original,page(1,'Imported history 1'),page(2,'Keep prior history'),{role:'current_file',tool:'workspace_read',data:{file:'report.md',content:'Contact 1 matches. Contact 2 still lacks Imported history 2; existing history retained. Task is partial.',sha256:'actual-current-hash',download:'/api/harvey/work/files/fixture/report.md'}}],false);
 
  await checkReview('outcome-quoted-decimals-preflight','Export these two source products in order as CSV with title,upc,price; price as decimal number.',[{role:'source_table_in_observed_order',data:{rows:[{title:'One',upc:'001',price:'£51.77'},{title:'Two',upc:'002',price:'£22.60'}]}},{role:'current_file',data:{file:'books.csv',content:'"title","upc","price"\n"One","001","51.77"\n"Two","002","22.60"'}}],true);
- for(const model of ['inception/mercury-2.5','~openai/gpt-luna-latest']){
+ for(const model of qaModels.filter(model=>!process.env.HARVEY_QA_MODEL||model===process.env.HARVEY_QA_MODEL)){
   if(!onlyBooks){
   records=source.map((r,i)=>({...r,notes:i===0?r.notes:i===1?'Keep prior history':'',due:i===0?r.due:'',relationship:i===0?r.relationship:''}));writes=0;writtenIds=new Set();
   const chat=S.createChat('candidate-qa',{mode:'work',model});

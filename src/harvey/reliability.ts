@@ -156,7 +156,11 @@ export class TurnVerification {
     return !prefix.trim()||texts.some((text:string)=>text.includes(prefix.trim()))||(source?.fields||[]).some((field:any)=>field.value===prefix.trim());
   }
   projectionGuidance() {
-    return this.receipts.filter(r=>r.observation&&r.outcome==='returned'&&!r.limitation&&!r.discovery&&r.tool!=='work_records').slice(-5).map(r=>{
+    const readable=this.receipts.filter(r=>r.observation&&r.outcome==='returned'&&!r.limitation&&!r.discovery&&r.tool!=='work_records');
+    // Prefer structured reads over repeated snapshot envelopes; cover one full
+    // supported save batch so repair does not hide the first pages it needs.
+    const structured=readable.filter(r=>{const s:any=this.sources.get(r.id);return s&&(s.rows||s.fields||s.data||s.values);});
+    return (structured.length?structured:readable).slice(-30).map(r=>{
       const paths:string[]=[];
       const walk=(value:any,path:string,depth:number)=>{
         if(depth>6||paths.length>=40)return;
