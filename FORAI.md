@@ -22,6 +22,10 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-18: Public multi-page QA exposed completion repair failures. Runtime-refused browser repeats now retain their known not-executed outcome, and automatic completion read-back tries the compact DOM reader when the snapshot is truncated. Partial observations still cannot verify completion; no navigation or uncertain write is retried.
+
+- 2026-10-18: Browser recovery includes the schema of the actual failed operation and rearms after a changed successful browser observation. Repeated unchanged observations, schema discovery and automatic diagnostic snapshots do not rearm recovery. This preserves later recovery in long workflows without replaying uncertain writes; live CRM completion remains unverified.
+
 - 2026-10-18: Native XLSX input support adds workspace_sheet for native owner/chat-scoped workbook inspection, rectangular source ranges and long-cell pagination. Parsed values retain nulls, dates, hyperlinks and explicit formula-cache metadata; nothing is evaluated, uploaded or written back. Cell coverage is scoped by file hash, sheet and cell. The capability map directs uploaded Excel inputs to this route. This addresses the missing reader found in LOOK, not certification of its destination CRM updates.
 
 - 2026-10-18: Paginated workspace reads track contiguous character coverage for the same file and content hash within the current execution. Only a final read with proven complete coverage can support completion while its individual page remains partial. Gaps, mixed revisions, browser truncation and unseen content remain unverified; this removes the impossible single-page read-back requirement for long CSV/text attachments without increasing per-call payloads.

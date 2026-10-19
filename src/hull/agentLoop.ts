@@ -418,6 +418,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   let scrollRecoveryPrompted=false;
   let browserFailureCount=0;
   let browserRecoveryUsed=false;
+  let browserRecoveryProgress: string | undefined;
   const safeBrowserRetry = new Set<string>();
   /* Calls held by the gate. The turn still finishes; these did not run. */
   const heldApprovals: PendingApproval[] = [];
@@ -495,6 +496,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
       return {
         error: "REPEATED CALL REFUSED",
+        ...(name==='computer'?{recovery:{kind:'repeat_refused',actionOutcome:'not_executed',safeToRetry:false}}:{}),
         detail: `You have already called ${name} with these exact arguments ${seen - 1} times this turn. Do not repeat a possible action: it may already have taken effect. Inspect current state, use the evidence already returned, change approach, or report the specific blocker.`,
       };
     }
@@ -607,10 +609,15 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           verificationReadbackRecovered=true;
           const error={error:'Browser read-back was missing from the completion evidence. Review the fresh current-page observation below and cite its receipt if it verifies the actual requested outcome. A saved file does not verify a browser action. No external write was retried.'};
           const rejected=verification.record(name,input,error);opts.onEvidence?.(rejected);
-          const observed=await executeTool('computer',{action:'call',tool:'browser_snapshot',arguments:{}});
-          const receipt=verification.record('computer',{action:'call',tool:'browser_snapshot',arguments:{}},observed);opts.onEvidence?.(receipt);
+          let observed=await executeTool('computer',{action:'call',tool:'browser_snapshot',arguments:{}});
+          let receipt=verification.record('computer',{action:'call',tool:'browser_snapshot',arguments:{}},observed);opts.onEvidence?.(receipt);
+          if(receipt.truncated||receipt.outcome!=='returned'){
+            const compact=await executeTool('computer',{action:'call',tool:'browser_read_table',arguments:{}});
+            const compactReceipt=verification.record('computer',{action:'call',tool:'browser_read_table',arguments:{}},compact);opts.onEvidence?.(compactReceipt);
+            if(compactReceipt.outcome==='returned'&&!compactReceipt.truncated){observed=compact;receipt=compactReceipt;}
+          }
           rememberVerificationProgress();
-          return {...error,currentObservation:{...(observed as any),_harveyEvidence:receipt}};
+          return {...error,currentObservation:{...(observed as any),_harveyEvidence:receipt},note:receipt.truncated?'The current snapshot remains partial. Read a focused region or inspect_screen before citing it; never repeat navigation to repair a citation.':'Review this complete current observation together with the saved-file content and source receipts; do not repeat navigation to repair a citation.'};
         }
       }
       if(opts.allowContinuation && input.status==="blocked" && segmentLimit(JSON.stringify(input.limitations||[])))return {error:"The turn limit does not block this saved job. Inspect current state, retain unfinished task_plan steps and continue_work automatically."};
@@ -654,11 +661,17 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       else result={...(result as any),structuredRead:{...compact,_harveyEvidence:compactReceipt},structuredReadNote:'Optional compact DOM read did not yield complete records. This does not establish missing data or an automation limitation; inspect a focused region or use inspect_screen structured=true.'};
     }
     if(name==="computer"&&input.action==="call"){
+      // A later failure after fresh observed progress deserves recovery too.
+      // Discovery and runtime-generated snapshots must not rearm a failing loop.
+      if(receipt.outcome==="returned" && receipt.observation && !receipt.discovery){
+        const key=verification.continuationCheckpoint()?.progressKey;
+        if(key && key!==browserRecoveryProgress){browserRecoveryUsed=false;browserRecoveryProgress=key;}
+      }
       browserFailureCount=receipt.outcome==="failed"?browserFailureCount+1:0;
       if(browserFailureCount>=2&&!browserRecoveryUsed&&opts.workRuntime.tools.some(t=>t.name==="computer")){
         browserRecoveryUsed=true;
         const recovery:any={reason:receipt.diagnostic,note:"Runtime read-only recovery on the selected computer. These observations do not retry the failed action or authorize a write."};
-        for(const tool of ['browser_snapshot','browser_scroll','browser_inspect_scroll_regions','browser_read_table','browser_wait_for']){
+        for(const tool of new Set([String(input.tool),'browser_snapshot','browser_scroll','browser_inspect_scroll_regions','browser_read_table','browser_wait_for'])){
           try{const schema=await opts.workRuntime.execute('computer',{action:'tools',tool});recovery[tool]=schema;}catch{recovery[tool]={unavailable:true};}
         }
         // Local and hosted selection remains inside the existing runtime. No

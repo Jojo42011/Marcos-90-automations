@@ -151,7 +151,7 @@ export class TurnVerification {
     if(result?.imageUnavailableToModel===true)receipt.limitation="The selected model cannot inspect these image pixels. Use a semantic page snapshot or a vision-capable model; this screenshot cannot verify visual claims.";
     if(["edit_video","inspect_video"].includes(name) && result?.diagnostic)receipt.diagnostic={code:String(result.diagnostic.code||"").slice(0,80),message:String(result.diagnostic.message||"").slice(0,500),detail:String(result.diagnostic.detail||"").slice(0,1800)};
     if(name==="computer"&&result?.recovery?.kind==="arguments")receipt.diagnostic={...receipt.diagnostic,code:"browser_arguments",message:receipt.diagnostic?.message||"Invalid browser arguments",detail:receipt.diagnostic?.detail||name};
-    else if(name==="computer"&&result?.recovery)receipt.diagnostic={code:"browser_"+String(result.recovery.kind||"unknown").slice(0,60),message:receipt.diagnostic?.message||"Browser action needs recovery",detail:JSON.stringify({action:input.tool,actionOutcome:result.recovery.actionOutcome,safeToRetry:result.recovery.safeToRetry===true})};
+    else if(name==="computer"&&result?.recovery&&result.recovery.kind!=="repeat_refused")receipt.diagnostic={code:"browser_"+String(result.recovery.kind||"unknown").slice(0,60),message:receipt.diagnostic?.message||"Browser action needs recovery",detail:JSON.stringify({action:input.tool,actionOutcome:result.recovery.actionOutcome,safeToRetry:result.recovery.safeToRetry===true})};
     this.receipts.push(receipt);
     if(receipt.outcome==="returned" && size<=60000)this.sources.set(receipt.id,source);
     if(receipt.truncated&&this.completeFileCoverage(receipt)){if(name==='workspace_sheet')receipt.completeCellRead=true;else receipt.completeFileRead=true;}

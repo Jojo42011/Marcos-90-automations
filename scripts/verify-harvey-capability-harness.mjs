@@ -35,6 +35,10 @@ const server=http.createServer(async(req,res)=>{
    if(n===1){const result=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(result._harveyEvidence.id,'e2');assert.equal(result._harveyEvidence.truncated,false);assert.equal(result.rows[0].title,'Full source title');}
    const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/catalog'}}],['work_records',{action:'save',collection:'compact',records:[{evidenceId:'e2',idPath:'/rows/0/id',fieldPaths:{name:'/rows/0/title'}}]}],['work_records',{action:'list',collection:'compact'}],['report_verification',{status:'completed',evidenceIds:['e2','e4'],checks:['Saved full structured title instead of the shortened snapshot label'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved the full source title.'};
+  }else if(mode==='compact_readback'){
+   const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/report'}}],['workspace_read',{file:'fixture.md'}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Saved-file read alone does not verify browser state'],limitations:[]}],['report_verification',{status:'completed',evidenceIds:['e2','e5'],checks:['Reviewed compact current browser observation and saved-file content'],limitations:[]}]];
+   if(n===3){const reply=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(reply.currentObservation._harveyEvidence.id,'e5');assert.equal(reply.currentObservation._harveyEvidence.truncated,false);}
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Reviewed the compact current page and file.'};
   }else if(mode==='missing_readback'){
    const steps=[['computer',{action:'call',tool:'browser_navigate',arguments:{url:'https://fixture.invalid/report'}}],['workspace_read',{file:'fixture.md'}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Attempted unrelated read-back'],limitations:[]}],['report_verification',{status:'completed',evidenceIds:['e2','e4'],checks:['Reviewed fresh selected-page observation and saved content'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Reviewed the page and saved content.'};
@@ -55,6 +59,9 @@ const server=http.createServer(async(req,res)=>{
    if(n===0||n===2)message=tc('inspect_screen',{question:'Read the fixture rows',structured:true});
    else if(n===1)message=tc('computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}});
    else message={role:'assistant',content:'Visual observation remains unavailable; no action was verified.'};
+  }else if(mode==='recovery_episodes'){
+   const steps=[['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],...['#a','#b'].map(target=>['computer',{action:'call',tool:'browser_click',arguments:{target}}]),['computer',{action:'call',tool:'browser_snapshot',arguments:{target:'main'}}],...['#c','#d'].map(target=>['computer',{action:'call',tool:'browser_click',arguments:{target}}]),['computer',{action:'call',tool:'browser_snapshot',arguments:{target:'body'}}],...['#e','#f'].map(target=>['computer',{action:'call',tool:'browser_click',arguments:{target}}]),['computer',{action:'call',tool:'browser_snapshot',arguments:{target:'section'}}],['report_verification',{status:'completed',evidenceIds:['e12'],checks:['Read current state after two distinct recovery episodes; unchanged observations did not rearm recovery or replay writes'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Inspected the final fixture state.'};
   }else if(mode==='recovery'){
    if(n===0)message={role:'assistant',content:"I cannot extract virtualized table data."};
    else{assert(body.messages.some(m=>String(m.content).includes('CAPABILITY RECOVERY')));const steps=[['capabilities',{}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e2'],checks:['Read fixture records'],limitations:[]}]];message=n<=steps.length?tc(...steps[n-1]):{role:'assistant',content:'Read the records using the available route.'};}
@@ -110,11 +117,22 @@ try{
  console.log('ok malformed/truncated/wrong-shaped visual results fail explicitly, stay uncached and cannot unlock coordinate actions');
  mode='profiles';round=0;let profile='1',profileClicks=0;
  const profiles=await runAgentLoop({message:'Read profile notes',modelOverride:'inception/mercury-2.5',workRuntime:{tools,context:'Fixture',execute:async(_name,input)=>{if(input.tool==='browser_navigate')profile='2';if(input.tool==='browser_click')profileClicks++;return {url:'https://fixture.invalid/people/'+profile,notes:'Observed fixture notes'};}}});
- assert.equal(profileClicks,2);assert.equal(profiles.verification.status,'completed');
+ assert.equal(profileClicks,2);assert.equal(profiles.verification.status,'completed');assert.equal(profiles.verification.receipts.find(r=>r.diagnostic?.code==='repeat_refused').actionOutcome,'not_executed');
  const locationProof=new (require(join(root,'harvey/reliability.js')).TurnVerification)();
  locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=details'});const before=locationProof.browserLocation();
  locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=notes#changed'});assert.equal(locationProof.browserLocation(),before,'Query/hash changes must not permit a duplicate write');
  console.log('ok identical profile controls work across observed URLs while same-page replay stays refused');
+ mode='recovery_episodes';round=0;let episode=0,diagnosticSnapshots=0,clickSchemas=0,attempts=0;
+ const episodes=await runAgentLoop({message:'Inspect and finish the fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(name,input)=>{
+   assert.equal(name,'computer');
+   if(input.action==='tools'){if(input.tool==='browser_click')clickSchemas++;return {tools:[{name:input.tool}]};}
+   if(input.tool==='browser_click'){attempts++;return {error:'Target no longer exists',recovery:{actionOutcome:'not_executed',safeToRetry:true}};}
+   if(attempts>0 && !input.arguments?.target){diagnosticSnapshots++;return {url:'https://fixture.invalid/people/'+episode,content:'Read-only diagnostic state'};}
+   if(input.arguments.target==='main')episode=2;else if(!episode)episode=1;
+   return {url:'https://fixture.invalid/people/'+episode,content:'Observed profile '+episode};
+ }}});
+ assert.equal(episodes.verification.status,'completed');assert.equal(attempts,6);assert.equal(diagnosticSnapshots,2);assert.equal(clickSchemas,2);
+ console.log('ok later browser failures recover after fresh progress, discover the failed action schema, and never replay writes');
  mode='recovery';round=0;let discovered=false;
  const recovered=await runAgentLoop({message:'Extract fixture records',modelOverride:'inception/mercury-2.5',allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(name)=>{if(name==='capabilities'){discovered=true;return {routes:['semantic snapshot']};}assert(discovered);return {records:[{id:'one'}]};}}});
  assert.equal(recovered.verification.status,'completed');console.log('ok unsupported capability claim triggers route discovery and successful recovery');
@@ -138,6 +156,10 @@ try{
  mode='missing_readback';round=0;let navigations=0,readbacks=0;
  const recoveredReadback=await runAgentLoop({message:'Read the fixture page and report',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>{if(name==='workspace_read')return {file:'fixture.md',content:'Observed fixture report'};if(input.tool==='browser_navigate')navigations++;if(input.tool==='browser_snapshot')readbacks++;return {url:'https://fixture.invalid/report',observed:'Fixture report'};}}});
  assert.equal(recoveredReadback.verification.status,'completed');assert.equal(navigations,1);assert.equal(readbacks,1);
+ mode='compact_readback';round=0;let compactReadbacks=0;
+ const compactReadback=await runAgentLoop({message:'Read fixture report and verify it',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>name==='workspace_read'?{file:'fixture.md',content:'Verified fixture report'}:input.tool==='browser_snapshot'?{url:'https://fixture.invalid/report',truncated:true,content:'Partial page'}:input.tool==='browser_read_table'?(compactReadbacks++,{url:'https://fixture.invalid/report',rows:[{name:'Report',value:'Verified fixture report'}]}):{url:'https://fixture.invalid/report',navigated:true}}});
+ assert.equal(compactReadback.verification.status,'completed');assert.equal(compactReadbacks,1);
+ console.log('ok completion repair replaces a truncated browser snapshot with a complete compact DOM read without replaying navigation');
  mode='rejected_review';round=0;
  const rejectedReview=await runAgentLoop({message:'Finish and verify the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
  assert.equal(rejectedReview.verification.status,'needs_verification');assert.match(rejectedReview.speech,/Evidence must reference successful tool receipts/);assert(!rejectedReview.speech.includes('The task is complete.'));
