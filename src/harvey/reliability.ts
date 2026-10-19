@@ -269,6 +269,15 @@ export class TurnVerification {
     const details=[rejection?`Completion check: ${rejection.diagnostic!.message}`:'No completion review was accepted after the latest operations.',failure?`Last recorded tool error: ${failure.diagnostic!.message}`:''];
     return details.filter(Boolean).join(' ');
   }
+  sourceOrderValues(order:any,expectedCount?:number){
+    const receipt=this.receipts.find(r=>r.id===order?.evidenceId);
+    if(!receipt||!['computer','workspace_sheet','inspect_screen','business_call','plugin_request','COMPOSIO_MULTI_EXECUTE_TOOL'].includes(receipt.tool))throw Error('Bind source order to an actual browser, workbook or connector observation, not a saved staging collection or authored file.');
+    const rows=this.sourceValue({evidenceId:order.evidenceId,path:order.path});
+    if(!Array.isArray(rows)||!Number.isInteger(order.count)||order.count<1||order.count>rows.length||expectedCount&&order.count!==expectedCount||typeof order.keyPath!=='string'||!order.keyPath.startsWith('/'))throw Error('Read the complete requested first-N source list and use its actual row path/count.');
+    const values=rows.slice(0,order.count).map((_,i)=>this.sourceValue({evidenceId:order.evidenceId,path:order.path+'/'+i+order.keyPath}));
+    if(values.some(v=>typeof v!=='string'&&typeof v!=='number'))throw Error('Source-order identities must be literal scalar values.');
+    return values;
+  }
   reviewGuidance() {
     return this.receipts.filter(r=>r.observation&&!r.discovery&&r.outcome==='returned'&&(!r.truncated||r.completeFileRead||r.completeCellRead)&&!r.limitation&&r.tool!=='report_verification').slice(-30).map(r=>{
       const source:any=this.sources.get(r.id);

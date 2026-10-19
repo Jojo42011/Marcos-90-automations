@@ -560,7 +560,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       delete input._orderValues;delete input._orderField;
       const order:any=input.orderFrom;
       if(requestedSourceOrder&&!order)return {error:'For this first-N source-order export use orderFrom:{evidenceId,path:"/rows",keyPath:"/title",field:"title",count:N} from the observed source list. Native selection/order must match the actual source, not saved insertion/key order.'};
-      if(order){try{const rows=verification.sourceValue({evidenceId:order.evidenceId,path:order.path});if(!Array.isArray(rows)||!Number.isInteger(order.count)||order.count<1||order.count>rows.length||requestedSourceOrder&&order.count!==requestedSourceOrder||typeof order.keyPath!=='string'||!order.keyPath.startsWith('/'))throw Error('Read the complete requested first-N source list and use its actual row path/count.');const values=rows.slice(0,order.count).map((_,i)=>verification.sourceValue({evidenceId:order.evidenceId,path:order.path+'/'+i+order.keyPath}));if(values.some(v=>typeof v!=='string'&&typeof v!=='number'))throw Error('Source-order identities must be literal scalar values.');input={...input,keys:undefined,_orderValues:values,_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
+      if(order){try{input={...input,keys:undefined,_orderValues:verification.sourceOrderValues(order,requestedSourceOrder),_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
     }
     if(opts.workRuntime&&name==='computer'){
       const bindings=(input as any).sourceValues;input=computerArguments(input);
