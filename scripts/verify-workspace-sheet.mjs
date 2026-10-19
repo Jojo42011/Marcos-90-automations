@@ -9,6 +9,7 @@ sheet.addRow(['Fixture',0,history,new Date('2026-10-20T00:00:00.000Z'),{formula:
 sheet.addRow(['Other',null,history]);sheet.getCell('D2').numFmt='mm/dd/yyyy';await book.xlsx.writeFile(file);
 const bytes=readFileSync(file);const read=input=>S.readWorkspaceSheet('alice','sheet',{file:'source.xlsx',...input});
 const meta=await read({});assert.equal(meta.sheets[0].rows,3);assert.equal(meta.sheets[0].columns,9);assert.equal(meta.sheets[0].headers[2].label,'History');
+assert.deepEqual((await read({sheet:'Inputs',range:'A2:B3',offset:0})).rows,(await read({sheet:'Inputs',range:'A2:B3'})).rows);await assert.rejects(read({sheet:'Inputs',range:'A2:B3',offset:1}),/use range for rows/);
 const row=await read({sheet:'Inputs',range:'A2:B3'});assert.equal(row.truncated,false);assert.equal(row.rows[0].values.B,0);assert.equal(row.rows[1].values.B,null);assert.notEqual(row.rows[0].id,row.rows[1].id);
 const ledger=new TurnVerification(),r=ledger.record('workspace_sheet',{},row);assert.equal(r.observation,true);assert.equal(r.scope,'files');assert.equal(ledger.projectRecords([{evidenceId:r.id,idPath:'/rows/0/id',fieldPaths:{name:'/rows/0/values/A'}}])[0].fields.name,'Fixture');
 const preview=await read({sheet:'Inputs',range:'C2:C2'});assert(preview.truncated);assert.equal(preview.rows[0].values.C.totalCharacters,history.length);

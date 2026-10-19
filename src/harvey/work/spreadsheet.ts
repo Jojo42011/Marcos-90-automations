@@ -55,7 +55,7 @@ export async function readWorkspaceSheet(owner:string,chat:string,input:any){
     const end=Math.min(content.length,offset+limit);
     return {...common,sheet:sheet.name,cell:c.address,id:sha256+':'+sheet.name+':'+c.address,content:content.slice(offset,end),offset,totalCharacters:content.length,nextOffset:end<content.length?end:null,truncated:offset>0||end<content.length,note:'This is one cell from the source workbook, not the full row or workbook. Preserve original dates and text; do not infer missing fields.'};
   }
-  if(input.offset!==undefined)throw Error('offset is for worksheet lists or one cell; use range for rows');
+  if(input.offset!=null&&input.offset!==0)throw Error('offset is for worksheet lists or one cell; use range for rows');
   const parts=String(input.range||'A1:'+column(Math.min(sheet.columnCount,50))+'1').split(':');
   if(parts.length>2)throw Error('Use one rectangular Excel range, such as A2:F10');
   const start=coordinate(parts[0]),end=coordinate(parts[1]||parts[0]);

@@ -19,7 +19,10 @@ const server=http.createServer(async(req,res)=>{
  else if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
-  if(mode==='repeat_observations'){
+  if(mode==='repeat_checkpoints'){
+   const steps=[['workspace_write',{file:'repeat.md',content:'Verified literal text'}],['workspace_write',{file:'repeat.md',content:'Verified literal text'}],['task_plan',{action:'checkpoint',completedSteps:[0,1],nextStep:2}],['task_plan',{action:'checkpoint',completedSteps:[0,1],nextStep:2}],['workspace_read',{file:'repeat.md'}],['report_verification',{status:'completed',automaticEvidence:true,checks:['Idempotent file and checkpoint operations retained exact state; actual saved file was read'],limitations:[]}]];
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Verified repeat-safe local work.'};
+  }else if(mode==='repeat_observations'){
    message=n<5?tc('workspace_read',{file:'same.csv'}):n===5?tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Read the same saved file five times without a fabricated tool limitation'],limitations:[]}):{role:'assistant',content:'Verified file.'};
   }else if(mode==='source_bindings'){
    const steps=[['workspace_sheet',{file:'source.xlsx'}],['computer',{action:'call',tool:'browser_fill_form',arguments:{fields:[{name:'Notes',target:'textarea',value:'Wrong paraphrase'}]}}],['computer',{action:'call',tool:'browser_fill_form',arguments:{fields:[{name:'Notes',target:'textarea',value:''}]},sourceValues:[{argumentPath:'/fields/0/value',evidenceId:'e1',path:'/rows/0/values/C'}]}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',automaticEvidence:true,checks:['Exact source text copied; paraphrased attempt was rejected without changing fields; destination read back'],limitations:[]}]];
@@ -260,6 +263,10 @@ try{
  const learned=await runAgentLoop({message:'Retain a verified method',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='workflow')],execute:async(name,input)=>name==='workflow'?input.action==='learn'?learning.learnWorkflow('fixture',chat.id,input):{workflows:learning.workflows('fixture',chat.id)}:{id:'observed-fixture-record'}}});
  assert.equal(learned.verification.status,'completed');assert.equal(learning.workflows('fixture',chat.id)[0].basis,'verified_execution_require_current_prerequisites');assert.equal(learning.workflows('other-owner',store.createChat('other-owner',{}).id).length,0);
  console.log('ok a completed observed procedure is retained and read back without crossing owners');
+ mode='repeat_checkpoints';round=0;let checkpointWrites=0,fileWrites=0;
+ const checkpointResult=await runAgentLoop({message:'Check local checkpoint idempotence',modelOverride:mainModel,workRuntime:{tools:runtime.WORK_TOOLS.filter(t=>['workspace_write','workspace_read','task_plan'].includes(t.name)),context:'Fixture',execute:async(name,input)=>{if(name==='task_plan'){checkpointWrites++;return {nextStep:2};}if(name==='workspace_write'){fileWrites++;return fileApi.writeWorkspaceFile('fixture',chat.id,input);}return fileApi.readWorkspaceFile('fixture',chat.id,input);}}});
+ assert.equal(checkpointResult.verification.status,'completed');assert.equal(fileWrites,2);assert.equal(checkpointWrites,2);
+ console.log('ok idempotent local file/checkpoint operations are repeat-safe and saved bytes still require read-back');
  mode='repeat_observations';round=0;let repeatedReads=0;
  const reread=await runAgentLoop({message:'Verify this saved file',modelOverride:mainModel,workRuntime:{tools:runtime.WORK_TOOLS.filter(t=>t.name==='workspace_read'),context:'Fixture',execute:async()=>{repeatedReads++;return {file:'same.csv',content:'Exact saved contents'};}}});
  assert.equal(repeatedReads,5);assert.equal(reread.verification.status,'completed');assert(!reread.verification.receipts.some(r=>r.outcome==='failed'));

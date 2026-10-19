@@ -12,6 +12,7 @@ app.get('/',(_req,res)=>res.type('html').send(`<style>body{margin:0}#viewport{he
 app.use('/api/harvey',require('../dist/src/harvey/work/routes.js').createWorkRouter(req=>req.headers.authorization==='Bearer fixture',req=>req.headers['x-owner']||'alice'));
 const longFormText='Exact Ω 😀 history\n'.repeat(1500);
 app.get('/form',(_req,res)=>res.send('<label>History<textarea name="history">'+longFormText+'</textarea></label><input type="password" value="never-expose"><input type="hidden" value="secret"><h1>Literal Book</h1><table><tr><th>UPC</th><td>0123456789abcdef</td></tr><tr><th>Price (incl. tax)</th><td>£51.77</td></tr></table>'));
+app.get('/auth-form',(_req,res)=>res.send('<form><label>Email<input name="email" value="old@example.invalid"></label><label>Password<input type="password" name="password"></label></form><form><label>Search<input type="search" name="q" value="same"></label><button>Search</button></form>'));
 const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
 const original=global.fetch;global.fetch=(url,...args)=>{assert.equal(new URL(String(url)).hostname,'127.0.0.1');return original(url,...args);};
 const chat=S.createChat('alice',{}),v=new TurnVerification();
@@ -39,6 +40,12 @@ try{
  assert.equal((await fetch(base+exported.download)).status,401);
  assert.throws(()=>R.workRecords('alice',chat.id,{action:'export',collection:'filtered',columns:['unreadNotes']}),/never been observed/);
  const readback=v.record('workspace_files',{},F.workspaceFiles('alice',chat.id));assert(readback.observation);assert(F.workspaceFiles('alice',chat.id).files.some(f=>f.name===exported.file));
+ await call('browser_navigate',{url:base+'/auth-form'});
+ const authFill=await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'Email',type:'textbox',target:'input[name="email"]',value:'new@example.invalid'},{name:'Password',type:'textbox',target:'input[name="password"]',value:'synthetic-only'}]});assert(!authFill.error,JSON.stringify(authFill));
+ const authSnapshot=await call('browser_snapshot');const authText=(authSnapshot.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');const emailRef=authText.split('\n').find(line=>line.includes('textbox "Email"'))?.match(/\[ref=((?:f\d+)?e\d+)\]/)?.[1];assert(emailRef,'Actual email field reference must be observed');
+ const wrappedFill=await call('browser_type',{_preserveExisting:true,target:'ref='+emailRef,text:'new@example.invalid'});assert(!wrappedFill.error,JSON.stringify(wrappedFill));
+ const authRead=await call('browser_read_form');assert.equal(authRead.fields.find(f=>f.name==='email').value,'new@example.invalid');assert(!JSON.stringify(authRead).includes('synthetic-only'));
+ const searched=await call('browser_type',{_preserveExisting:true,target:'input[name="q"]',text:'same',submit:true});assert(!searched.error,JSON.stringify(searched));assert(JSON.stringify(searched).includes('?q=same'),'An unchanged search query must still submit when requested');
  await call('browser_navigate',{url:base+'/form'});
  const form=await call('browser_read_form');assert.equal(form.fields.length,1);assert.equal(form.fields[0].characters,longFormText.length);assert.equal(form.fields[0].valueTruncated,true);assert(!JSON.stringify(form).includes('never-expose'));assert.equal(form.fields[0].sha256,(await import('node:crypto')).createHash('sha256').update(longFormText).digest('hex'));
  const detail=await call('browser_read_table');assert.equal(detail.layout,'key_value');assert.equal(detail.title,'Literal Book');assert.equal(detail.fields.UPC,'0123456789abcdef');assert.equal(detail.fields['Price (incl. tax)'],'£51.77');

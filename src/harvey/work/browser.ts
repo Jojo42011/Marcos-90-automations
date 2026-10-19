@@ -291,7 +291,8 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         for(const field of fields){
           const evalArgs=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Current visible copy destination',target:field.target||field.ref,function:copyFieldInPage.toString()});
           const current:any=parseBrowserJson(checked(await call(s,'browser_evaluate',evalArgs,15000,signal)));
-          const value=current.search?field.value:mergeMissingValue(current.value,String(field.value??''),current.history);
+          if(current.excluded||current.search){changed.push(field);continue;}
+          const value=mergeMissingValue(current.value,String(field.value??''),current.history);
           preservedFields.push({target:field.target||field.ref,characters:value.length,sha256:createHash('sha256').update(value).digest('hex'),changed:value!==current.value});
           if(value!==current.value)changed.push({...field,value});
         }

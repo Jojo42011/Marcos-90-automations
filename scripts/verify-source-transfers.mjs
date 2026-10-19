@@ -11,6 +11,14 @@ const {TurnVerification,VERIFICATION_TOOL}=require(join(root,'harvey/reliability
 assert.equal(VERIFICATION_TOOL.input_schema.properties.evidenceIds,undefined,'Completion schema leaves receipt selection to the runtime');
 const S=require(join(root,'harvey/work/store.js')),R=require(join(root,'harvey/work/records.js')),F=require(join(root,'harvey/work/files.js'));
 const {formatSourceValue,mergeMissingValue}=require(join(root,'harvey/work/valueFormats.js'));
+const {browserArguments}=require(join(root,'harvey/work/browserArguments.js'));
+const {recoveryFor}=require(join(root,'harvey/work/browserState.js'));
+const targetSchema={properties:{target:{type:'string'}},required:['target']};
+for(const target of ['ref=e12','[ref=e12]','[ref="e12"]'])assert.equal(browserArguments(targetSchema,{target}).target,'e12');
+assert.equal(browserArguments(targetSchema,{target:'[data-ref=e12]'}).target,'[data-ref=e12]');
+assert.equal(browserArguments(targetSchema,{target:'ref=f1e4'}).target,'f1e4');
+assert.throws(()=>browserArguments(targetSchema,{target:''}),/Missing browser argument/);
+assert.equal(recoveryFor('Unknown engine "ref" while parsing selector ref=e12').actionOutcome,'not_executed');
 const runtime=require(join(root,'harvey/work/runtime.js'));
 assert(runtime.WORK_TOOLS.find(t=>t.name==='computer').input_schema.properties.sourceValues);
 const v=new TurnVerification(),history=('Literal history Ω 😀\n').repeat(1400);

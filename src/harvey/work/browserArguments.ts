@@ -15,6 +15,11 @@ export function browserArguments(schema:any,input:any){
       args[canonical]=args[alias];delete args[alias];
     }
   }
+  for(const key of ['target','startTarget','endTarget','ref','startRef','endRef'])if(props[key]&&typeof args[key]==='string'){
+    if(!args[key].trim())throw Error('Missing browser argument: '+key+'. Use a current observed target');
+    const wrapped=args[key].match(/^(?:ref=|\[ref=)["']?((?:f\d+)?e\d+)["']?\]?$/);
+    if(wrapped)args[key]=wrapped[1];
+  }
   if(Array.isArray(args.fields)&&props.fields?.items)args.fields=args.fields.map((f:any)=>browserArguments(props.fields.items,f));
   for(const required of schema?.required||[])if(args[required]===undefined){
     // Zod's JSON schema can mark defaulted inputs required; honor the installed

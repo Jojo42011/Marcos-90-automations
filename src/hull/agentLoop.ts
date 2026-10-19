@@ -492,7 +492,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
     const polling = opts.workRuntime && name==="computer" && input.action==="call" && input.tool==="browser_wait_for";
-    const limit = polling ? 6 : opts.workRuntime ? (read ? Infinity : 1) : MAX_IDENTICAL_CALLS;
+    const idempotentLocal=opts.workRuntime&&['workspace_write','work_records','task_plan','continuity'].includes(name);
+    const limit = polling ? 6 : opts.workRuntime ? (read||idempotentLocal ? Infinity : 1) : MAX_IDENTICAL_CALLS;
     const knownNotExecuted = opts.workRuntime && name === "computer" && seen === 2 && safeBrowserRetry.has(sig);
     if (seen > limit && !knownNotExecuted) {
       console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
