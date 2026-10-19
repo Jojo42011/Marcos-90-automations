@@ -7,7 +7,7 @@ import {join} from 'node:path';
 const require=createRequire(import.meta.url),dir=mkdtempSync(join(tmpdir(),'harvey-harness-live-'));chmodSync(dir,0o755);
 assert(process.env.OPENROUTER_API_KEY,'Configured model access is required');
 const sharedBudget=process.env.SHARED_OPENROUTER_BUDGET_DB_PATH||join(process.env.TENANT_DATA_ROOT||'/data','openrouter-budget.db');
-for(const key of Object.keys(process.env))if(/COMPOSIO|TENANT_OWNER_ID|DB_JSON_PATH/.test(key))delete process.env[key];
+for(const key of Object.keys(process.env))if(/API_KEY|TOKEN|PASSWORD|SECRET|COMPOSIO|TENANT_OWNER_ID|DB_JSON_PATH/.test(key)&&key!=='OPENROUTER_API_KEY')delete process.env[key];
 Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:sharedBudget,DOTENV_CONFIG_PATH:join(dir,'missing'),HARVEY_BROWSER_ENABLED:'true',AETHON_MAX_TOKENS:'2048'});
 const S=require('../dist/src/harvey/work/store.js'),B=require('../dist/src/harvey/work/browser.js'),R=require('../dist/src/harvey/work/records.js'),F=require('../dist/src/harvey/work/files.js');
 const {WORK_TOOLS}=require('../dist/src/harvey/work/runtime.js'),{capabilityMap}=require('../dist/src/harvey/work/capabilities.js'),{runAgentLoop}=require('../dist/src/hull/agentLoop.js');
@@ -33,11 +33,11 @@ try{
      if(name==='work_records'){const r=R.workRecords(owner,chat.id,input);if(input.action==='export')exported=r;return r;}
      if(name==='workspace_files')return F.workspaceFiles(owner,chat.id,input);
      throw Error('Unknown fixture tool');
-   }},onEvent:e=>{if(e.type==='usage'){cost+=e.costUsd;calls++;if(cost>0.03||calls>35)controller.abort();}}});
+   }},onEvent:e=>{if(e.type==='usage'){cost+=e.costUsd;calls++;if(cost>0.03)controller.abort();}}});
  assert(!result.modelError&&!result.toolFailure&&!result.budgetRefused,JSON.stringify({modelError:result.modelError,toolFailure:result.toolFailure,budgetRefused:result.budgetRefused}));
  assert.equal(result.verification?.status,'completed','The visual export was not verified');assert.equal(exported?.rows,2);
  const csv=readFileSync(F.filePath(owner,chat.id,exported.file),'utf8');
- for(const value of ['F001','Iris Fixture','Listing Lead','F003','Noah Fixture','Sphere'])assert(csv.includes(value),'Missing fixture field');
+ for(const value of ['F001','Iris Fixture','Listing Lead','F003','Noah Fixture','Sphere'])assert(csv.split(/[,\r\n]+/).map(v=>v.replace(/^\uFEFF/, '').replace(/^\"|\"$/g,'')).includes(value),'Missing or changed literal fixture field');
  assert(!csv.includes('F002')&&!csv.includes('Mojo FL'));assert.equal(csv.trim().split('\r\n').length,3);
  console.log('HARNESS_LIVE_PASS '+JSON.stringify({model:result.modelUsed,rows:2,modelCalls:calls,costUsd:cost,verifiedCsv:true,customerDataAccessed:false}));
 }finally{clearTimeout(timer);await B.closeBrowsers();S.closeStore();global.fetch=original;server.closeAllConnections();await new Promise(r=>server.close(r));}

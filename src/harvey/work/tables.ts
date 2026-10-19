@@ -30,8 +30,36 @@ export function readTableInPage(input:{target?:string;offset?:number}) {
   }
   let scroll:Element|null=root;
   while(scroll&&!(scroll.scrollHeight>scroll.clientHeight+2&&/auto|scroll/.test(getComputedStyle(scroll).overflowY)))scroll=scroll.parentElement;
-  return {url:location.origin+location.pathname,headers,rows,offset,nextOffset:offset+rows.length<all.length?offset+rows.length:null,renderedRowCount:all.length,totalFromAria:root.getAttribute('aria-rowcount'),truncated,
+  const detail=all.length&&all.every(r=>r.querySelectorAll('th').length===1&&r.querySelectorAll('td').length===1)&&!truncated?{layout:'key_value',title:(document.querySelector('h1')?.textContent||'').trim(),fields:Object.fromEntries(all.map(r=>[(r.querySelector('th')?.textContent||'').trim(),(r.querySelector('td') as HTMLElement).innerText.trim()]))}:{};
+  return {url:location.origin+location.pathname,...detail,headers,rows,offset,nextOffset:offset+rows.length<all.length?offset+rows.length:null,renderedRowCount:all.length,totalFromAria:root.getAttribute('aria-rowcount'),truncated,
     scroll:scroll?{top:scroll.scrollTop,clientHeight:scroll.clientHeight,scrollHeight:scroll.scrollHeight}:null,
     coverage:"Only currently rendered DOM rows. A null nextOffset is NOT proof the dataset is complete. Read the status filter and total, navigate actual pagination or scroll the table, then inspect fresh rows. Null IDs need a stable profile identifier before saving."};
 }
 export function tableCode(input:{target?:string;offset?:number}) {return `() => (${readTableInPage.toString()})(${JSON.stringify(input)})`;}
+
+/** Visible form data only; never passwords, hidden fields or application internals. */
+export function formCode(input:{target?:string;expected?:string[]}){return '() => ('+readFormInPage.toString()+')('+JSON.stringify(input)+')';}
+export function readFormInPage(input:{target?:string;expected?:string[]}){
+  const root=input.target?document.querySelector(input.target):document;
+  if(!root)return {error:'Observed form target was not found'};
+  const fields=Array.from(root.querySelectorAll('input,textarea,select')).filter((el:any)=>{const r=el.getBoundingClientRect(),style=getComputedStyle(el);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.opacity!=='0'&&!el.closest('[hidden],[aria-hidden="true"]')&&!['password','hidden','submit','button'].includes(el.type);}).slice(0,100).map((el:any)=>{
+    const label=el.getAttribute('aria-label')||Array.from(el.labels||[]).map((l:any)=>Array.from(l.childNodes).filter((n:any)=>n!==el).map((n:any)=>n.textContent||'').join('').trim()).join(' ')||el.name||el.id;
+    const selector=el.id?'#'+CSS.escape(el.id):el.name?el.tagName.toLowerCase()+'[name='+JSON.stringify(el.name)+']':null;
+    return {label,name:el.name||null,type:el.type,value:String(el.value??''),checked:['checkbox','radio'].includes(el.type)?el.checked:undefined,selector};
+  });const visible=(document.body?.innerText||'');
+  const labelledEmails=Array.from(document.querySelectorAll('p,span,div,label,dd')).filter((el:any)=>{const r=el.getBoundingClientRect(),style=getComputedStyle(el);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.opacity!=='0'&&!el.closest('[hidden],[aria-hidden="true"],textarea,[role="log"],[class*="note" i],[class*="history" i],[class*="message" i]');}).map((el:any)=>(el.innerText||'').match(/^\s*e-?mail(?: address)?\s*:?\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*$/i)?.[1]).filter(Boolean);
+  const identityEmails=[...new Set([...fields.filter((f:any)=>f.type==='email'||/^e-?mail(?: address)?$/i.test(f.label||f.name||'')).map((f:any)=>f.value),...labelledEmails])];
+  const labelledPhones=Array.from(document.querySelectorAll('p,span,div,label,dd')).filter((el:any)=>{const r=el.getBoundingClientRect(),style=getComputedStyle(el);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.opacity!=='0'&&!el.closest('[hidden],[aria-hidden="true"],textarea,[role="log"],[class*="note" i],[class*="history" i],[class*="message" i]');}).map((el:any)=>(el.innerText||'').match(/^\s*(?:phone|mobile|cell|telephone)(?: number|\(s\)|s)?\s*:?\s*([+()0-9 .-]{7,})\s*$/i)?.[1]).filter(Boolean);
+  const identityPhones=[...new Set([...fields.filter((f:any)=>f.type==='tel'||/phone|mobile|cell|telephone/i.test((f.label||'')+' '+(f.name||''))).map((f:any)=>f.value),...labelledPhones])];
+  const historyValues=fields.filter((f:any)=>/notes?|history|messages?|texts?/i.test((f.label||'')+' '+(f.name||''))).map((f:any)=>f.value);
+  const norm=(text:string)=>text.replace(/\r\n?/g,'\n');return {url:location.origin+location.pathname,fields,identityEmails,identityPhones,contains:input.expected?.map(value=>norm(visible).includes(norm(value))||historyValues.some((text:string)=>norm(text).includes(norm(value))))};
+}
+
+// The browser resolves the already-observed target. Read no password or hidden state.
+export function copyFieldInPage(element:any){
+  const rect=element.getBoundingClientRect(),type=String(element.type||'');
+  if(type==='password'||element.closest('form')?.querySelector('input[type="password"]'))return {excluded:true};
+  if(rect.width<=0||rect.height<=0||type==='hidden'||!['INPUT','TEXTAREA','SELECT'].includes(element.tagName))throw Error('Copy preservation requires a visible non-secret form field');
+  const label=[element.name,element.id,element.placeholder,element.getAttribute('aria-label'),...Array.from(element.labels||[]).map((l:any)=>l.textContent)].filter(Boolean).join(' ');
+  return {unambiguousForm:document.forms.length===1&&(element.form||element.closest('form'))===document.forms[0],value:String(element.value??''),history:element.tagName==='TEXTAREA'||/notes?|history|messages?/i.test(label),search:/search|filter|find|username|login|verification/i.test(label)};
+}

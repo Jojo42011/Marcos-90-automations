@@ -16,3 +16,9 @@ export function taskFollowup(message:string):boolean {
 export function segmentLimit(reason:string):boolean {
   return /\b(?:turn|step|execution) (?:budget|limit)|\bfinal round\b/i.test(reason) && !/\b(?:24.hour|256|monthly|credits|provider|rate limit)\b/i.test(reason);
 }
+
+/** Auxiliary advice only; this ceiling does not limit the task's tool actions. */
+export function recoveryReviewPolicy(){return {model:process.env.HARVEY_RECOVERY_MODEL||'anthropic/claude-sonnet-4.6',maxCostUsd:.05,readOnly:true,mainModelUnchanged:true};}
+
+/** Optional semantic review complements native receipt/hash checks, never replaces them. */
+export function outcomeReviewPolicy(){return {model:process.env.HARVEY_OUTCOME_AUDIT_MODEL||recoveryReviewPolicy().model,maxCostUsd:.05,readOnly:true,mainModelUnchanged:true};}

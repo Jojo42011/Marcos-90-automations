@@ -5,9 +5,12 @@ export function failureReport(owner:string,chatId:string,message:string):string|
   if(!/\b(?:what|waht|why|whats|what's)\b.{0,60}\b(?:fail\w*|fial\w*|error\w*|erroo\w*|problem|wrong)\b/i.test(message)||/\b(?:fix|retry|resume|continue|try again|execute)\b/i.test(message))return;
   const job=list<any>('job',owner).find(j=>j.chatId===chatId&&j.result);
   if(job?.status==='completed')return;
-  const checkpoint=list<any>('verification',owner).find(v=>v.chatId===chatId&&v.receipts?.length);
-  const diagnostics=(checkpoint?.receipts||[]).filter((r:any)=>r.outcome==='failed'&&r.diagnostic).map((r:any)=>r.diagnostic);
-  const failure=job?.result?.failure?.kind==='tool_error'?job.result.failure:[...diagnostics].reverse().find((d:any)=>d.code!=='repeat_refused')||diagnostics.at(-1);
-  if(failure)return `The saved run failed at ${failure.detail}: ${failure.message}. That is the recorded tool error. The run did not establish a lazy-loading or timing cause. Saved work is retained.`;
+  const checkpoint=list<any>('verification',owner).find(v=>v.chatId===chatId);
+  // A saved job owns its diagnostics, including an empty receipt set. An older
+  // browser failure must not explain a newer provider-only failure.
+  const receipts=job?job.result?.verification?.receipts||[]:checkpoint?.receipts||[];
+  const diagnostics=receipts.filter((r:any)=>r.outcome==='failed'&&r.diagnostic&&!['report_verification','task_plan','continuity'].includes(r.tool)).map((r:any)=>r.diagnostic);
+  const failure=['tool_error','execution_error'].includes(job?.result?.failure?.kind)?job.result.failure:[...diagnostics].reverse().find((d:any)=>d.code!=='repeat_refused')||diagnostics.at(-1);
+  if(failure)return `The recorded failed operation was ${failure.detail}: ${failure.message}. ${failure.message==='Use an HTTP(S) URL without embedded credentials'?"That older validation message covered both unsupported URL types and embedded credentials; it does not identify which was supplied or mean an earlier login failed. ":""}This does not establish whether earlier steps succeeded or later changes were saved. Saved work is retained.`;
   if(job?.result?.verification?.receipts?.some((r:any)=>r.outcome==='failed'))return 'The saved run contains failed tool calls, but that older run did not retain their error details. I cannot honestly identify their cause from the saved record; lazy loading and timing were not established.';
 }

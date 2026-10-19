@@ -28,7 +28,7 @@ const next=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1));assert
 const nextId=B.reserveOpenRouterSpend(150,next);assert.throws(()=>B.reserveOpenRouterSpend(0,next),/shared \$150/);B.settleOpenRouterSpend(nextId,149);assert.equal(B.openRouterBudgetStatus(next).remainingUsd,1);
 assert.equal(B.openRouterBudgetStatus().month,month);
 const columns=B.sharedOpenRouterBudgetDb().prepare('PRAGMA table_info(spend)').all().map(r=>r.name);assert.deepEqual(columns,['id','month','cost','pending']);
-assert.equal(new Database(join(dir,'accounts','alice','ai-usage.db'),{readonly:true}).prepare('SELECT COUNT(*) AS n FROM ai_requests').get().n,1);
+const privateLog=new Database(join(dir,'accounts','alice','ai-usage.db'),{readonly:true});try{assert.equal(privateLog.prepare('SELECT COUNT(*) AS n FROM ai_requests').get().n,1);}finally{privateLog.close();}
 const exhausted=B.reserveOpenRouterSpend(16);B.settleOpenRouterSpend(exhausted,16);
 process.env.AI_USAGE_DB_PATH=join(dir,'private-new-usage.db');
 process.env.ANTHROPIC_API_KEY='fixture-fallback';let paidCalls=0;
@@ -37,4 +37,4 @@ const {complete,BudgetRefusedError}=require('../dist/src/hull/providers/index.js
 await assert.rejects(()=>complete({job:'agent',messages:[{role:'user',content:'Finish the task'}],modelOverride:'anthropic/claude-sonnet-4'}),BudgetRefusedError);
 assert.equal(paidCalls,0,'Monthly refusal must not bypass to direct Anthropic');
 console.log('PASS shared $150: historical import, provider reconciliation, concurrent account reservations, no old task cap, idempotent settlement, UTC reset, private logs preserved');
-B.sharedOpenRouterBudgetDb().close();rmSync(dir,{recursive:true,force:true});
+require('../dist/src/core/aiUsageStore.js').getAiUsageDb().close();B.sharedOpenRouterBudgetDb().close();rmSync(dir,{recursive:true,force:true});

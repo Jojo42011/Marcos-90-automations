@@ -1,12 +1,13 @@
+import {mergeMissingValue} from './valueFormats.js';
 import { scrollCode } from "./scroll.js";
-import { tableCode } from "./tables.js";
+import { tableCode, formCode, copyFieldInPage } from "./tables.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createHash, randomUUID } from "crypto";
 import { mkdirSync, chownSync, existsSync, renameSync, chmodSync, writeFileSync, readFileSync, realpathSync, statSync } from "fs";
 import { join, resolve, sep } from "path";
 import { get, list, put, seal, unseal, workDir, text } from "./store.js";
-import {browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
+import {navigationProblem, browserRead, parseTabs, readTabs, recoveryFor, restorableUrl, resultText, TabState, writeTabs} from "./browserState.js";
 
 import { browserArguments } from "./browserArguments.js";
 import { uploadArguments } from "./uploadFiles.js";
@@ -19,6 +20,7 @@ const TARGETED = new Set(["browser_click","browser_type","browser_fill_form","br
 const EXTRA_TOOLS = [
   {name:"browser_inspect_scroll_regions",description:"Find rendered page/pane scroll containers and their selectors and positions. Use when rows are missing, virtualized or lazy-loaded; no screenshot or vision model needed.",inputSchema:{type:"object",properties:{}}},
   {name:"browser_scroll",description:"Scroll an observed container or the document using DOM scrolling, without screenshot coordinates. Supports text-only models. Use a selector from browser_inspect_scroll_regions or the observed table. Then read fresh rows/snapshot; do not ask the user to scroll for you.",inputSchema:{type:"object",properties:{target:{type:"string"},deltaY:{type:"number",minimum:-2000,maximum:2000},deltaX:{type:"number",minimum:-2000,maximum:2000}}}},
+  {name:"browser_read_form",description:"Read visible form values, identity emails and full-value hashes. Password/hidden fields are excluded. expected:[source text] checks literal history on the visible page without returning long text. computer sourceValues can bind /expected/0 directly from a source cell. Save and reopen before verifying persistence.",inputSchema:{type:"object",properties:{target:{type:"string"},expected:{type:"array",maxItems:30,items:{type:"string",maxLength:262144}}}}},
   {name:"browser_read_table",description:"Read compact structured rendered table/grid rows or article/list cards, including stable links and full link titles/alt text. Use this for catalog cards as well as tables before relying on screenshots. Optional target is an observed table/container selector or repeating article/list-card selector; multiple matching cards are allowed. Prefer row.title/full link titles over shortened display text. offset/nextOffset page DOM rows only: use actual UI pagination or scrolling for unseen/virtualized records. Verify filters and total separately; save sourced rows with work_records before continuing.",inputSchema:{type:"object",properties:{target:{type:"string"},offset:{type:"integer",minimum:0}}}},
   {name:"browser_inspect_targets",description:"Inspect visible canvas nodes, ports, controls and exposed graph edges with precise viewport rectangles and a screenshot. Optionally focus on observed nodeIds when the graph is large. Use before connecting overlapping nodes; missing DOM edges require destination read-back, not guesswork.",inputSchema:{type:"object",properties:{nodeIds:{type:"array",items:{type:"string"},maxItems:4}}}},
   {name:"browser_drag_targets",description:"Connect two freshly observed port targets with a controlled mouse gesture. Requires observationId and target IDs from browser_inspect_targets. Rejects moved/obscured targets before pressing. Returns fresh graph and pixels; verify the intended input, not just gesture completion.",inputSchema:{type:"object",properties:{observationId:{type:"string"},start:{type:"string"},end:{type:"string"}},required:["observationId","start","end"]}},
@@ -26,7 +28,7 @@ const EXTRA_TOOLS = [
   {name:"browser_recover",description:"Restart this chat's unresponsive hosted browser and restore saved tabs/cookies. Only after observing a connection or browser crash. Never replays a click, form submission or other action; unsaved page state can be lost. Inspect the restored page before continuing.",inputSchema:{type:"object",properties:{}}}
 ];
 type Frame = { image: string; capturedAt: string; url: string; title: string };
-type Session = {owner:string;chat:string;client:Client;tools:any[];lastUsed:number;statePath:string;tabsPath:string;tabs?:TabState;busy:number;chain:Promise<any>;action?:string;failed?:boolean;frame?:Frame;preview?:Promise<void>;previewAbort?:AbortController;closing?:boolean;snapshot?:{id:string;raw:string;at:number};visionAt?:number;dirty:boolean;savedAt:number;saveTimer?:NodeJS.Timeout;saveWarning?:string;restoreWarning?:string;metrics:{calls:number;preflights:number;checkpoints:number;previewCalls:number}};
+type Session = {owner:string;chat:string;client:Client;tools:any[];lastUsed:number;statePath:string;tabsPath:string;tabs?:TabState;busy:number;chain:Promise<any>;action?:string;failed?:boolean;frame?:Frame;preview?:Promise<void>;previewAbort?:AbortController;closing?:boolean;snapshot?:{id:string;raw:string;at:number};visionAt?:number;preservedFormChanged?:boolean;unchangedPreservedForm?:boolean;dirty:boolean;savedAt:number;saveTimer?:NodeJS.Timeout;saveWarning?:string;restoreWarning?:string;metrics:{calls:number;preflights:number;checkpoints:number;previewCalls:number}};
 const sessions = new Map<string, Promise<Session>>();
 let shuttingDown=false;
 let shutdownRegistered=false;
@@ -55,7 +57,14 @@ export function browserDirectory(owner: string, chat: string) { const key = crea
 function tabsPath(owner:string,chat:string){return join(browserDirectory(owner,chat),"tabs.json");}
 async function call(s:Session,name:string,args:any={},timeout=15000,signal?:AbortSignal):Promise<any>{
   s.metrics.calls++;
-  const result:any=await s.client.callTool({name,arguments:args},undefined,{timeout,signal});
+  // The SDK retains abort listeners on the supplied signal. Give each request
+  // its own signal and detach it from the long-lived task when this call ends.
+  signal?.throwIfAborted();
+  const request=new AbortController(),abort=()=>request.abort(signal?.reason);
+  signal?.addEventListener('abort',abort,{once:true});
+  let result:any;
+  try{result=await s.client.callTool({name,arguments:args},undefined,{timeout,signal:request.signal});}
+  finally{signal?.removeEventListener('abort',abort);}
   // This MCP version puts implicit action snapshots in local files. Return their
   // actual observations to the model without paying for another browser call.
   const dir=browserDirectory(s.owner,s.chat),files=realpathSync(join(dir,"files"));
@@ -191,6 +200,17 @@ export function validateActionReferences(snapshot:string,args:any){
 }
 export async function browserCall(owner:string,chat:string,name:string,args:any,signal?:AbortSignal):Promise<any>{
   signal?.throwIfAborted();args={...(args||{})};
+  if(['browser_read_form','browser_read_table'].includes(name)&&args.url!==undefined)return {error:name+' reads the current selected page; url is not supported. Navigate to the intended URL using browser_navigate, inspect its identity, then read it. Nothing was read or navigated.',recovery:{actionOutcome:'not_executed',safeToRetry:false}};
+  if(['browser_read_form','browser_read_table'].includes(name)){const allowed=name==='browser_read_form'?['target','expected']:['target','offset'];const unknown=Object.keys(args).filter(key=>!allowed.includes(key));if(unknown.length)return {error:'Unknown '+name+' argument '+JSON.stringify(unknown)+'. Supported arguments: '+allowed.join(', ')+'. Nothing was read.',recovery:{actionOutcome:'not_executed',safeToRetry:false}};}
+  if(name==='browser_read_form'){
+    if(args.target!==undefined&&(typeof args.target!=='string'||args.target.length>2000))return {error:'Use an observed form selector'};
+    if(args.expected!==undefined&&(!Array.isArray(args.expected)||args.expected.length>30||Array.from(args.expected).some((value:any)=>typeof value!=='string'||value.length>262144)||args.expected.reduce((n:number,value:string)=>n+value.length,0)>524288))return {error:'Use up to 30 bounded source text checks'};
+    const s=await session(owner,chat);return observedAction(s,name,async()=>{
+      const data:any=parseBrowserJson(checked(await call(s,'browser_evaluate',{function:formCode({target:args.target,expected:args.expected})},15000,signal)));
+      if(data.error)return data;
+      return {...data,textChecks:Array.isArray(args.expected)?args.expected.map((value:string,i:number)=>({sha256:createHash('sha256').update(value).digest('hex'),matched:data.contains?.[i]===true})):undefined,fields:(data.fields||[]).map((field:any)=>{const {value,...rest}=field;return {...rest,characters:value.length,sha256:createHash('sha256').update(value).digest('hex'),...(value.length<=2000?{value}:{preview:value.slice(0,1000),valueTruncated:true})};}),note:'Full field values were read for hashes. Long previews are not full text. These are visible editor values; save and reopen the actual record before claiming persistence.'};
+    });
+  }
   if(name==="browser_scroll"||name==="browser_inspect_scroll_regions"){
     if(args.target!==undefined&&(typeof args.target!=="string"||args.target.length>2000)||['deltaY','deltaX'].some(k=>args[k]!==undefined&&(!Number.isFinite(args[k])||Math.abs(args[k])>2000)))return {error:"Use an observed selector and scroll deltas between -2000 and 2000"};
     const s=await session(owner,chat);
@@ -244,12 +264,13 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
   }
   if(name==="browser_read_snapshot"){const s=await session(owner,chat);if(s.snapshot?.id!==args.snapshotId)throw new Error("Snapshot changed; request a fresh focused snapshot");return pageSlice(s,args.offset);}
   if(!ALLOWED.has(name))throw new Error("Unsupported browser action");
-  if(name==="browser_navigate" || name==="browser_tabs"&&args.url){const url=new URL(text(args.url,"URL",4000));if(!["https:","http:"].includes(url.protocol)||url.username||url.password)throw new Error("Use an HTTP(S) URL without embedded credentials");}
+  if(name==="browser_navigate" || name==="browser_tabs"&&args.url){const problem=navigationProblem(args.url);if(problem)return problem;}
   const filesDir=join(browserDirectory(owner,chat),"files");
   if(name==="browser_file_upload")args=uploadArguments(filesDir,args);
   if(name==="browser_take_screenshot"||name==="browser_snapshot")delete args.filename;
   if(name==="browser_take_screenshot"){args.type="jpeg";args.fullPage=false;}
   if(name==="browser_close"){await closeBrowser(owner,chat);return {content:[{type:"text",text:"Browser closed; saved login retained. Tabs will not reopen until requested."}]};}
+  const preserveExisting=args._preserveExisting===true;args={...args};delete args._preserveExisting;
   const s=await session(owner,chat);
   const schema=s.tools.find(t=>t.name===name)?.inputSchema;
   try{args=browserArguments(schema,args);}catch(error){return {error:(error as Error).message,recovery:{kind:"arguments",actionOutcome:"not_executed",safeToRetry:true,guidance:"No page action ran. Correct the arguments using this installed schema; do not retry guessed shapes or ask the user to perform the action."},inputSchema:schema};}
@@ -266,8 +287,35 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         }
       }
       if(name==="browser_mouse_click_xy"||name==="browser_mouse_drag_xy")if(!s.visionAt||Date.now()-s.visionAt>30000)throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
+      let saveControl=false;
+      if(name==='browser_click'&&(s.unchangedPreservedForm||s.preservedFormChanged)){
+        const evaluated=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Observed save control',target:args.target||args.ref,function:`element => document.forms.length===1&&(element.form||element.closest('form'))===document.forms[0]&&/^(?:save(?: changes)?|update(?: contact|profile|record)?)$/i.test((element.innerText||element.value||element.getAttribute('aria-label')||'').trim())`});
+        saveControl=parseBrowserJson(checked(await call(s,'browser_evaluate',evaluated,15000,signal)))===true;
+        if(preserveExisting&&saveControl&&s.unchangedPreservedForm&&!s.preservedFormChanged){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,submissionSkipped:true,note:'The missing-only fields were already present. This unchanged Save/Update was not submitted; reopen and verify the existing saved state.'};}
+      }
+      const preservedFields:any[]=[];
+      if(preserveExisting&&['browser_fill_form','browser_type'].includes(name)){
+        const fields=name==='browser_fill_form'?args.fields:[{target:args.target||args.ref,value:args.text}];
+        const changed=[];let unambiguousForm=true;
+        for(const field of fields){
+          const evalArgs=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Current visible copy destination',target:field.target||field.ref,function:copyFieldInPage.toString()});
+          const current:any=parseBrowserJson(checked(await call(s,'browser_evaluate',evalArgs,15000,signal)));
+          unambiguousForm&&=current.unambiguousForm===true;
+          if(current.excluded||current.search){changed.push(field);continue;}
+          const value=mergeMissingValue(current.value,String(field.value??''),current.history);
+          preservedFields.push({target:field.target||field.ref,characters:value.length,sha256:createHash('sha256').update(value).digest('hex'),changed:value!==current.value});
+          if(value!==current.value)changed.push({...field,value});
+        }
+        if(!changed.length){s.unchangedPreservedForm=unambiguousForm&&!s.preservedFormChanged;const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,preservedFields,note:'The requested values were already present or existing scalar fields were retained. No field changed. Do not submit an unchanged form.'};}
+        s.preservedFormChanged=true;s.unchangedPreservedForm=false;
+        if(name==='browser_fill_form')args.fields=changed;else args.text=changed[0].value;
+      }
+      // A control click may edit a checkbox or switch editor state. Preserve uncertainty
+      // until navigation rather than suppressing a later required submission.
+      if(!browserRead(name,args)){s.unchangedPreservedForm=false;s.preservedFormChanged=true;}
       preflight=false;
       const result=checked(await call(s,name==="browser_mouse_drag_xy"?"browser_run_code_unsafe":name,name==="browser_mouse_drag_xy"?{code:dragCode({x:args.startX,y:args.startY},{x:args.endX,y:args.endY})}:args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
+      if(saveControl||['browser_navigate','browser_navigate_back','browser_tabs'].includes(name)){s.preservedFormChanged=false;s.unchangedPreservedForm=false;}
       if(name==="browser_mouse_drag_xy"){const gesture=parseBrowserJson(result);if(gesture.error)return {...gesture,recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};}
       if(!browserRead(name,args))canvasObservations.delete(owner+":"+chat);
       if(!browserRead(name,args)){s.visionAt=undefined;s.snapshot=undefined;s.dirty=true;}
@@ -275,7 +323,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       try{remember(s,result,name==="browser_snapshot");}catch{s.saveWarning="The action returned successfully but tab state could not be saved. Inspect the page before repeating any action.";}
       s.lastUsed=Date.now();
       if(s.dirty){if(!s.savedAt || args.submit || name==="browser_press_key"&&/enter/i.test(args.key||""))await checkpoint(s);else deferCheckpoint(s);}
-      return normalized(s,result);
+      return {...normalized(s,result),...(preservedFields.length?{preservedFields,note:'Existing scalar values were retained and literal history was appended only when missing. These hashes describe editor values; save and reopen to verify persistence.'}:{})};
     }catch(e){
       s.failed=true;const message=(e as Error).message;let recovery=recoveryFor(message,preflight);s.visionAt=undefined;
       // A batch may have changed earlier fields before a later target failed.

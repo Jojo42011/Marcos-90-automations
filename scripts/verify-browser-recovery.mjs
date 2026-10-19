@@ -3,7 +3,7 @@ import {mkdtempSync,readFileSync,mkdirSync,rmdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import http from 'node:http';
-import {once} from 'node:events';
+import {once,getEventListeners} from 'node:events';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 process.env.HARVEY_BROWSER_ENABLED='true';
@@ -29,8 +29,19 @@ const txt=r=>JSON.stringify(r);
 try{
  const catalog=await B.browserTools('alice','catalog-only','browser_snapshot');assert.equal(catalog[0].name,'browser_snapshot');assert.equal(await B.browserMetrics('alice','catalog-only'),undefined);
  console.log('ok schema discovery does not allocate a browser session');
+ for(const url of ['file:///private-fixture.csv','data:text/html,fixture','sandbox:/private-sheet.csv','https://fixture-user:fixture-password@example.com/','not-a-url']){
+   const rejected=await B.browserCall('alice','invalid-only','browser_navigate',{url});assert.equal(rejected.recovery.actionOutcome,'not_executed');assert.equal(await B.browserMetrics('alice','invalid-only'),undefined);assert(!txt(rejected).includes('fixture-password'));assert(!txt(rejected).includes('private-fixture'));
+ }
+ console.log('ok invalid navigation is rejected before browser allocation with redacted actionable recovery');
+
  const started=Date.now();let r=await call('browser_navigate',{url:base+'/login'});assert(!r.error,txt(r));
- const baseline=await B.browserMetrics('alice','recovery');
+ let baseline=await B.browserMetrics('alice','recovery');
+ const invalid=await call('browser_navigate',{url:'file:///private-sheet.csv'});assert.equal(invalid.recovery.actionOutcome,'not_executed');assert.match(invalid.error,/URL type/);assert(!/embedded credentials/.test(invalid.error));
+ const retainedPage=await call('browser_snapshot',{target:'h1'});assert.match(txt(retainedPage),/Recovery fixture/);
+ await call('browser_navigate',{url:base+'/second'});assert.match(txt(await call('browser_snapshot',{target:'h1'})),/authenticated/);await call('browser_navigate',{url:base+'/login'});
+ console.log('ok rejected attachment navigation leaves current signed-in browser and cookies intact');
+ baseline=await B.browserMetrics('alice','recovery');
+
  r=await call('browser_snapshot',{target:'#one'});assert(!r.error,txt(r));
  const before=await B.browserMetrics('alice','recovery');
  assert.equal(before.checkpoints,baseline.checkpoints,'Read-only snapshot must not save browser storage');
@@ -91,5 +102,12 @@ try{
  const cards=await B.browserCall('alice','cards','browser_read_table',{});assert.equal(cards.layout,'cards');assert.equal(cards.rows.length,6);assert.equal(cards.rows[0].links[0].title,'Full fixture title 0');assert(cards.rows[0].id.endsWith('/book/0'));assert(!cards.truncated);
  const targetedCards=await B.browserCall('alice','cards','browser_read_table',{target:'article'});assert.equal(targetedCards.rows.length,6);assert.equal(targetedCards.rows[0].title,'Full fixture title 0');
  console.log('ok rendered article cards expose literal full titles, prices and stable profile links without vision');
+ const cancellation=new AbortController();
+ for(let i=0;i<16;i++){await B.browserCall('alice','cards','browser_read_table',{},cancellation.signal);assert.equal(getEventListeners(cancellation.signal,'abort').length,0,'Completed MCP calls must detach from the task signal');}
+ cancellation.abort();await assert.rejects(B.browserCall('alice','cards','browser_read_table',{},cancellation.signal));
+ const pendingCancellation=new AbortController(),pendingStarted=Date.now(),abortPending=setTimeout(()=>pendingCancellation.abort(),100);
+ try{await B.browserCall('alice','cards','browser_wait_for',{text:'Never present in this fixture'},pendingCancellation.signal);}catch{assert(pendingCancellation.signal.aborted);}finally{clearTimeout(abortPending);}
+ assert(pendingCancellation.signal.aborted);assert(Date.now()-pendingStarted<5000,'Cancellation must interrupt an in-flight MCP wait');assert.equal(getEventListeners(pendingCancellation.signal,'abort').length,0);
+ console.log('ok long browser runs release task abort listeners and cancellation still prevents another operation');
  assert.equal(writes,1);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,fixtureWrites:writes}));
 }finally{await B.closeBrowsers();server.closeAllConnections();await new Promise(r=>server.close(r));}

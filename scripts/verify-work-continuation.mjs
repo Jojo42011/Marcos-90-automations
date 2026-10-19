@@ -84,6 +84,17 @@ for(let i=0;i<4;i++){
  await J.executeJob('alice',broken.id,async()=>({speech:'Recovering',continuation:{delaySeconds:10,reason:'Inspect saved progress',recovery:'model_response'},costUsd:.01}));
 }
 assert.equal(S.get('job','alice',broken.id).status,'needs_attention');assert.equal(S.get('job','alice',broken.id).result.failure.kind,'invalid_model_response');
+const progressingChat=S.createChat('alice',{}),progressing=J.enqueueJob('alice',progressingChat.id,{requestId:'progress-between-model-repairs',message:'Extract every remaining profile'});
+for(let i=0;i<6;i++){
+ if(i===2){S.closeStore();J.recoverJobs();}
+ if(i)S.put('job','alice',{...S.get('job','alice',progressing.id),nextRunAt:new Date(0).toISOString()});
+ const observed=new TurnVerification();observed.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/profiles/'+i,text:'Distinct verified profile '+i});
+ await J.executeJob('alice',progressing.id,async()=>({speech:'Recovering after saved profile '+i,continuation:{delaySeconds:10,reason:'Inspect the next distinct profile from saved progress',recovery:'model_response',progressKey:observed.continuationCheckpoint().progressKey},verification:observed.result()}));
+ assert.equal(S.get('job','alice',progressing.id).status,'waiting','Genuine observed progress must not accumulate unrelated model-format failures into a task cutoff');
+}
+S.put('job','alice',{...S.get('job','alice',progressing.id),nextRunAt:new Date(0).toISOString()});await J.executeJob('alice',progressing.id,async()=>({speech:'All profiles verified',verification:{status:'completed'}}));assert.equal(S.get('job','alice',progressing.id).status,'completed');
+const unchangedChat=S.createChat('alice',{}),unchanged=J.enqueueJob('alice',unchangedChat.id,{requestId:'unchanged-model-repairs',message:'Finish source retrieval'});const sameState=new TurnVerification();sameState.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/same',text:'The same unchanged source'});for(let i=0;i<4;i++){if(i)S.put('job','alice',{...S.get('job','alice',unchanged.id),nextRunAt:new Date(0).toISOString()});await J.executeJob('alice',unchanged.id,async()=>({speech:'Recovering unchanged state',continuation:{delaySeconds:10,reason:'No new observation',recovery:'model_response',progressKey:sameState.continuationCheckpoint().progressKey}}));}assert.equal(S.get('job','alice',unchanged.id).status,'needs_attention');assert.equal(S.get('job','alice',unchanged.id).result.failure.kind,'invalid_model_response');
+console.log('ok six distinct observed checkpoints survive separate model repairs; unchanged or missing progress still stops persistent unusable responses');
 console.log('ok 30 batches retain distinct source/destination and job identity without duplicate records; persistent malformed service responses stop after bounded automatic recovery');
 const oldChat=S.createChat('alice',{}),old=J.enqueueJob('alice',oldChat.id,{requestId:'uncapped-age',message:'Finish all remaining profiles'});
 S.put('job','alice',{...S.get('job','alice',old.id),createdAt:new Date(Date.now()-72*60*60_000).toISOString(),continuationCount:1000});
@@ -93,5 +104,16 @@ console.log('ok interactive jobs continue beyond 24 hours and 256 yields without
 const failureChat=S.createChat('alice',{}),failureJob=J.enqueueJob('alice',failureChat.id,{requestId:'tool-diagnostic',message:'Finish source retrieval'});
 await J.executeJob('alice',failureJob.id,async()=>({speech:'Browser disconnected',toolFailure:{code:'browser_disconnected',message:'Selected browser disconnected',detail:'computer/browser_snapshot'}}));
 const toolFailed=S.get('job','alice',failureJob.id);assert.equal(toolFailed.status,'needs_attention');assert.equal(toolFailed.result.failure.kind,'tool_error');assert.equal(toolFailed.result.failure.code,'browser_disconnected');
+const thrownChat=S.createChat('alice',{}),thrownJob=J.enqueueJob('alice',thrownChat.id,{requestId:'thrown-diagnostic',message:'Finish source retrieval'});
+await J.executeJob('alice',thrownJob.id,async(_owner,_chat,_prompt,opts)=>{opts.onEvidence(receipt(true));throw Error('Fixture read timeout at https://user:private-password@example.invalid/record?token=private-token; token=private-secret');});const thrown=S.get('job','alice',thrownJob.id);assert.equal(thrown.status,'needs_attention');assert.equal(thrown.result.failure.kind,'execution_error');assert.match(thrown.result.failure.message,/Fixture read timeout/);assert(!JSON.stringify(thrown.result).includes('private-password'));assert(!JSON.stringify(thrown.result).includes('private-secret'));assert.equal(thrown.result.verification.receipts.length,1);S.closeStore();assert.equal(S.get('job','alice',thrownJob.id).result.failure.kind,'execution_error');const diagnosis=require('../dist/src/harvey/work/failureReport.js').failureReport('alice',thrownChat.id,'What failed?');assert.match(diagnosis,/Fixture read timeout/);assert(!/lazy.loading|earlier login failed/.test(diagnosis));
 console.log('ok saved job retains browser tool failure separately from provider or credit failures');
+const staleChat=S.createChat('alice',{}),oldDiagnostic={id:'old-diagnostic',chatId:staleChat.id,receipts:[{outcome:'failed',tool:'computer',diagnostic:{code:'old_timeout',detail:'computer/browser_snapshot',message:'OLD unrelated timeout'}}]};
+S.put('verification','alice',oldDiagnostic);
+const report=require('../dist/src/harvey/work/failureReport.js').failureReport;
+assert.match(report('alice',staleChat.id,'What failed?'),/OLD unrelated timeout/,'Legacy checkpoint-only failures remain diagnosable');
+S.put('verification','alice',{id:'latest-empty',chatId:staleChat.id,receipts:[]});assert.equal(report('alice',staleChat.id,'What failed?'),undefined,'Empty latest checkpoint cannot revive older failures');
+S.put('job','alice',{id:'new-provider-failure',chatId:staleChat.id,status:'failed',result:{failure:{kind:'provider_error'},text:'Provider failed before any browser calls'}});
+S.put('verification','alice',{...oldDiagnostic,id:'unrelated-later-checkpoint'});
+assert.equal(report('alice',staleChat.id,'What failed?'),undefined,'A saved job without browser receipts cannot borrow another run diagnostics');
+console.log('ok diagnostics do not attribute stale browser errors to a newer provider-only job or empty checkpoint');
 S.closeStore();

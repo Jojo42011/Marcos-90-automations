@@ -55,9 +55,10 @@ export function handoffChat(owner: string, sourceId: string, brief: string): Cha
 export function messages(owner: string, chat: string): Message[] { get("chat", owner, chat); return (workDb().prepare("SELECT body FROM (SELECT seq,body FROM messages WHERE owner=? AND chat=? ORDER BY seq DESC LIMIT 200) ORDER BY seq").all(owner, chat) as any[]).map(r => JSON.parse(r.body)); }
 export function append(owner: string, chatId: string, message: Message) {
   const chat = get<Chat>("chat", owner, chatId);
-  workDb().prepare("INSERT INTO messages(owner,chat,body) VALUES (?,?,?)").run(owner, chatId, JSON.stringify(message));
+  const inserted=workDb().prepare("INSERT INTO messages(owner,chat,body) VALUES (?,?,?)").run(owner, chatId, JSON.stringify(message));
   chat.updatedAt = new Date().toISOString(); if (chat.title === "New chat" && message.role === "user") chat.title = message.content.slice(0, 80);
   put("chat", owner, chat);
+  return Number(inserted.lastInsertRowid);
 }
 export function nextRun(cron: string, tz: string, from = new Date()): string {
   timezone(tz); if (cron.trim().split(/\s+/).length !== 5) throw new Error("Use a five-field cron expression (minute hour day month weekday)");

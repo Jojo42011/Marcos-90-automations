@@ -24,6 +24,11 @@ assert.equal(F.workspaceFiles('alice','files',{includeDiagnostics:true}).files.l
 assert.equal(F.workspaceFiles('alice','files',{includeDiagnostics:true}).nextOffset,20);
 assert(JSON.stringify(F.workspaceFiles('alice','files')).length<12000);
 console.log('ok preserved media aliases, strict chooser arguments, owner/path boundaries and bounded asset listing');
+const quotedCsv='title,upc,price\r\n"Title 😀, with ""quoted"" words\nand a line break",abc,9.00\r\n';
+const csvFile=F.writeWorkspaceFile('alice','text',{file:'quoted.csv',content:quotedCsv});assert.equal(F.readWorkspaceFile('alice','text',{file:'quoted.csv'}).content,quotedCsv);
+for(const bad of ['title,upc,price\nTitle, with comma,abc,9.00','title,upc\n"unclosed,abc','title,upc\n"closed"extra,abc','title,upc\nwrong"quote,abc'])assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'quoted.csv',content:bad,expectedSha256:csvFile.sha256}),/Invalid CSV row/);
+assert.equal(F.readWorkspaceFile('alice','text',{file:'quoted.csv'}).sha256,csvFile.sha256,'Rejected CSV must preserve prior bytes');
+console.log('ok malformed CSV is rejected before saving; quoted commas, quotes, Unicode and multiline fields retain exact bytes');
 const authored=F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"total":375}'});
 assert.equal(F.readWorkspaceFile('alice','text',{file:'report.json'}).content,'{"total":375}');
 assert.equal(F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"total":375}'}).unchanged,true);
@@ -42,10 +47,27 @@ const {TurnVerification}=require('../dist/src/harvey/reliability.js'),review=new
 review.record('workspace_write',{file:'a.md'},{file:'a.md',sha256:'one'});review.record('workspace_write',{file:'b.md'},{file:'b.md',sha256:'two'});
 review.record('workspace_read',{file:'b.md'},{file:'b.md',sha256:'two',content:'b'});
 const completion={status:'completed',evidenceIds:['e3'],checks:['Read files'],limitations:[]};
-assert.throws(()=>review.review(completion),/each authored file/);
-review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/current hash/);
-review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});
+assert.throws(()=>review.review(completion),/latest saved revision of a.md/);assert.throws(()=>review.review({...completion,automaticEvidence:true}),/latest saved revision of a.md/);
+review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/latest saved revision of a.md/);
+review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});assert.equal(review.review({...completion,automaticEvidence:true}).accepted,true);
 console.log('ok every authored artifact requires its own current-hash content read-back');
+const manyFiles=new TurnVerification();for(let i=0;i<250;i++){manyFiles.record('workspace_write',{file:'part-'+i+'.md'},{file:'part-'+i+'.md',sha256:'hash-'+i});manyFiles.record('workspace_read',{file:'part-'+i+'.md'},{file:'part-'+i+'.md',sha256:'hash-'+i,content:'Fixture content'});}
+const manyReview=manyFiles.review({status:'completed',automaticEvidence:true,checks:['Read all 250 authored files at their current hashes'],limitations:[]});assert.equal(manyReview.evidenceCount,250);assert.equal(manyFiles.result().evidenceIds.length,250);assert(manyReview.evidenceIds.length<=20);
+console.log('ok automatic review verifies more than 100 files without a model-managed receipt cap or an oversized reply');
+
+const paged=new TurnVerification(),pagedWrite=F.writeWorkspaceFile('alice','text',{file:'paged.csv',content:'name,history\n'+('Fixture lead,Observed history\n'.repeat(40000))});
+paged.record('workspace_write',{file:'paged.csv'},pagedWrite);
+const firstPage=F.readWorkspaceFile('alice','text',{file:'paged.csv'});paged.record('workspace_read',{file:'paged.csv'},firstPage);
+assert.throws(()=>paged.review({...completion,evidenceIds:['e2']}),/smaller/);
+let offset=firstPage.nextOffset,lastReceipt;
+while(offset!==null){const page=F.readWorkspaceFile('alice','text',{file:'paged.csv',offset});lastReceipt=paged.record('workspace_read',{file:'paged.csv',offset},page);offset=page.nextOffset;}
+assert(paged.result().receipts.length>100);assert.equal(require('../dist/src/harvey/reliability.js').canResumeFromReceipts(paged.result().receipts),true);assert.equal(lastReceipt.completeFileRead,true);assert.equal(paged.review({...completion,evidenceIds:[lastReceipt.id],checks:['Read all source characters at the saved hash']}).accepted,true);
+const gapped=new TurnVerification();gapped.record('workspace_read',{},firstPage);gapped.record('workspace_read',{},F.readWorkspaceFile('alice','text',{file:'paged.csv',offset:10000}));
+assert.throws(()=>gapped.review({...completion,evidenceIds:['e2']}),/smaller/);
+const revised=F.writeWorkspaceFile('alice','text',{file:'paged.csv',content:'changed,'+'x'.repeat(21000),expectedSha256:pagedWrite.sha256});
+const revisionPage=paged.record('workspace_read',{file:'paged.csv'},F.readWorkspaceFile('alice','text',{file:'paged.csv'}));assert(!revisionPage.completeFileRead);assert.throws(()=>paged.review({...completion,evidenceIds:[revisionPage.id]}),/smaller/);
+console.log('ok long file completion requires contiguous source coverage at one hash; gaps and mixed revisions remain incomplete');
+
 assert.equal(F.publicFileLinks('alice','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('bob','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](https://chatgpt.com/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('alice','text','[report]( /api/harvey/work/files/text/report.json )'), '[report](/api/harvey/work/files/text/report.json)');

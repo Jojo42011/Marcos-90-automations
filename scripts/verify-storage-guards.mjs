@@ -60,4 +60,4 @@ try {
   await assert.rejects(()=>smtp.sendViaSmtp({to:'fixture@example.invalid',subject:'Fixture',body:'Fixture'}),/SMTP connection failed/);break;
  }
  }
-} finally {rmSync(root,{recursive:true,force:true});}
+} finally {if(process.argv[2]==='smtp')mod('core/emailStore').getEmailDb().close();rmSync(root,{recursive:true,force:true});}

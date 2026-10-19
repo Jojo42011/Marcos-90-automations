@@ -22,6 +22,71 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Failure explanations use the saved job's own receipts; a newer provider-only failure cannot borrow an older browser error from the same chat. Legacy checkpoint-only diagnostics use the latest checkpoint, including an empty one, rather than reviving earlier failures.
+
+- Model-response continuation recovery carries a native observed-state fingerprint. The saved job counts consecutive format failures without progress rather than accumulating unrelated failures over a long task; unchanged/no-progress failures remain bounded, and uncertain writes remain non-replayable.
+
+- date_only source bindings validate actual month/day and Gregorian leap-year rules before task inputs or exports. Impossible source dates fail explicitly; valid observed calendar dates are retained without timezone shifting or inferred corrections.
+
+- Unchanged-save suppression requires a single unambiguous actual form. A comparison in one form cannot suppress another form's Save; other potentially mutating controls invalidate the comparison rather than hiding pending work. A real Chromium two-form regression reproduces and covers this case.
+
+- Browser history coverage does not force a connector-only transfer through the browser, and numeric count columns are not treated as literal history. Source content-read and connector read-back requirements remain separate.
+
+- Model-created task plans retain the native original-message reference as well as automatically initialized plans. Header-only workbook reads cannot satisfy history-transfer coverage.
+
+- Unchanged Save suppression is scoped to the active missing-only import request; an independently authorized explicit Save is not blocked by stale comparison state.
+
+- A workbook range/cell request without sheet reads the sole worksheet when unambiguous, and returns an actionable error for multi-sheet workbooks. It no longer silently substitutes metadata for a requested content read.
+
+- Unexpected job exceptions retain their sanitized actual error and observed receipts instead of replacing them with a generic interruption. Diagnostic follow-ups use this persisted execution error and never infer a site or login failure.
+
+- Hosted missing-only copy workflows skip an observed Save/Update after a fully unchanged field comparison, while retaining genuinely pending edits across later unchanged field checks. Profile identities cannot be carried across navigation without a fresh observation. Long source-history coverage uses complete source cells and native presence hashes.
+
+- Native form/table reads reject an ignored url argument rather than silently reading the wrong current page. Source-order failures identify the exact missing/ambiguous row and actual saved field names for recovery.
+
+- Native verification retains the original user-message reference across simple continuations, so resuming does not drop source-copy and first-N order requirements. No extra credential copy is stored.
+
+- Workbook history transfers have a native per-source-field coverage check against matching visible email/phone identities and reopened destination state. Distinct imported history cannot be skipped because an old note is populated or a model reviewer approves it. browser_read_form supports source-bound expected-text presence checks for long displayed history without echoing it.
+
+- Local output replacement can bind expectedSha256 from the actual same-file workspace_read receipt when omitted. Explicit version assertions and native on-disk concurrency checks remain authoritative; listings and cross-file hashes cannot supply the version.
+
+- Missing first-N order proof can refresh the single explicitly requested source URL once and provide a current native source binding. This read-only recovery respects uncertain-write checks and avoids searching archives for obsolete receipt IDs.
+
+- Explicit first-N source-order CSV requests require a native orderFrom binding to a complete observed list; export matches existing record identities and follows that source sequence rather than trusting a reviewer or insertion order.
+
+- Source-record exports accept explicit existing keys for exact subset selection and row ordering; corrections no longer require rebuilding collections or rewriting source values. Duplicate/unknown keys are rejected.
+
+- Outcome review excludes private staging collections so abandoned selections cannot contradict current source observations and final saved outputs; native record provenance checks remain unchanged.
+
+- Outcome review treats valid quoted CSV decimals as numeric values and reports only unresolved discrepancies, avoiding false format failures after a correct export.
+
+- Configured outcome review also runs for short resumed segments; first-N completion requires observed source order, rather than trusting a reordered intermediate collection.
+
+- Private source-record checkpoints do not demand separate service read-backs; final CSV exports require their own latest-hash content read, including exports made through work_records.
+
+- Invalid computer envelopes are recorded as unexecuted, allowing safe saved-progress recovery; successful model responses reset consecutive format-repair failures during long workflows.
+
+- Completion verifies the latest authored revision per file, avoiding impossible read-back requirements for superseded drafts; missing current reads name the exact file and hash.
+
+- Configured outcome review uses a separately accounted read-only auxiliary model after native completion checks to compare user scope with actual source and saved-output evidence. The reviewer parser retains actionable structured criticism, treats contradictory passes as failures, and reports exact malformed-field types. Its evidence view separates source inputs, prior page values, current reopened page values and latest file hashes; it must not demand writes to already-correct records or replace missing writes with report edits. The reviewer returns a forced structured verdict without executable tools and sees latest actual post-action snapshots. Failed reviews return concrete corrections; unchanged evidence is cached, external actions are never replayed, and the selected executor stays unchanged. Verified native deliverables receive real owner/chat-scoped download links.
+
+- Harvey missing-only hosted-browser transfers retain existing scalar fields and append literal note/history text once at the tool boundary; repeated pure observations and guarded local file/record/plan checkpoints are allowed while uncertain external writes remain protected. Explicit wrapped browser references normalize to current observed references; harmless worksheet offset zero does not reject a range read. Completion receipt selection is runtime-owned.
+- Harvey exact source transfer: computer sourceValues fills observed workbook/website values directly, complete long-cell pages are joined without model transcription, and work_records exports requested CSV filenames/headers using literal source-backed fields. Visible form hashes support long-text read-back. Independent live QA must pass before merge; no production deployment authorized.
+
+- 2026-10-18: Completion review can gather valid current receipts automatically without a model-managed ID count ceiling; service and file-hash read-back checks use indexed positions rather than repeated receipt scans. It retains source/read-back/hash, approval and scope checks. Explicit invalid IDs still fail. Persistent stalled execution or unaccepted stop can request a metadata-only, read-only recovery consultation once per distinct observed progress state through HARVEY_RECOVERY_MODEL (default Sonnet 4.6), with a $0.05 consultation ceiling inside the existing task budget and separately accounted usage. Model advice exposes the helper policy. The main selected model stays pinned; advice grants no permission and cannot execute/replay actions. User-permitted exclusions are distinguished from unmet requirements.
+
+- 2026-10-18: Real-model candidate QA exposed malformed authored CSV and accumulated MCP abort listeners. CSV writes now reject inconsistent columns and malformed quoting before touching the prior file. Each hosted MCP request uses a detached request signal so the task signal does not accumulate SDK listeners; cancellation still propagates. No tool/time ceiling is introduced.
+
+- 2026-10-18: Public multi-page QA exposed completion repair failures. Missing-field rejections identify the required labels and missing-record counts plus available field labels, without returning contact values. Runtime-refused browser repeats now retain their known not-executed outcome without erasing the last observed page identity; uncertain actions still invalidate it, and automatic completion read-back tries the compact DOM reader when the snapshot is truncated. Partial observations still cannot verify completion; no navigation or uncertain write is retried.
+
+- 2026-10-18: Browser recovery includes the schema of the actual failed operation and rearms after a changed successful browser observation. Repeated unchanged observations, schema discovery and automatic diagnostic snapshots do not rearm recovery. This preserves later recovery in long workflows without replaying uncertain writes; live CRM completion remains unverified.
+
+- 2026-10-18: Native XLSX input support adds workspace_sheet for native owner/chat-scoped workbook inspection, rectangular source ranges and long-cell pagination. Parsed values retain nulls, dates, hyperlinks and explicit formula-cache metadata; nothing is evaluated, uploaded or written back. Cell coverage is scoped by file hash, sheet and cell. The capability map directs uploaded Excel inputs to this route. This addresses the missing reader found in LOOK, not certification of its destination CRM updates.
+
+- 2026-10-18: Paginated workspace reads track contiguous character coverage for the same file and content hash within the current execution. Only a final read with proven complete coverage can support completion while its individual page remains partial. Gaps, mixed revisions, browser truncation and unseen content remain unverified; this removes the impossible single-page read-back requirement for long CSV/text attachments without increasing per-call payloads.
+
+- 2026-10-18: Invalid navigation returns a structured not-executed recovery result before touching the selected browser, distinguishing unsupported/local attachment URLs from credential-bearing URLs without retaining raw values. Hosted and local browsers share this validation. Receipts retain known action outcomes so confirmed unexecuted calls do not poison safe continuation or require a phantom write read-back; unknown writes remain guarded. Unfinished final replies surface the recorded completion rejection and last tool diagnostic instead of the generic verification banner. This does not establish the input or effects of the reported Wesley run without its saved trace.
+
 - 2026-10-17: Final replies turn inline-code names or paths of files actually present in the current owner/chat into authenticated clickable downloads; unknown files and other owners remain unchanged. This closes the live catalog delivery gap after content verification.
 
 - 2026-10-17: Compact DOM replacements now return their own source receipt at the top level, avoiding contradictory truncated evidence identifiers. Rejected completion reviews list eligible current observation IDs with per-file hashes so models can repair citations without repeating writes. Known current-chat download links normalize surrounding Markdown whitespace as well as incorrect hosts. Completion still requires actual source review and saved-content read-back.

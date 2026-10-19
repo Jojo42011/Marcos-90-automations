@@ -22,6 +22,7 @@ swap_size_mb = 1024
   TZ = "America/Chicago"
   HARVEY_BROWSER_ENABLED = "true"
   HARVEY_WORKER_ENABLED = "true"
+  HARVEY_OUTCOME_AUDIT_MODEL = "anthropic/claude-sonnet-4.6"
   HARVEY_SCHEDULE_MODEL = "inception/mercury-2.5"
   HARVEY_PUBLIC_URL = "https://marco-90-automation.fly.dev"
   PORT = "3000"
