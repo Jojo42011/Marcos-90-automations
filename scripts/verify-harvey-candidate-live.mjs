@@ -28,8 +28,8 @@ const server=http.createServer(async(req,res)=>{
 });await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
 const parseCSV=text=>{const rows=[];let row=[],value='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(value);value='';}else if(c==='\n'&&!quoted){row.push(value.replace(/\r$/,''));rows.push(row);row=[];value='';}else value+=c;}if(value||row.length){row.push(value);rows.push(row);}return rows;};
 const decode=s=>s.replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,'&');
-const onlyCrm=process.env.HARVEY_QA_CASE==='crm';
-assert(!process.env.HARVEY_QA_CASE||onlyCrm,'Unknown QA case');
+const onlyCrm=process.env.HARVEY_QA_CASE==='crm',onlyBooks=process.env.HARVEY_QA_CASE==='books';
+assert(!process.env.HARVEY_QA_CASE||onlyCrm||onlyBooks,'Unknown QA case');
 const home=onlyCrm?'':await(await fetch('https://books.toscrape.com/')).text(),expectedBooks=[];
 for(const [,href,title]of [...home.matchAll(/<h3>\s*<a href="([^"]+)" title="([^"]+)"/g)].slice(0,10)){
  const page=await(await fetch(new URL(href,'https://books.toscrape.com/'))).text(),upc=page.match(/<th>UPC<\/th><td>([^<]+)<\/td>/)?.[1],price=page.match(/<th>Price \(incl\. tax\)<\/th><td>[^\d]*(\d+\.\d+)<\/td>/)?.[1];assert(upc&&price,'Independent public source parser failed');expectedBooks.push([decode(title),upc,price]);
@@ -56,11 +56,12 @@ try{
  const sourceFacts={role:'source',tool:'workspace_sheet',data:{headers:['Name','Email','Notes','Due','Relationship'],rows:[['Fixture 1','fixture1@example.invalid','Imported history 1','2026-11-10','Sibling: Test 1'],['Fixture 2','fixture2@example.invalid','Imported history 2','2026-11-11','Sibling: Test 2']]}};
  const page=(id,notes)=>({role:'current_page',tool:'computer',operation:'browser_read_form',url:'https://fixture.invalid/people/'+id,reopenedFromServer:true,editorChangedAfterReopen:false,data:{email:'fixture'+id+'@example.invalid',fields:[{label:'Notes',value:notes},{label:'Task due date',value:id===1?'2026-11-10':'2026-11-11'},{label:'Relationship',value:'Sibling: Test '+id}]}});
  const original={role:'previous_page_state_before_edit',tool:'computer',url:'https://fixture.invalid/people/2',data:{email:'fixture2@example.invalid',fields:[{label:'Notes',value:'Keep prior history'},{label:'Task due date',value:''},{label:'Relationship',value:''}]}};
- await checkReview('outcome-existing-correct-state-needs-no-save-preflight',goal,[sourceFacts,original,page(1,'Imported history 1'),page(2,'Keep prior history\nImported history 2'),{role:'current_file',tool:'workspace_read',data:{file:'report.md',content:'Both contacts match the source. Existing history retained; missing history, dates and relationships are present.',sha256:'actual-current-hash',download:'/api/harvey/work/files/fixture/report.md'}}],true);
- await checkReview('outcome-distinct-history-required-preflight',goal,[sourceFacts,original,page(1,'Imported history 1'),page(2,'Keep prior history'),{role:'current_file',tool:'workspace_read',data:{file:'report.md',content:'Contact 1 matches. Contact 2 still lacks Imported history 2; existing history retained. Task is partial.',sha256:'actual-current-hash',download:'/api/harvey/work/files/fixture/report.md'}}],false);
+ if(!onlyBooks)await checkReview('outcome-existing-correct-state-needs-no-save-preflight',goal,[sourceFacts,original,page(1,'Imported history 1'),page(2,'Keep prior history\nImported history 2'),{role:'current_file',tool:'workspace_read',data:{file:'report.md',content:'Both contacts match the source. Existing history retained; missing history, dates and relationships are present.',sha256:'actual-current-hash',download:'/api/harvey/work/files/fixture/report.md'}}],true);
+ if(!onlyBooks)await checkReview('outcome-distinct-history-required-preflight',goal,[sourceFacts,original,page(1,'Imported history 1'),page(2,'Keep prior history'),{role:'current_file',tool:'workspace_read',data:{file:'report.md',content:'Contact 1 matches. Contact 2 still lacks Imported history 2; existing history retained. Task is partial.',sha256:'actual-current-hash',download:'/api/harvey/work/files/fixture/report.md'}}],false);
 
  await checkReview('outcome-quoted-decimals-preflight','Export these two source products in order as CSV with title,upc,price; price as decimal number.',[{role:'source_table_in_observed_order',data:{rows:[{title:'One',upc:'001',price:'£51.77'},{title:'Two',upc:'002',price:'£22.60'}]}},{role:'current_file',data:{file:'books.csv',content:'"title","upc","price"\n"One","001","51.77"\n"Two","002","22.60"'}}],true);
  for(const model of ['inception/mercury-2.5','~openai/gpt-luna-latest']){
+  if(!onlyBooks){
   records=source.map((r,i)=>({...r,notes:i===0?r.notes:i===1?'Keep prior history':'',due:i===0?r.due:'',relationship:i===0?r.relationship:''}));writes=0;writtenIds=new Set();
   const chat=S.createChat('candidate-qa',{mode:'work',model});
   const book=new Excel.Workbook(),sheet=book.addWorksheet('Leads');sheet.addRows([['Name','Email','Notes','Task due date','Relationship'],...source.map(r=>[r.name,r.email,r.notes,r.due,r.relationship]),['Fixture Same',null,'Ambiguous history: do not assign',null,null]]);await book.xlsx.writeFile(join(F.filesDir('candidate-qa',chat.id),'source.xlsx'));
@@ -74,6 +75,7 @@ try{
    const out={model,test:'xlsx-to-authenticated-synthetic-crm',status:'passed',verifiedContacts:5,ambiguousRowsUntouched:1,initialWrites:writes,rerunWrites:0};outcomes.push(out);console.log('CANDIDATE_PASS '+JSON.stringify(out));
   }catch(e){failed++;console.log('CANDIDATE_FAIL '+JSON.stringify({model,test:'xlsx-to-authenticated-synthetic-crm',error:e.message,writes,independentDestination:{matchingNotes:records.filter(r=>r.notes.includes(source.find(s=>s.id===r.id).notes)).length,matchingDates:records.filter(r=>r.due===source.find(s=>s.id===r.id).due).length,matchingRelationships:records.filter(r=>r.relationship===source.find(s=>s.id===r.id).relationship).length,preservedPrior:records[1].notes.includes('Keep prior history'),alreadyCorrectProfileRewritten:writtenIds.has('1')}}));}
   finally{await B.closeBrowsers();}
+  }
   if(onlyCrm)continue;
   const browserChat=S.createChat('candidate-qa',{mode:'work',model});
   try{
