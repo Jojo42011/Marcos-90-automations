@@ -23,6 +23,9 @@ console.log('ok ended response stream retrieves the saved final answer without r
 
 const inline=source.slice(source.indexOf('  function mdInline('),source.indexOf('  function isTableSep('));vm.runInContext(inline,context);
 assert(context.mdInline('[clip](/api/harvey/work/files/chat/edited.mp4)').includes('href="/api/harvey/work/files/chat/edited.mp4"'));
+context.esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+assert(context.mdInline('[report](< /api/harvey/work/files/chat/invoices.csv >)').includes('href="/api/harvey/work/files/chat/invoices.csv"'));
+assert(!context.mdInline('[bad](< javascript:alert(1) >)').includes('<a '));
 assert(!context.mdInline('[bad](javascript:alert(1))').includes('<a '));assert(!context.mdInline('[bad](//evil.example/file)').includes('<a '));
 const linkSource=readFileSync('dist/src/harvey/work/files.js','utf8');const linkContext={Map,files:()=>[{path:'/data/harvey-work/browsers/own/files/clip.mp4',download:'/api/harvey/work/files/chat/clip.mp4'}]};vm.createContext(linkContext);vm.runInContext(linkSource.slice(linkSource.indexOf('function publicFileLinks(')),linkContext);
 assert.equal(linkContext.publicFileLinks('owner','chat','[clip](/workspace/harvey-work/browsers/own/files/clip.mp4)'),'[clip](/api/harvey/work/files/chat/clip.mp4)');
