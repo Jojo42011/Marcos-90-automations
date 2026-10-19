@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Referential resumes such as “finish the existing task against the original first ten” retain the original numeric count, file and source-order checks. Merely repeating “first” no longer replaces the task with a weaker follow-up sentence; explicit count/filter corrections still use the current request.
+
 - Source-order export mismatches return the specific unmatched observed rows and original evidence references as a repair list, without writing an incomplete file. This lets recovery retrieve missing records or repair null fields while preserving already verified records; exact source-order matching still gates export.
 
 - Invalid work_records saves now return real current observation IDs and bounded readable JSON-pointer paths, without source values or guessed field mappings. Repair can discover the actual source shape; native source/coverage checks still decide what can be saved.

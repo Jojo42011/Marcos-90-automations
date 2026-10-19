@@ -13,6 +13,14 @@ export function taskFollowup(message:string):boolean {
   return executionRequest(message)&&(confirmedConnection||/^\s*(?:(?:yes|ok|okay)[,.!]?\s*)?(?:continue|conitnue|contine|resume|finish|keep going|go ahead|do it|(?:oh[, ]+)?(?:i meant|actually)|(?:please\s+)?(?:exclude|include|skip))\b/i.test(message)||message.length<300&&/\b(?:try again|retry|pick up where you left off|do whatever you can|(?:authorize|connect).{0,60}(?:then|and).{0,30}(?:do|finish|continue))\b/i.test(message));
 }
 
+/** Referring to the original first-N selection is not a new, weaker task. */
+export function resumedTaskGoal(message:string,original:string):string {
+  const count=/\bfirst\s+(\d+)\b/i.exec(message),prior=/\bfirst\s+(\d+)\b/i.exec(original);
+  const reference=/\b(?:original|existing|same)\b/i.test(message);
+  const changed=/\b(?:actually|instead|exclude|include|skip|change|only)\b/i.test(message)||/\bfirst\b/i.test(message)&&(!reference||!!count&&count[1]!==prior?.[1]);
+  return changed?message:original;
+}
+
 export function segmentLimit(reason:string):boolean {
   return /\b(?:turn|step|execution) (?:budget|limit)|\bfinal round\b/i.test(reason) && !/\b(?:24.hour|256|monthly|credits|provider|rate limit)\b/i.test(reason);
 }
