@@ -678,8 +678,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const result={error:'Tool is not available in this mode. Use the current capability list; no operation ran.',recovery:{kind:'capability',actionOutcome:'not_executed',safeToRetry:false}};
       const receipt=verification.record(name,input,result);receipt.actionOutcome='not_executed';opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};
     }
+    const sourceValuePage=copiedValues.length?verification.browserPage()?.url:undefined;
     let result = await executeTool(name, input);
-    if(copiedValues.length&&result&&typeof result==='object')result={...(result as any),sourceValueBindings:copiedValues,sourceValueNote:'These hashes describe the literal input passed to the tool, not saved-state proof. Save and reopen the record, then compare browser_read_form field hashes to verify persistence.'};
+    if(copiedValues.length&&result&&typeof result==='object')result={...(result as any),sourceValueBindings:copiedValues,sourceValuePage,sourceValueNote:'These hashes describe the literal input passed to the tool, not saved-state proof. Save and reopen the record, then compare browser_read_form field hashes to verify persistence.'};
     if(name==='computer'&&input.action==='call'&&!isObservation(name,input))assistedVisionAt=0;
     if (!opts.workRuntime) return result;
     if(result && typeof result==="object" && (result as any)._image && !opts.modelOverride){
