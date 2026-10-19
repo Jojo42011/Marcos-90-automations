@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 
 const root = resolve("dist/src");
 const env = { OPENROUTER_API_KEY: "fixture", ANTHROPIC_API_KEY: "fixture" };
@@ -56,6 +57,7 @@ const store = {
   unlockChat: (_owner,_id,k) => locks.delete(k)
 };
 const runtime = load("harvey/work/runtime.js", {
+  "../reliability.js":createRequire(import.meta.url)(resolve(root,"harvey/reliability.js")),
   "./spreadsheet.js":{readWorkspaceSheet:()=>{throw Error("Credential settings must not read workbook files");}},
   "./localBrowser.js":{localBrowserSelected:()=>false},
   "./capabilities.js":load("harvey/work/capabilities.js"), "./modelAdvice.js":{}, "./records.js":{}, "./execution.js":load("harvey/work/execution.js"),
