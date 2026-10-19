@@ -269,6 +269,11 @@ export class TurnVerification {
     const details=[rejection?`Completion check: ${rejection.diagnostic!.message}`:'No completion review was accepted after the latest operations.',failure?`Last recorded tool error: ${failure.diagnostic!.message}`:''];
     return details.filter(Boolean).join(' ');
   }
+  observedFileRevision(file:unknown):string|undefined{
+    if(typeof file!=='string')return undefined;
+    for(const receipt of [...this.receipts].reverse())if(receipt.tool==='workspace_read'&&receipt.outcome==='returned'){const source:any=this.sources.get(receipt.id);if(source?.file===file&&typeof source.sha256==='string')return source.sha256;}
+    return undefined;
+  }
   sourceOrderValues(order:any,expectedCount?:number){
     const receipt=this.receipts.find(r=>r.id===order?.evidenceId);
     if(!receipt||!['computer','workspace_sheet','inspect_screen','business_call','plugin_request','COMPOSIO_MULTI_EXECUTE_TOOL'].includes(receipt.tool))throw Error('Bind source order to an actual browser, workbook or connector observation, not a saved staging collection or authored file.');

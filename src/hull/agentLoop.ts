@@ -550,6 +550,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   const requestedSourceOrder=orderedCount&&orderedFile&&/\b(?:homepage|source|listed|original)\s+order\b/i.test(opts.message)?Number(orderedCount[1]):undefined;
   const outcomeReviews=new Map<string,{passed:boolean;issues:string[]}>();
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
+    if(opts.workRuntime&&(name==='workspace_write'||name==='work_records'&&input.action==='export')&&input.expectedSha256===undefined){const revision=verification.observedFileRevision(input.file);if(revision)input={...input,expectedSha256:revision};}
     const copiedValues:any[]=[];
     const copyTask=/\b(?:reconcil\w*|copy|transfer|import\w*|missing information|missing data)\b/i.test(opts.message)&&! /\b(?:summari\w*|rewrite|translate|compose|draft)\b/i.test(opts.message);
     const extractedCsv=/\b(?:collect|extract|export|scrape|take the first)\b/i.test(opts.message)&&verification.hasBrowserInput();

@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Local output replacement can bind expectedSha256 from the actual same-file workspace_read receipt when omitted. Explicit version assertions and native on-disk concurrency checks remain authoritative; listings and cross-file hashes cannot supply the version.
+
 - Missing first-N order proof can refresh the single explicitly requested source URL once and provide a current native source binding. This read-only recovery respects uncertain-write checks and avoids searching archives for obsolete receipt IDs.
 
 - Explicit first-N source-order CSV requests require a native orderFrom binding to a complete observed list; export matches existing record identities and follows that source sequence rather than trusting a reviewer or insertion order.
