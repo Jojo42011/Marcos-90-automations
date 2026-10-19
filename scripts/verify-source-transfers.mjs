@@ -67,6 +67,7 @@ const ordered=v.record('computer',{action:'call',tool:'browser_read_table'},{row
 R.workRecords('fixture',chat.id,{action:'save',collection:'order',_verifiedRecords:v.projectRecords([0,1].map(i=>({evidenceId:ordered.id,idPath:'/rows/'+i+'/id',fieldPaths:{name:'/rows/'+i+'/name'}})))});
 const orderedExport=R.workRecords('fixture',chat.id,{action:'export',collection:'order',order:'saved',includeSourceId:false});
 assert.equal(readFileSync(F.filePath('fixture',chat.id,orderedExport.file),'utf8'),'\uFEFF"name"\r\n"First observed"\r\n"Second observed"\r\n');
+const explicitOrder=R.workRecords('fixture',chat.id,{action:'export',collection:'order',keys:['a','z'],includeSourceId:false});assert.equal(readFileSync(F.filePath('fixture',chat.id,explicitOrder.file),'utf8'),'\uFEFF"name"\r\n"Second observed"\r\n"First observed"\r\n');const subset=R.workRecords('fixture',chat.id,{action:'export',collection:'order',keys:['z'],includeSourceId:false});assert.equal(subset.rows,1);for(const keys of [['a','a'],['unknown'],[]])assert.throws(()=>R.workRecords('fixture',chat.id,{action:'export',collection:'order',keys}),/unique existing record keys/);
 assert.equal(formatSourceValue({type:'excel_date',value:'2026-11-19T00:00:00Z'},'date_only'),'2026-11-19');
 assert.throws(()=>formatSourceValue('next Friday','date_only'),/explicit ISO/);
 assert.throws(()=>formatSourceValue('£51.777','decimal_currency'),/no rounding/);

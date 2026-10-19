@@ -11,7 +11,12 @@ export function workRecords(owner:string,chatId:string,input:any) {
   const collection=text(input.collection,"Collection",80);
   const rows=()=>list<any>("work_record",owner).filter(r=>r.chatId===chatId&&r.collection===collection);
   if(input.action==="export"){
-    const all=rows().sort(input.order==='saved'?(a,b)=>(a.sourceOrder??0)-(b.sourceOrder??0):(a,b)=>a.key.localeCompare(b.key));
+    let all=rows().sort(input.order==='saved'?(a,b)=>(a.sourceOrder??0)-(b.sourceOrder??0):(a,b)=>a.key.localeCompare(b.key));
+    if(input.keys!==undefined){
+      const byKey=new Map(all.map(r=>[r.key,r]));
+      if(!Array.isArray(input.keys)||!input.keys.length||input.keys.length>10000||new Set(input.keys).size!==input.keys.length||input.keys.some((key:any)=>typeof key!=='string'||!byKey.has(key)))throw Error('Export keys must be unique existing record keys in the exact requested output order; list the saved collection and use its actual keys.');
+      all=input.keys.map((key:string)=>byKey.get(key)!);
+    }
     if(!all.length)throw Error("No saved records in this collection. Retrieve and save the requested data first.");
     const requested=input.columns??[...new Set(all.flatMap(r=>Object.keys(r.fields)))];
     if(!Array.isArray(requested)||!requested.length||requested.length>200)throw Error('Use 1–200 saved fields as columns');

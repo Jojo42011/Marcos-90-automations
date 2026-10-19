@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Source-record exports accept explicit existing keys for exact subset selection and row ordering; corrections no longer require rebuilding collections or rewriting source values. Duplicate/unknown keys are rejected.
+
 - Outcome review excludes private staging collections so abandoned selections cannot contradict current source observations and final saved outputs; native record provenance checks remain unchanged.
 
 - Outcome review treats valid quoted CSV decimals as numeric values and reports only unresolved discrepancies, avoiding false format failures after a correct export.
