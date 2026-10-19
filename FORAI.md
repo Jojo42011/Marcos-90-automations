@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Native form/table reads reject an ignored url argument rather than silently reading the wrong current page. Source-order failures identify the exact missing/ambiguous row and actual saved field names for recovery.
+
 - Native verification retains the original user-message reference across simple continuations, so resuming does not drop source-copy and first-N order requirements. No extra credential copy is stored.
 
 - Workbook history transfers have a native per-source-field coverage check against matching visible email/phone identities and reopened destination state. Distinct imported history cannot be skipped because an old note is populated or a model reviewer approves it. browser_read_form supports source-bound expected-text presence checks for long displayed history without echoing it.

@@ -13,7 +13,7 @@ export function workRecords(owner:string,chatId:string,input:any) {
   if(input.action==="export"){
     let all=rows().sort(input.order==='saved'?(a,b)=>(a.sourceOrder??0)-(b.sourceOrder??0):(a,b)=>a.key.localeCompare(b.key));
     if(input._orderValues){
-      all=input._orderValues.map((value:any)=>{const matches=all.filter(r=>input._orderField?r.fields[input._orderField]===value:r.key===value);if(matches.length!==1)throw Error('Each observed source-order value must match exactly one saved record; retrieve missing records or use an unambiguous identity field.');return matches[0];});
+      all=input._orderValues.map((value:any,index:number)=>{const matches=all.filter(r=>input._orderField?r.fields[input._orderField]===value:r.key===value);if(matches.length!==1)throw Error('Source-order row '+(index+1)+' matched '+matches.length+' saved records using '+(input._orderField?'field '+JSON.stringify(input._orderField):'record key')+'. Read that source row and compare with work_records list. Saved fields: '+JSON.stringify([...new Set(all.flatMap(r=>Object.keys(r.fields)))])+'; retrieve missing records or bind an unambiguous actual saved field.');return matches[0];});
       if(new Set(all.map(r=>r.key)).size!==all.length)throw Error('Observed source order contains duplicate record identities.');
     }
     if(input.keys!==undefined){
