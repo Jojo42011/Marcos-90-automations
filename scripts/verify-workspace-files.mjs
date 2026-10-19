@@ -47,8 +47,8 @@ const {TurnVerification}=require('../dist/src/harvey/reliability.js'),review=new
 review.record('workspace_write',{file:'a.md'},{file:'a.md',sha256:'one'});review.record('workspace_write',{file:'b.md'},{file:'b.md',sha256:'two'});
 review.record('workspace_read',{file:'b.md'},{file:'b.md',sha256:'two',content:'b'});
 const completion={status:'completed',evidenceIds:['e3'],checks:['Read files'],limitations:[]};
-assert.throws(()=>review.review(completion),/each authored file/);assert.throws(()=>review.review({...completion,automaticEvidence:true}),/each authored file/);
-review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/current hash/);
+assert.throws(()=>review.review(completion),/latest saved revision of a.md/);assert.throws(()=>review.review({...completion,automaticEvidence:true}),/latest saved revision of a.md/);
+review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'stale',content:'a'});assert.throws(()=>review.review({...completion,evidenceIds:['e3','e4']}),/latest saved revision of a.md/);
 review.record('workspace_read',{file:'a.md'},{file:'a.md',sha256:'one',content:'a'});review.review({...completion,evidenceIds:['e3','e5']});assert.equal(review.review({...completion,automaticEvidence:true}).accepted,true);
 console.log('ok every authored artifact requires its own current-hash content read-back');
 const manyFiles=new TurnVerification();for(let i=0;i<250;i++){manyFiles.record('workspace_write',{file:'part-'+i+'.md'},{file:'part-'+i+'.md',sha256:'hash-'+i});manyFiles.record('workspace_read',{file:'part-'+i+'.md'},{file:'part-'+i+'.md',sha256:'hash-'+i,content:'Fixture content'});}
