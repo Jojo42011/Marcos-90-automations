@@ -125,6 +125,9 @@ try{
  const locationProof=new (require(join(root,'harvey/reliability.js')).TurnVerification)();
  locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=details'});const before=locationProof.browserLocation();
  locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=notes#changed'});assert.equal(locationProof.browserLocation(),before,'Query/hash changes must not permit a duplicate write');
+ locationProof.record('computer',{action:'call',tool:'browser_click'},{error:'REPEATED CALL REFUSED',recovery:{kind:'repeat_refused',actionOutcome:'not_executed',safeToRetry:false}});assert.equal(locationProof.browserLocation(),before,'A known unexecuted call cannot erase observed page identity');
+ locationProof.record('computer',{action:'call',tool:'browser_click'},{error:'Connection lost after submission'});assert.equal(locationProof.browserLocation(),undefined,'An uncertain write still invalidates prior page identity');
+
  console.log('ok identical profile controls work across observed URLs while same-page replay stays refused');
  mode='recovery_episodes';round=0;let episode=0,diagnosticSnapshots=0,clickSchemas=0,attempts=0;
  const episodes=await runAgentLoop({message:'Inspect and finish the fixture',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async(name,input)=>{

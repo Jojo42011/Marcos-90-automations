@@ -483,7 +483,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     // Same-page repeats (including uncertain submissions) remain refused.
     const pageScope=opts.workRuntime&&name==='computer'&&!read?verification.browserLocation():undefined;
     const operation=signature(name,input);
-    if(opts.workRuntime&&name==='computer'&&!read&&!pageScope&&scopedBrowserActions.has(operation))return {error:'The current page identity is unknown after the last operation. Inspect a fresh page before considering this action again; no action was replayed.'};
+    if(opts.workRuntime&&name==='computer'&&!read&&!pageScope&&scopedBrowserActions.has(operation))return {error:'The current page identity is unknown after the last operation. Inspect a fresh page before considering this action again; no action was replayed.',recovery:{kind:'page_identity',actionOutcome:'not_executed',safeToRetry:false}};
     if(pageScope)scopedBrowserActions.add(operation);
     if(opts.workRuntime&&name==='computer'&&!read&&!pageScope)unscopedBrowserActions.add(operation);
     const sig = operation + (pageScope&&!unscopedBrowserActions.has(operation)?':'+pageScope:'') + (scrolling?":"+scrollCheckpoint!.progressKey:"") + (opts.workRuntime && read ? `:${observationRevision}` : "");
@@ -503,7 +503,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
     if (opts.workRuntime) {
       if (!opts.workRuntime.tools.some(t => t.name === name)) return { error: "Tool is not available in this mode" };
-      if(name==="computer" && /^browser_mouse_(click|drag)_xy$/.test(String(input.tool)) && getModelInfo(lastModelUsed)?.supportsVision===false&&Date.now()-assistedVisionAt>30000)return {error:"This selected model cannot see screenshots. Use observed semantic targets or inspect_screen for a fresh assisted visual observation before coordinate actions. No coordinate action was executed."};
+      if(name==="computer" && /^browser_mouse_(click|drag)_xy$/.test(String(input.tool)) && getModelInfo(lastModelUsed)?.supportsVision===false&&Date.now()-assistedVisionAt>30000)return {error:"This selected model cannot see screenshots. Use observed semantic targets or inspect_screen for a fresh assisted visual observation before coordinate actions. No coordinate action was executed.",recovery:{kind:"visual_observation",actionOutcome:"not_executed",safeToRetry:false}};
       opts.onEvent?.({ type: "tool", name, status: "running" });
       try { const result = await opts.workRuntime.execute(name, input);
         safeBrowserRetry.delete(sig);

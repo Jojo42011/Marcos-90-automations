@@ -89,7 +89,7 @@ export class TurnVerification {
   private report?: Omit<Verification, "receipts" | "basis">;
   browserPage():{url:string;observedAt:string}|undefined {
     for(const r of [...this.receipts].reverse()){
-      if(r.tool!=='computer'||r.discovery)continue;
+      if(r.tool!=='computer'||r.discovery||r.actionOutcome==='not_executed')continue;
       if(r.outcome!=='returned')return undefined;
       const source:any=this.sources.get(r.id);
       const raw=Array.isArray(source?.content)?source.content.filter((c:any)=>c.type==='text').map((c:any)=>c.text).join('\n'):'';
