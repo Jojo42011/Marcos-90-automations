@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Private source-record checkpoints do not demand separate service read-backs; final CSV exports require their own latest-hash content read, including exports made through work_records.
+
 - Invalid computer envelopes are recorded as unexecuted, allowing safe saved-progress recovery; successful model responses reset consecutive format-repair failures during long workflows.
 
 - Completion verifies the latest authored revision per file, avoiding impossible read-back requirements for superseded drafts; missing current reads name the exact file and hash.

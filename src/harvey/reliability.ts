@@ -302,11 +302,11 @@ export class TurnVerification {
         }
       }
       const latestFileWrite=new Map<string,number>();
-      for(const [index,receipt] of this.receipts.entries())if(receipt.tool==='workspace_write'&&receipt.actionOutcome!=='not_executed'){const file:any=this.sources.get(receipt.id);if(file?.file)latestFileWrite.set(file.file,index);}
+      for(const [index,receipt] of this.receipts.entries())if((receipt.tool==='workspace_write'||receipt.tool==='work_records'&&receipt.scope==='files')&&receipt.actionOutcome!=='not_executed'){const file:any=this.sources.get(receipt.id);if(file?.file)latestFileWrite.set(file.file,index);}
       for(const [index,action] of this.receipts.entries()){
-        if(action.observation||action.discovery||action.actionOutcome==='not_executed'||['task_plan','continuity'].includes(action.tool))continue;
+        if(action.observation||action.discovery||action.actionOutcome==='not_executed'||['task_plan','continuity'].includes(action.tool)||action.tool==='work_records'&&action.scope!=='files')continue;
         if((latestRead.get(action.scope)??-1)<=index)throw new Error(`Read back each affected service after its action before claiming completion. Missing ${action.scope} observation after ${action.tool} (${action.id}). For browser use computer browser_snapshot or inspect_screen and cite that receipt; for saved text use workspace_read for the affected file.`);
-        if(action.tool==='workspace_write'){
+        if(action.tool==='workspace_write'||action.tool==='work_records'&&action.scope==='files'){
           const file:any=this.sources.get(action.id);
           if(file?.sha256&&latestFileWrite.get(file.file)===index&&(fileRead.get(JSON.stringify([file.file,file.sha256]))??-1)<=index)throw Error(`Read back the latest saved revision of ${file.file} (${file.sha256}) with workspace_read before completion; reading another file or listing metadata is insufficient.`);
         }
