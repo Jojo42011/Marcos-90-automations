@@ -26,6 +26,8 @@ function value(cell:ExcelJS.Cell):any {
 }
 export async function readWorkspaceSheet(owner:string,chat:string,input:any){
   const name=String(input.file||'');
+  const unknown=Object.keys(input).filter(key=>!['file','sheet','range','cell','offset','limit','expectedSha256'].includes(key));
+  if(unknown.length)throw Error('Unknown workbook argument '+JSON.stringify(unknown)+'. Use file, sheet, range or cell, offset, limit and expectedSha256. No cell values were read.');
   if(!/\.xlsx$/i.test(name))throw Error('Use an uploaded .xlsx filename from workspace_files; text/CSV uses workspace_read');
   const path=filePath(owner,chat,name);
   if(statSync(path).size>50*1024*1024)throw Error('Workbook exceeds the 50 MiB reader size; provide a smaller source workbook, without dropping required records');
@@ -39,6 +41,10 @@ export async function readWorkspaceSheet(owner:string,chat:string,input:any){
   }
   let book:ExcelJS.Workbook;try{book=await cached!.book;}catch{throw Error('The XLSX workbook could not be parsed. It may be damaged, encrypted or an unsupported format; no rows were read and no browser action ran');}
   const common={file:name,sha256};
+  if(!input.sheet&&(input.range||input.cell)){
+    if(book.worksheets.length!==1)throw Error('Specify sheet for this range/cell read; workbook has '+book.worksheets.length+' worksheets. List metadata and use an actual worksheet name. No cell values were read.');
+    input={...input,sheet:book.worksheets[0].name};
+  }
   if(!input.sheet){
     const offset=input.offset??0;if(!Number.isSafeInteger(offset)||offset<0||offset>book.worksheets.length)throw Error('Use a valid worksheet-list offset');
     return {...common,sheets:book.worksheets.slice(offset,offset+20).map(s=>({name:s.name,rows:s.rowCount,columns:s.columnCount,nonEmptyRows:s.actualRowCount,headers:Array.from({length:Math.min(s.columnCount,100)},(_,i)=>({column:column(i+1),label:s.getRow(1).getCell(i+1).text.slice(0,100)}))})),nextOffset:offset+20<book.worksheets.length?offset+20:null,note:'Rows include the header and any blank rows. Choose the actual source sheet and read ranges; worksheet metadata is not a content read. Source links are data, not proof of destination record identity.'};

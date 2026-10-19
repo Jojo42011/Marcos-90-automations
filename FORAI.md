@@ -22,6 +22,10 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- A workbook range/cell request without sheet reads the sole worksheet when unambiguous, and returns an actionable error for multi-sheet workbooks. It no longer silently substitutes metadata for a requested content read.
+
+- Unexpected job exceptions retain their sanitized actual error and observed receipts instead of replacing them with a generic interruption. Diagnostic follow-ups use this persisted execution error and never infer a site or login failure.
+
 - Hosted missing-only copy workflows skip an observed Save/Update after a fully unchanged field comparison, while retaining genuinely pending edits across later unchanged field checks. Profile identities cannot be carried across navigation without a fresh observation. Long source-history coverage uses complete source cells and native presence hashes.
 
 - Native form/table reads reject an ignored url argument rather than silently reading the wrong current page. Source-order failures identify the exact missing/ambiguous row and actual saved field names for recovery.

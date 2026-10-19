@@ -201,9 +201,10 @@ export function validateActionReferences(snapshot:string,args:any){
 export async function browserCall(owner:string,chat:string,name:string,args:any,signal?:AbortSignal):Promise<any>{
   signal?.throwIfAborted();args={...(args||{})};
   if(['browser_read_form','browser_read_table'].includes(name)&&args.url!==undefined)return {error:name+' reads the current selected page; url is not supported. Navigate to the intended URL using browser_navigate, inspect its identity, then read it. Nothing was read or navigated.',recovery:{actionOutcome:'not_executed',safeToRetry:false}};
+  if(['browser_read_form','browser_read_table'].includes(name)){const allowed=name==='browser_read_form'?['target','expected']:['target','offset'];const unknown=Object.keys(args).filter(key=>!allowed.includes(key));if(unknown.length)return {error:'Unknown '+name+' argument '+JSON.stringify(unknown)+'. Supported arguments: '+allowed.join(', ')+'. Nothing was read.',recovery:{actionOutcome:'not_executed',safeToRetry:false}};}
   if(name==='browser_read_form'){
     if(args.target!==undefined&&(typeof args.target!=='string'||args.target.length>2000))return {error:'Use an observed form selector'};
-    if(args.expected!==undefined&&(!Array.isArray(args.expected)||args.expected.length>30||Array.from(args.expected).some((value:any)=>typeof value!=='string')||args.expected.reduce((n:number,value:string)=>n+value.length,0)>524288))return {error:'Use up to 30 bounded source text checks'};
+    if(args.expected!==undefined&&(!Array.isArray(args.expected)||args.expected.length>30||Array.from(args.expected).some((value:any)=>typeof value!=='string'||value.length>262144)||args.expected.reduce((n:number,value:string)=>n+value.length,0)>524288))return {error:'Use up to 30 bounded source text checks'};
     const s=await session(owner,chat);return observedAction(s,name,async()=>{
       const data:any=parseBrowserJson(checked(await call(s,'browser_evaluate',{function:formCode({target:args.target,expected:args.expected})},15000,signal)));
       if(data.error)return data;

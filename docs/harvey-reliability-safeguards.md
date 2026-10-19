@@ -82,3 +82,19 @@ Opt-in deployed acceptance: `[harvey-harness-live]` runs `smoke-harvey-harness-l
 Repeated browser actions are keyed by their latest observed origin/path as well as arguments. Reusing a Notes control on a different profile is permitted; same-page retries remain refused, query/hash changes do not reset the guard, and operations first attempted without a known page retain the conservative original guard. This distinguishes resources; it does not authorize new actions or replay unknown writes.
 
 Visual observations carry an observed origin/path when available, so profile fields can be saved without asking the vision model to invent an invisible record ID. Query strings/fragments/credentials are omitted; use a visible stable ID if several records share one path. Unknown mutations invalidate the inherited page identity, requiring fresh inspection.
+
+
+## Candidate hardening (2026-10-19; not deployed)
+
+Completion now combines native source/revision checks with an optional independent semantic review. A reviewer approval cannot override missing native workbook-history coverage. That coverage compares complete read source history with reopened visible profiles matched by observed email or phone. Long-cell presence checks bind source bytes directly and return hashes/booleans. They do not prove unread rows, name-only matches, arbitrary field semantics, or every third-party workflow.
+
+Simple resumptions retain the original user-message reference for completion and preservation rules. Profile identity must be re-observed after navigation. An unchanged missing-only field comparison can suppress a following observed Save/Update; pending edits remain submit-able. Current-page readers reject an unsupported URL argument. Unexpected execution exceptions retain sanitized diagnostics and observed receipts, rather than replacing their cause with a generic interruption.
+
+Research informing these decisions:
+
+- [Hermes persistent goals and quality gates](https://hermes-agent.nousresearch.com/docs/user-guide/features/goals): persist scope and progress; run deterministic gates before model judgment. Its documentation also acknowledges imperfect judges and bounded recovery. Copy the useful pattern, not a claim of universal reliability.
+- [Anthropic agent evaluations](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents): grade actual environment outcomes as well as transcripts. Synthetic CRM tests inspect server-side notes/dates/relationships and POST counts; browser exports compare exact source cells and order.
+- [Anthropic long-running harness design](https://www.anthropic.com/engineering/harness-design-long-running-apps): carry structured progress across context boundaries and define concrete acceptance criteria.
+- [Temporal durable execution](https://docs.temporal.io/tasks): persisted orchestration does not remove the need to make external effects safe to retry. Harvey retains its existing single-worker job/store architecture; no new orchestration platform is introduced. Unknown browser submissions still require inspection rather than blind replay.
+
+Regression coverage includes source-bound long Unicode text, stale identity, ignored URL arguments, unchanged form submissions, pending edits, credential-consent adapters, exception redaction, persisted continuation, cancellation, and browser restart recovery. Local scripted providers test control flow; real Mercury/Luna acceptance results must be recorded separately. A passing fixture or model review is not proof that Wesley's actual Brivity import has run.

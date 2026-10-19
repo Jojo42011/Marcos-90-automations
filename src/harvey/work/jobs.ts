@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "crypto";
 import { Chat, get, list, owners, put, text, workDb } from "./store.js";
 import { canResumeFromReceipts, type Receipt } from "../reliability.js";
 import { runChat } from "./runtime.js";
+import {toolFailure} from "../toolFailures.js";
 
 export interface WorkJob {
   actorId?: string; id: string; chatId: string; requestId: string; fingerprint: string; prompt: string; model?: string;
@@ -57,9 +58,9 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
   // Individual browser/provider operations retain their own hang timeouts.
   const timer=job.originChatId?setTimeout(()=>controller.abort(),15*60_000):undefined;timer?.unref();
   const approvals:unknown[]=[...(job.result?.approvals||[])],schedules:unknown[]=[...(job.result?.schedules||[])];
+  const receipts:Receipt[]=[];
   try {
     const prompt=job.continuationCount ? job.prompt+"\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): "+job.resumeReason+((job.stalledContinuations||0)>0?"\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail.":"") : job.prompt;
-    const receipts:Receipt[]=[];
     let segmentCost=0;
     const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,onEvidence:r=>{
       receipts.push(r);const current=get<WorkJob>("job",owner,id);current.safeResume=safeRecovery(receipts);put("job",owner,current);
@@ -95,9 +96,10 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
       job.nextRunAt=new Date(Date.now()+Math.max(10,Math.min(120,result.continuation.delaySeconds))*1000).toISOString();
       job.resumeReason=result.continuation.reason;job.result.needsAttention=false;
     }
-  } catch {
+  } catch(error) {
     job=get<WorkJob>("job",owner,id);job.status="needs_attention";
-    job.result={text:controller.signal.aborted?"Stopped. Inspect any action already in progress before retrying.":"The task was interrupted. Review saved chat and verification checkpoints before retrying; no automatic replay was performed.",needsAttention:true};
+    const diagnostic=toolFailure('execution',{}, {error:error instanceof Error?error.message:String(error)})||{code:'execution_error',message:'Execution failed without a recorded error message',detail:'execution'};
+    job.result={text:controller.signal.aborted?"Stopped. Inspect any action already in progress before retrying.":"The task was interrupted by an execution error: "+diagnostic.message+". Inspect saved progress and any action already in progress before retrying.",needsAttention:true,approvals,schedules,verification:{status:'needs_verification',receipts},failure:{kind:controller.signal.aborted?'cancelled':'execution_error',...diagnostic}};
   } finally {
     clearTimeout(timer);controllers.delete(key(owner,id));job.updatedAt=new Date().toISOString();put("job",owner,job);
   }
