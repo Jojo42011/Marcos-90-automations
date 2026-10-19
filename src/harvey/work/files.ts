@@ -15,10 +15,28 @@ function textName(value:any):string {
   if(typeof value!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9 _.-]{0,139}$/.test(value)||! /\.(?:txt|md|csv|tsv|json|yaml|yml|xml|html)$/i.test(value))throw Error('Use a plain text filename in this chat, such as report.md, records.csv or plan.json; no directories');
   return value;
 }
+// Validate structure without changing source bytes or guessing how to repair data.
+function validateCsv(content:string){
+  const csv=content.replace(/^\uFEFF/,''),fail=(row:number,detail:string)=>{throw Error('Invalid CSV row '+row+': '+detail+'. Quote fields containing commas, quotes or line breaks and double embedded quotes. No file was saved');};
+  let quoted=false,closed=false,started=false,columns=1,width:number|undefined,row=1;
+  const end=()=>{if(started||columns>1){if(width===undefined)width=columns;else if(columns!==width)fail(row,'expected '+width+' columns, found '+columns);}row++;columns=1;started=false;closed=false;};
+  for(let i=0;i<csv.length;i++){
+    const char=csv[i];
+    if(quoted){if(char==='"'){if(csv[i+1]==='"')i++;else{quoted=false;closed=true;}}continue;}
+    if(char===','){columns++;started=false;closed=false;continue;}
+    if(char==='\r'||char==='\n'){if(char==='\r'&&csv[i+1]==='\n')i++;end();continue;}
+    if(char==='"'){if(started||closed)fail(row,'unexpected quote in an unquoted field');quoted=true;started=true;continue;}
+    if(closed)fail(row,'unexpected text after a closing quote');
+    started=true;
+  }
+  if(quoted)fail(row,'unclosed quoted field');
+  if(started||columns>1)end();
+}
 export function writeWorkspaceFile(owner:string,chat:string,input:any) {
   const name=textName(input.file);
   if(typeof input.content!=='string'||Buffer.byteLength(input.content)>2*1024*1024||input.content.includes('\0'))throw Error('Provide UTF-8 text content of at most 2 MiB; split large artifacts into files');
   if(/\.json$/i.test(name))try{JSON.parse(input.content);}catch{throw Error('Invalid JSON content; correct it before saving');}
+  if(/\.csv$/i.test(name))validateCsv(input.content);
   const path=join(filesDir(owner,chat),name),sha256=digest(input.content);
   if(existsSync(path)){
     if(statSync(filePath(owner,chat,name)).size>2*1024*1024)throw Error('Existing text file exceeds the artifact edit size; retain it and create a separate smaller file');

@@ -24,6 +24,11 @@ assert.equal(F.workspaceFiles('alice','files',{includeDiagnostics:true}).files.l
 assert.equal(F.workspaceFiles('alice','files',{includeDiagnostics:true}).nextOffset,20);
 assert(JSON.stringify(F.workspaceFiles('alice','files')).length<12000);
 console.log('ok preserved media aliases, strict chooser arguments, owner/path boundaries and bounded asset listing');
+const quotedCsv='title,upc,price\r\n"Title 😀, with ""quoted"" words\nand a line break",abc,9.00\r\n';
+const csvFile=F.writeWorkspaceFile('alice','text',{file:'quoted.csv',content:quotedCsv});assert.equal(F.readWorkspaceFile('alice','text',{file:'quoted.csv'}).content,quotedCsv);
+for(const bad of ['title,upc,price\nTitle, with comma,abc,9.00','title,upc\n"unclosed,abc','title,upc\n"closed"extra,abc','title,upc\nwrong"quote,abc'])assert.throws(()=>F.writeWorkspaceFile('alice','text',{file:'quoted.csv',content:bad,expectedSha256:csvFile.sha256}),/Invalid CSV row/);
+assert.equal(F.readWorkspaceFile('alice','text',{file:'quoted.csv'}).sha256,csvFile.sha256,'Rejected CSV must preserve prior bytes');
+console.log('ok malformed CSV is rejected before saving; quoted commas, quotes, Unicode and multiline fields retain exact bytes');
 const authored=F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"total":375}'});
 assert.equal(F.readWorkspaceFile('alice','text',{file:'report.json'}).content,'{"total":375}');
 assert.equal(F.writeWorkspaceFile('alice','text',{file:'report.json',content:'{"total":375}'}).unchanged,true);

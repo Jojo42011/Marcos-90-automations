@@ -3,7 +3,7 @@ import {mkdtempSync,readFileSync,mkdirSync,rmdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import http from 'node:http';
-import {once} from 'node:events';
+import {once,getEventListeners} from 'node:events';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 process.env.HARVEY_BROWSER_ENABLED='true';
@@ -102,5 +102,12 @@ try{
  const cards=await B.browserCall('alice','cards','browser_read_table',{});assert.equal(cards.layout,'cards');assert.equal(cards.rows.length,6);assert.equal(cards.rows[0].links[0].title,'Full fixture title 0');assert(cards.rows[0].id.endsWith('/book/0'));assert(!cards.truncated);
  const targetedCards=await B.browserCall('alice','cards','browser_read_table',{target:'article'});assert.equal(targetedCards.rows.length,6);assert.equal(targetedCards.rows[0].title,'Full fixture title 0');
  console.log('ok rendered article cards expose literal full titles, prices and stable profile links without vision');
+ const cancellation=new AbortController();
+ for(let i=0;i<16;i++){await B.browserCall('alice','cards','browser_read_table',{},cancellation.signal);assert.equal(getEventListeners(cancellation.signal,'abort').length,0,'Completed MCP calls must detach from the task signal');}
+ cancellation.abort();await assert.rejects(B.browserCall('alice','cards','browser_read_table',{},cancellation.signal));
+ const pendingCancellation=new AbortController(),pendingStarted=Date.now(),abortPending=setTimeout(()=>pendingCancellation.abort(),100);
+ try{await B.browserCall('alice','cards','browser_wait_for',{text:'Never present in this fixture'},pendingCancellation.signal);}catch{assert(pendingCancellation.signal.aborted);}finally{clearTimeout(abortPending);}
+ assert(pendingCancellation.signal.aborted);assert(Date.now()-pendingStarted<5000,'Cancellation must interrupt an in-flight MCP wait');assert.equal(getEventListeners(pendingCancellation.signal,'abort').length,0);
+ console.log('ok long browser runs release task abort listeners and cancellation still prevents another operation');
  assert.equal(writes,1);console.log(JSON.stringify({elapsedMs:Date.now()-started,clickMcpCalls:after.calls-before.calls,snapshotPages:pages,fixtureWrites:writes}));
 }finally{await B.closeBrowsers();server.closeAllConnections();await new Promise(r=>server.close(r));}

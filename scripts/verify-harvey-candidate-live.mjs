@@ -54,7 +54,7 @@ try{
    const before=JSON.stringify(records),beforeWrites=writes;
    await run(chat,'Recheck the same source workbook and the same five existing contacts. Complete the same reconciliation again, adding only information still missing. Preserve everything already saved and the unresolved ambiguous row. Verify the current destination state and report the result; do not rewrite unchanged profiles.');assert.equal(JSON.stringify(records),before);assert.equal(writes,beforeWrites,'Rerun must not resubmit unchanged contacts');
    const out={model,test:'xlsx-to-authenticated-synthetic-crm',status:'passed',verifiedContacts:5,ambiguousRowsUntouched:1,initialWrites:writes,rerunWrites:0};outcomes.push(out);console.log('CANDIDATE_PASS '+JSON.stringify(out));
-  }catch(e){failed++;console.log('CANDIDATE_FAIL '+JSON.stringify({model,test:'xlsx-to-authenticated-synthetic-crm',error:e.message,writes}));}
+  }catch(e){failed++;console.log('CANDIDATE_FAIL '+JSON.stringify({model,test:'xlsx-to-authenticated-synthetic-crm',error:e.message,writes,independentDestination:{matchingNotes:records.filter(r=>r.notes.includes(source.find(s=>s.id===r.id).notes)).length,matchingDates:records.filter(r=>r.due===source.find(s=>s.id===r.id).due).length,matchingRelationships:records.filter(r=>r.relationship===source.find(s=>s.id===r.id).relationship).length,preservedPrior:records[1].notes.includes('Keep prior history'),alreadyCorrectProfileRewritten:writtenIds.has('1')}}));}
   finally{await B.closeBrowsers();}
   const browserChat=S.createChat('candidate-qa',{mode:'work',model});
   try{

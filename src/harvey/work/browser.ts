@@ -55,7 +55,14 @@ export function browserDirectory(owner: string, chat: string) { const key = crea
 function tabsPath(owner:string,chat:string){return join(browserDirectory(owner,chat),"tabs.json");}
 async function call(s:Session,name:string,args:any={},timeout=15000,signal?:AbortSignal):Promise<any>{
   s.metrics.calls++;
-  const result:any=await s.client.callTool({name,arguments:args},undefined,{timeout,signal});
+  // The SDK retains abort listeners on the supplied signal. Give each request
+  // its own signal and detach it from the long-lived task when this call ends.
+  signal?.throwIfAborted();
+  const request=new AbortController(),abort=()=>request.abort(signal?.reason);
+  signal?.addEventListener('abort',abort,{once:true});
+  let result:any;
+  try{result=await s.client.callTool({name,arguments:args},undefined,{timeout,signal:request.signal});}
+  finally{signal?.removeEventListener('abort',abort);}
   // This MCP version puts implicit action snapshots in local files. Return their
   // actual observations to the model without paying for another browser call.
   const dir=browserDirectory(s.owner,s.chat),files=realpathSync(join(dir,"files"));
