@@ -12,6 +12,10 @@ export function workRecords(owner:string,chatId:string,input:any) {
   const rows=()=>list<any>("work_record",owner).filter(r=>r.chatId===chatId&&r.collection===collection);
   if(input.action==="export"){
     let all=rows().sort(input.order==='saved'?(a,b)=>(a.sourceOrder??0)-(b.sourceOrder??0):(a,b)=>a.key.localeCompare(b.key));
+    if(input._orderValues){
+      all=input._orderValues.map((value:any)=>{const matches=all.filter(r=>input._orderField?r.fields[input._orderField]===value:r.key===value);if(matches.length!==1)throw Error('Each observed source-order value must match exactly one saved record; retrieve missing records or use an unambiguous identity field.');return matches[0];});
+      if(new Set(all.map(r=>r.key)).size!==all.length)throw Error('Observed source order contains duplicate record identities.');
+    }
     if(input.keys!==undefined){
       const byKey=new Map(all.map(r=>[r.key,r]));
       if(!Array.isArray(input.keys)||!input.keys.length||input.keys.length>10000||new Set(input.keys).size!==input.keys.length||input.keys.some((key:any)=>typeof key!=='string'||!byKey.has(key)))throw Error('Export keys must be unique existing record keys in the exact requested output order; list the saved collection and use its actual keys.');

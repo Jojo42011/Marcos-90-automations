@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Explicit first-N source-order CSV requests require a native orderFrom binding to a complete observed list; export matches existing record identities and follows that source sequence rather than trusting a reviewer or insertion order.
+
 - Source-record exports accept explicit existing keys for exact subset selection and row ordering; corrections no longer require rebuilding collections or rewriting source values. Duplicate/unknown keys are rejected.
 
 - Outcome review excludes private staging collections so abandoned selections cannot contradict current source observations and final saved outputs; native record provenance checks remain unchanged.

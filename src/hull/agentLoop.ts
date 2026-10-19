@@ -543,6 +543,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
   };
 
+  const orderedExports=new Set<string>();
+  const orderedCount=/\bfirst\s+(\d+)\b/i.exec(opts.message);
+  const orderedFile=/(?:\b(?:save|write|create|export)\s+(?:csv\s+)?(?:as\s+|to\s+)?|\bas\s+)([A-Za-z0-9_.-]+\.csv)\b/i.exec(opts.message)?.[1];
+  const requestedSourceOrder=orderedCount&&orderedFile&&/\b(?:homepage|source|listed|original)\s+order\b/i.test(opts.message)?Number(orderedCount[1]):undefined;
   const outcomeReviews=new Map<string,{passed:boolean;issues:string[]}>();
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
     const copiedValues:any[]=[];
@@ -552,6 +556,12 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const result={error:'For extracted website data use work_records export with file, includeSourceId:false and selected columns. It writes actual observed values and safely quotes CSV. Use column format decimal_currency when a decimal price is requested; do not invent or manually retype source values.'};const r=verification.record(name,input,result);return {...result,_harveyEvidence:r};
     }
     if(opts.workRuntime&&name==='work_records'&&input.action==='export'&&extractedCsv)input={...input,_requireObserved:true};
+    if(opts.workRuntime&&name==='work_records'&&input.action==='export'){
+      delete input._orderValues;delete input._orderField;
+      const order:any=input.orderFrom;
+      if(requestedSourceOrder&&!order)return {error:'For this first-N source-order export use orderFrom:{evidenceId,path:"/rows",keyPath:"/title",field:"title",count:N} from the observed source list. Native selection/order must match the actual source, not saved insertion/key order.'};
+      if(order){try{const rows=verification.sourceValue({evidenceId:order.evidenceId,path:order.path});if(!Array.isArray(rows)||!Number.isInteger(order.count)||order.count<1||order.count>rows.length||requestedSourceOrder&&order.count!==requestedSourceOrder||typeof order.keyPath!=='string'||!order.keyPath.startsWith('/'))throw Error('Read the complete requested first-N source list and use its actual row path/count.');const values=rows.slice(0,order.count).map((_,i)=>verification.sourceValue({evidenceId:order.evidenceId,path:order.path+'/'+i+order.keyPath}));if(values.some(v=>typeof v!=='string'&&typeof v!=='number'))throw Error('Source-order identities must be literal scalar values.');input={...input,keys:undefined,_orderValues:values,_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
+    }
     if(opts.workRuntime&&name==='computer'){
       const bindings=(input as any).sourceValues;input=computerArguments(input);
       try{
@@ -631,6 +641,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         return {error:'A global blocker has not been established by an actual failed operation. Consult capabilities, inspect a distinct supported route (including inspect_screen when text is insufficient), and finish independent steps. Report the specific observed blocker if those attempts fail; a missing destination connection alone does not prevent source collection.'};
       }
       if(input.status==='completed'){
+        if(requestedSourceOrder&&!orderedExports.has(orderedFile!))return {error:'Verify the requested first-N source order by exporting the requested CSV using work_records orderFrom bound to the actual observed source list, then read the saved file. Existing draft order is not proof.'};
         const incomplete=opts.workRuntime.completionCheck?.();
         if(incomplete){
           const result={error:incomplete,plan:opts.workRuntime.tools.some(t=>t.name==='task_plan')?await opts.workRuntime.execute('task_plan',{action:'get'}):undefined,note:'Checkpoint only the genuinely completed zero-based plan steps with task_plan action=checkpoint, then report_verification again. If work remains, execute it; do not mark it complete just to satisfy this check.'};
@@ -680,6 +691,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     const sourceValuePage=copiedValues.length?verification.browserPage()?.url:undefined;
     let result = await executeTool(name, input);
+    if(name==='work_records'&&input.action==='export'&&input._orderValues&&(result as any)?.file&&!(result as any)?.error)orderedExports.add((result as any).file);
     if(copiedValues.length&&result&&typeof result==='object')result={...(result as any),sourceValueBindings:copiedValues,sourceValuePage,sourceValueNote:'These hashes describe the literal input passed to the tool, not saved-state proof. Save and reopen the record, then compare browser_read_form field hashes to verify persistence.'};
     if(name==='computer'&&input.action==='call'&&!isObservation(name,input))assistedVisionAt=0;
     if (!opts.workRuntime) return result;
