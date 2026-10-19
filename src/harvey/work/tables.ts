@@ -61,5 +61,5 @@ export function copyFieldInPage(element:any){
   if(type==='password'||element.closest('form')?.querySelector('input[type="password"]'))return {excluded:true};
   if(rect.width<=0||rect.height<=0||type==='hidden'||!['INPUT','TEXTAREA','SELECT'].includes(element.tagName))throw Error('Copy preservation requires a visible non-secret form field');
   const label=[element.name,element.id,element.placeholder,element.getAttribute('aria-label'),...Array.from(element.labels||[]).map((l:any)=>l.textContent)].filter(Boolean).join(' ');
-  return {value:String(element.value??''),history:element.tagName==='TEXTAREA'||/notes?|history|messages?/i.test(label),search:/search|filter|find|username|login|verification/i.test(label)};
+  return {unambiguousForm:document.forms.length===1&&(element.form||element.closest('form'))===document.forms[0],value:String(element.value??''),history:element.tagName==='TEXTAREA'||/notes?|history|messages?/i.test(label),search:/search|filter|find|username|login|verification/i.test(label)};
 }

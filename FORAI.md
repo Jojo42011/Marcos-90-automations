@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Unchanged-save suppression requires a single unambiguous actual form. A comparison in one form cannot suppress another form's Save; other potentially mutating controls invalidate the comparison rather than hiding pending work. A real Chromium two-form regression reproduces and covers this case.
+
 - Browser history coverage does not force a connector-only transfer through the browser, and numeric count columns are not treated as literal history. Source content-read and connector read-back requirements remain separate.
 
 - Model-created task plans retain the native original-message reference as well as automatically initialized plans. Header-only workbook reads cannot satisfy history-transfer coverage.

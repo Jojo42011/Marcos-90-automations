@@ -289,27 +289,30 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       if(name==="browser_mouse_click_xy"||name==="browser_mouse_drag_xy")if(!s.visionAt||Date.now()-s.visionAt>30000)throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
       let saveControl=false;
       if(name==='browser_click'&&(s.unchangedPreservedForm||s.preservedFormChanged)){
-        const evaluated=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Observed save control',target:args.target||args.ref,function:`element => /^(?:save(?: changes)?|update(?: contact|profile|record)?)$/i.test((element.innerText||element.value||element.getAttribute('aria-label')||'').trim())`});
+        const evaluated=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Observed save control',target:args.target||args.ref,function:`element => document.forms.length===1&&(element.form||element.closest('form'))===document.forms[0]&&/^(?:save(?: changes)?|update(?: contact|profile|record)?)$/i.test((element.innerText||element.value||element.getAttribute('aria-label')||'').trim())`});
         saveControl=parseBrowserJson(checked(await call(s,'browser_evaluate',evaluated,15000,signal)))===true;
         if(preserveExisting&&saveControl&&s.unchangedPreservedForm&&!s.preservedFormChanged){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,submissionSkipped:true,note:'The missing-only fields were already present. This unchanged Save/Update was not submitted; reopen and verify the existing saved state.'};}
       }
       const preservedFields:any[]=[];
       if(preserveExisting&&['browser_fill_form','browser_type'].includes(name)){
         const fields=name==='browser_fill_form'?args.fields:[{target:args.target||args.ref,value:args.text}];
-        const changed=[];
+        const changed=[];let unambiguousForm=true;
         for(const field of fields){
           const evalArgs=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Current visible copy destination',target:field.target||field.ref,function:copyFieldInPage.toString()});
           const current:any=parseBrowserJson(checked(await call(s,'browser_evaluate',evalArgs,15000,signal)));
+          unambiguousForm&&=current.unambiguousForm===true;
           if(current.excluded||current.search){changed.push(field);continue;}
           const value=mergeMissingValue(current.value,String(field.value??''),current.history);
           preservedFields.push({target:field.target||field.ref,characters:value.length,sha256:createHash('sha256').update(value).digest('hex'),changed:value!==current.value});
           if(value!==current.value)changed.push({...field,value});
         }
-        if(!changed.length){s.unchangedPreservedForm=!s.preservedFormChanged;const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,preservedFields,note:'The requested values were already present or existing scalar fields were retained. No field changed. Do not submit an unchanged form.'};}
+        if(!changed.length){s.unchangedPreservedForm=unambiguousForm&&!s.preservedFormChanged;const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,preservedFields,note:'The requested values were already present or existing scalar fields were retained. No field changed. Do not submit an unchanged form.'};}
         s.preservedFormChanged=true;s.unchangedPreservedForm=false;
         if(name==='browser_fill_form')args.fields=changed;else args.text=changed[0].value;
       }
-      if(['browser_type','browser_fill_form','browser_select_option','browser_press_key'].includes(name)){s.unchangedPreservedForm=false;s.preservedFormChanged=true;}
+      // A control click may edit a checkbox or switch editor state. Preserve uncertainty
+      // until navigation rather than suppressing a later required submission.
+      if(!browserRead(name,args)){s.unchangedPreservedForm=false;s.preservedFormChanged=true;}
       preflight=false;
       const result=checked(await call(s,name==="browser_mouse_drag_xy"?"browser_run_code_unsafe":name,name==="browser_mouse_drag_xy"?{code:dragCode({x:args.startX,y:args.startY},{x:args.endX,y:args.endY})}:args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
       if(saveControl||['browser_navigate','browser_navigate_back','browser_tabs'].includes(name)){s.preservedFormChanged=false;s.unchangedPreservedForm=false;}
