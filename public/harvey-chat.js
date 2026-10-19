@@ -126,7 +126,7 @@
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>")
       .replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>")
-      .replace(/\[([^\]]+)\]\((\/api\/harvey\/work\/files\/[a-zA-Z0-9-]+\/[a-zA-Z0-9%_.-]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+      .replace(/\[([^\]]+)\]\(\s*(?:&lt;\s*)?(\/api\/harvey\/work\/files\/[a-zA-Z0-9-]+\/[a-zA-Z0-9%_.-]+)\s*(?:&gt;\s*)?\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
       .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   }

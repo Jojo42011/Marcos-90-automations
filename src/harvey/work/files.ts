@@ -93,6 +93,6 @@ export function publicFileLinks(owner:string,chat:string,speech:string){
     try{const url=new URL(path,'https://harvey.invalid');if(downloads.has(url.pathname))return url.pathname;if(links.has(url.pathname))return links.get(url.pathname);}catch{}
   };
   speech=speech.replace(/`([^`\n]+)`/g,(whole,path)=>{const download=resolve(path.trim());return download?`[${path.trim().split('/').at(-1)}](${download})`:whole;});
-  speech=speech.replace(/\]\(\s*([^)\s]+)\s*\)/g,(whole,path)=>{const download=resolve(path);return download?`](${download})`:whole;});
+  speech=speech.replace(/\]\(\s*(?:<\s*)?([^()<>\s]+)\s*(?:>\s*)?\)/g,(whole,path)=>{const download=resolve(path);return download?`](${download})`:whole;});
   return speech.replace(/(^|[\s>])(https?:\/\/[^\s<>)]+)/g,(whole,prefix,path)=>{const download=resolve(path);return download?`${prefix}[${path.split('/').at(-1)}](${download})`:whole;});
 }

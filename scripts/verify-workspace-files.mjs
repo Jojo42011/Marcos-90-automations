@@ -71,6 +71,8 @@ console.log('ok long file completion requires contiguous source coverage at one 
 assert.equal(F.publicFileLinks('alice','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('bob','text','[report](https://chatgpt.com/api/harvey/work/files/text/report.json)'), '[report](https://chatgpt.com/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('alice','text','[report]( /api/harvey/work/files/text/report.json )'), '[report](/api/harvey/work/files/text/report.json)');
+assert.equal(F.publicFileLinks('alice','text','[report](< /api/harvey/work/files/text/report.json >)'), '[report](/api/harvey/work/files/text/report.json)');
+assert.equal(F.publicFileLinks('bob','text','[report](< /api/harvey/work/files/text/report.json >)'), '[report](< /api/harvey/work/files/text/report.json >)');
 assert.equal(F.publicFileLinks('alice','text','Download: `/api/harvey/work/files/text/report.json`'), 'Download: [report.json](/api/harvey/work/files/text/report.json)');
 assert.equal(F.publicFileLinks('alice','text','Saved `report.json`.'), 'Saved [report.json](/api/harvey/work/files/text/report.json).');
 assert.equal(F.publicFileLinks('bob','text','Saved `report.json`.'), 'Saved `report.json`.');

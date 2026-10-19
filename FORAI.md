@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Live invoice QA exposed space-padded angle-bracket download links rendering as plain text. Existing-file link normalization and the local download renderer now accept this form; owner/chat file checks and unsafe-scheme rejection remain in place.
+
 - Failure explanations use the saved job's own receipts; a newer provider-only failure cannot borrow an older browser error from the same chat. Legacy checkpoint-only diagnostics use the latest checkpoint, including an empty one, rather than reviving earlier failures.
 
 - Model-response continuation recovery carries a native observed-state fingerprint. The saved job counts consecutive format failures without progress rather than accumulating unrelated failures over a long task; unchanged/no-progress failures remain bounded, and uncertain writes remain non-replayable.
