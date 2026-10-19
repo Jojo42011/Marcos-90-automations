@@ -1,10 +1,10 @@
 import {createHash} from 'crypto';
 import {formatSourceValue} from '../harvey/work/valueFormats.js';
 import Anthropic from "@anthropic-ai/sdk";
-import { segmentLimit, executionRequest, recoveryReviewPolicy, outcomeReviewPolicy } from "../harvey/work/execution.js";
+import { segmentLimit, executionRequest, promisesImmediateCheck, recoveryReviewPolicy, outcomeReviewPolicy } from "../harvey/work/execution.js";
 import {computerArguments} from '../harvey/work/computerArguments.js';
 import {unsupportedCapabilityClaim} from '../harvey/work/capabilities.js';
-import { RELIABILITY_RULES, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, OUTCOME_REVIEW_TOOL, OUTCOME_REVIEW_SYSTEM, outcomeVerdict, type Verification, type Receipt } from "../harvey/reliability.js";
+import { RELIABILITY_RULES, hasWorkReceipts, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, OUTCOME_REVIEW_TOOL, OUTCOME_REVIEW_SYSTEM, outcomeVerdict, type Verification, type Receipt } from "../harvey/reliability.js";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { buildFounderSystemPrompt } from "./founderPrompt.js";
 import { getAethonModel, getHaikuModel, getMaxTokens, isSocialTurn, needsSonnet } from "./modelRouting.js";
@@ -922,7 +922,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(opts.allowContinuation && opts.workRuntime?.pendingWork?.() && verification.result().status!=="blocked" && canResumeFromReceipts(verification.result().receipts,true)){
         return {speech:"Recovering the AI response and continuing from saved progress.",continuation:{delaySeconds:10,recovery:"model_response",progressKey:verification.continuationCheckpoint()?.progressKey,reason:"The last model reply was malformed; no action from that reply ran. Inspect the saved task_plan, work_records and current site before continuing unfinished work. Do not repeat completed actions."},verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
       }
-      return {speech:"The AI service repeatedly returned an empty or unusable response. The task is unfinished. Saved work is retained; any action without a confirmed result must be inspected before retrying.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+      return {speech:"The AI service kept returning an empty or unreadable reply, so I couldn’t continue. I’ve kept the saved progress; the last action still needs checking before a retry.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }
     // A valid response ends the formatting failure streak; long tasks get a fresh repair chance after progress.
     malformedRepairs=0;
@@ -964,8 +964,13 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const evidence = verification.result();
       // Negative instructions are constraints, not evidence that an action was requested.
       const affirmativeMessage = opts.message.replace(/\b(?:do not|don['’]t|never|without)\b[^.!?\n]*(?:[.!?]|$)/gi, "");
-      const actionRequested = /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || /https?:\/\/\S+/i.test(affirmativeMessage);
-      if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && (opts.allowContinuation?evidence.status==='needs_verification':!evidence.checks.length) && (evidence.receipts.length > 0 || actionRequested)) {
+      const actionRequested = executionRequest(opts.message) && /\b(log\s*in|sign\s*in|connect\s+to|open\s+https?:|go\s+to|navigate|create|schedule|send|update|delete|check\s+the|read\s+the)\b/i.test(affirmativeMessage) || executionRequest(opts.message) && /https?:\/\/\S+/i.test(affirmativeMessage);
+      if(opts.workRuntime && !lastRound && completionRepairs < 3 && promisesImmediateCheck(out.text) && executionRequest(opts.message)) {
+        completionRepairs++;
+        system+='\nFOLLOW THROUGH: Your draft promises an immediate check. Perform that authorized check now and return its result, or explain the specific observed obstacle. Do not end with an unfulfilled promise. Do not expand the user request or repeat completed writes.';
+        continue;
+      }
+      if (opts.workRuntime && !plainStatusRewrite && !lastRound && completionRepairs < 3 && (opts.allowContinuation?evidence.status==='needs_verification':!evidence.checks.length) && (hasWorkReceipts(evidence.receipts) || actionRequested)) {
         completionRepairs++;
         if(opts.allowContinuation)forceVerification=true;
         // Do not append an unanswered assistant turn: some providers interpret
@@ -976,9 +981,9 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           : "Runtime execution reminder: the current user requested an action. Use available tools and inspect the result, or explain a specific observed blocker. Never claim an unexecuted action completed. An explanation or clarification requires no tool receipt.");
         continue;
       }
-      if(opts.allowContinuation&&opts.workRuntime&&executionRequest(opts.message)&&evidence.receipts.length&&evidence.status==='needs_verification'&&completionRepairs>=3&&!plainStatusRewrite){
+      if(opts.allowContinuation&&opts.workRuntime&&executionRequest(opts.message)&&hasWorkReceipts(evidence.receipts)&&evidence.status==='needs_verification'&&completionRepairs>=3&&!plainStatusRewrite){
         if(await consultRecovery('Repeated completion reviews failed; distinguish missing work from receipt bookkeeping.')){completionRepairs=0;forceVerification=false;continue;}
-        return {speech:'Work is unfinished. '+verification.unfinishedReason()+' Saved work is retained.',verification:evidence,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
+        return {speech:verification.unfinishedReason(),verification:evidence,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
       }
       const statusQuestion=opts.message.length<300 && /\b(?:where\b.{0,30}\b(?:stop|are we)|what(?:'s| is) left|what happened|did it work|status)\b/i.test(opts.message) && !/\b(?:detailed|technical report|table|breakdown)\b/i.test(opts.message);
       if(opts.workRuntime && statusQuestion && !plainStatusRewrite && !lastRound && (out.text.length>600 || /^\s*#{1,6}\s/m.test(out.text))){
@@ -991,7 +996,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const lastOperation=[...evidence.receipts].reverse().find(r=>!r.discovery&&!['task_plan','continuity','work_records'].includes(r.tool));
       const blockedFailure=evidence.status==='blocked'&&lastOperation?.outcome==='failed'?lastOperation.diagnostic:undefined;
       return {
-        speech: blockedFailure?`The task is unfinished. ${blockedFailure.detail} failed: ${blockedFailure.message}. Saved work is retained.`:unseenVisualOnly ? "The screenshot was captured, but this model cannot inspect image pixels. Choose a vision-capable model for visual analysis; I can still work with page text and controls." : finalizeSpeech(out.text, opts, hadToolOnly),
+        speech: blockedFailure?`I couldn’t finish the last step: ${blockedFailure.message}. I’ve kept the saved progress.`:unseenVisualOnly ? "The screenshot was captured, but this model cannot inspect image pixels. Choose a vision-capable model for visual analysis; I can still work with page text and controls." : finalizeSpeech(out.text, opts, hadToolOnly),
         ...(blockedFailure?{toolFailure:blockedFailure}:{}),
         ...(opts.workRuntime ? { verification: verification.result() } : {}),
         toolRounds,
@@ -1038,7 +1043,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         if(idleToolRounds>=8){
           const failed=verification.result().receipts.filter(r=>r.outcome==='failed'&&r.diagnostic);
           const diagnostic=[...failed].reverse().find(r=>r.diagnostic?.code!=='repeat_refused')?.diagnostic||failed.at(-1)?.diagnostic||{code:'tool_error',message:'No successful tool operation was returned',detail:'tool execution'};
-          return {speech:"The task is unfinished. "+diagnostic.detail+" failed: "+diagnostic.message+". I tried recovery but could not obtain a successful result. Saved work is retained. This error does not establish a lazy-loading or timing problem.",verification:verification.result(),toolFailure:diagnostic,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
+          return {speech:"I couldn’t complete the last step: "+diagnostic.message+". Recovery didn’t resolve it, and I’ve kept the saved progress.",verification:verification.result(),toolFailure:diagnostic,toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens};
         }
       }
     } else {
