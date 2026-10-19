@@ -2,7 +2,7 @@ import {readWorkspaceSheet} from './spreadsheet.js';
 import {localBrowserSelected,localBrowserCall,localBrowserTools} from "./localBrowser.js";
 import { modelAdvice } from "./modelAdvice.js";
 import { workRecords } from "./records.js";
-import { executionRequest, needsTaskPlan, taskFollowup, segmentLimit } from "./execution.js";
+import { executionRequest, needsTaskPlan, taskFollowup, resumedTaskGoal, segmentLimit } from "./execution.js";
 import {failureReport} from './failureReport.js';
 import {capabilityMap,validateContract} from './capabilities.js';
 import { getAccountUserById } from "../../core/users.js";
@@ -316,10 +316,10 @@ export async function runChat(owner: string, chat: Chat, message: string, option
     // Native completion checks retain the original scope across a simple resume.
     // Store a message reference, not another copy of possible credentials.
     const requestGoal=()=>{
-      if(!options.continuationTurn&&(!taskFollowup(message)||/\b(?:actually|instead|exclude|include|skip|change|only|first)\b/i.test(message)))return message;
+      if(!options.continuationTurn&&!taskFollowup(message))return message;
       const plan=list<any>('task_plan',owner).find(p=>p.chatId===chat.id&&p.requestId===requestId);
       if(!plan?.sourceUserSeq)return message;
-      try{const original=sourceMessage(owner,chat.id,plan.sourceUserSeq);return original.role==='user'&&!original.origin?original.content:message;}catch{return message;}
+      try{const original=sourceMessage(owner,chat.id,plan.sourceUserSeq);return original.role==='user'&&!original.origin?(options.continuationTurn?original.content:resumedTaskGoal(message,original.content)):message;}catch{return message;}
     };
     const workRuntime=await runtime(owner,chat,!!runId||!!options.workDelegated,options.onEvent,options.signal,requestGoal(),options.actorId||owner,!!options.workDelegated,!!options.allowContinuation,requestId,options.modelOverride||chat.model||"auto",sourceUserSeq);
     Object.assign(workRuntime,{requestGoal});

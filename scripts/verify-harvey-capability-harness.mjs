@@ -260,6 +260,14 @@ try{
  for(const text of ['yes, do it','Google Sheets is connected now','I authorized Google Sheets','Authorize Google Sheets, then do whatever you can','well just time it correctly and try again'])assert(execution.taskFollowup(text));
  assert(!execution.taskFollowup('Are Google Sheets connected?'));assert(!execution.taskFollowup('stop'));assert(!execution.taskFollowup('just explain the plan'));
  console.log('ok follow-up retains exact contract and rechecks historical blockers without bypassing security');
+ const originalOrder='Open https://fixture.invalid/ and export the first 10 products in homepage order as books.csv with title,upc,price';
+ for(const followup of ['Finish the existing export against the original requested first ten products','Finish the same first 10 products','continue'])assert.equal(execution.resumedTaskGoal(followup,originalOrder),originalOrder);
+ for(const correction of ['Finish the same export but use the first 20 products','Actually export only the first 5','Finish the first 3 products instead'])assert.equal(execution.resumedTaskGoal(correction,originalOrder),correction);
+ const scopeChat=store.createChat('fixture',{}),scopeSeq=store.append('fixture',scopeChat.id,{role:'user',content:originalOrder,at:new Date().toISOString()});
+ store.put('task_plan','fixture',{id:'scope-reference',chatId:scopeChat.id,requestId:'old',sourceUserSeq:scopeSeq,steps:['Export'],nextStep:0});
+ const loopModule=require(join(root,'hull/agentLoop.js')),realLoop=loopModule.runAgentLoop;let resumedGoal;
+ try{loopModule.runAgentLoop=async opts=>{resumedGoal=opts.workRuntime.requestGoal();return {speech:'Scope inspected',toolRounds:0};};await runtime.runChat('fixture',scopeChat,'Finish the existing task against the original requested first ten products',{allowContinuation:true,workRequestId:'scope-resume',modelOverride:mainModel});assert.equal(resumedGoal,originalOrder);}finally{loopModule.runAgentLoop=realLoop;}
+ console.log('ok actual runtime retains original first-N/file/source-order scope on a referential resume, while explicit count corrections remain current');
  mode='visual_fields';round=0;
  const savedVisual=await runAgentLoop({message:'Read visual profile fields',modelOverride:'inception/mercury-2.5',workRuntime:{tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='work_records')],context:'Fixture',execute:async(name,input)=>name==='work_records'?records.workRecords('fixture',chat.id,input):input.tool==='browser_take_screenshot'?{_image:{media_type:'image/png',data:'fixture-profile-pixels'}}:{url:'https://fixture.invalid/people/42?token=secret'}}});
  assert.equal(savedVisual.verification.status,'completed');const visualRecord=records.workRecords('fixture',chat.id,{action:'list',collection:'visual-profiles'}).items[0];assert.equal(visualRecord.key,'https://fixture.invalid/people/42');assert.equal(visualRecord.fields.Name,'Fixture Person');assert(!JSON.stringify(visualRecord).includes('secret'));
