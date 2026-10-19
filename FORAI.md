@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-19: Context/history and capability lookups alone no longer force external task-completion reviews. Prerequisite questions remain conversational; immediate authorized check promises receive a follow-through reminder. Actual work retains verification and recovery, while terminal errors use plain explanations rather than unfinished-task banners. Local provider regressions cover conversation and acted-on checks.
+
 - Referential resumes such as “finish the existing task against the original first ten” retain the original numeric count, file and source-order checks. Merely repeating “first” no longer replaces the task with a weaker follow-up sentence; explicit count/filter corrections still use the current request.
 
 - Source-order export mismatches return the specific unmatched observed rows and original evidence references as a repair list, without writing an incomplete file. This lets recovery retrieve missing records or repair null fields while preserving already verified records; exact source-order matching still gates export.

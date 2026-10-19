@@ -20,7 +20,12 @@ const server=http.createServer(async(req,res)=>{
  else if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
-  if(mode==='native_revision'){
+  if(mode==='conversation'){
+   message=n===0?tc('history_search',{query:'weekly seller email SOP'}):{role:'assistant',content:'The remaining gaps are the ad figures and last week portal log. The SOP allows placeholders.'};
+   assert(n<2,'Conversation must not enter completion repair');
+  }else if(mode==='promise_check'){
+   message=n===0?{role:'assistant',content:"I'll check the current page."}:n===1?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===2?tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Read current fixture page'],limitations:[]}):{role:'assistant',content:'The current page shows two active listings.'};
+  }else if(mode==='native_revision'){
    const steps=[['workspace_read',{file:'revision.md'}],['workspace_write',{file:'revision.md',content:'Updated from observed version'}],['workspace_read',{file:'revision.md'}],['report_verification',{status:'completed',automaticEvidence:true,checks:['Runtime used actual observed version for safe replacement and read final content'],limitations:[]}]];message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Updated and verified.'};
   }else if(mode==='source_order'){
 
@@ -150,6 +155,22 @@ const records=require(join(root,'harvey/work/records.js'));
 const caps=require(join(root,'harvey/work/capabilities.js')),failure=require(join(root,'harvey/toolFailures.js'));
 const tools=runtime.WORK_TOOLS.filter(t=>['computer','inspect_screen','capabilities'].includes(t.name));
 try{
+ for(const question of ['Do you need anything else from my end to do this task?','What exactly do you need to execute these weekly emails?','Are you okay?','No im asking you a question'])assert(!execution.executionRequest(question));
+ for(const request of ['Can you check the MLS connection?','Check again real quick','Create the weekly drafts','continue'])assert(execution.executionRequest(request));
+ for(const question of ['Do you need anything else from my end to do this task?','Brivity you have access to; only thing left is ad or portal log']){
+  mode='conversation';round=0;
+  const reply=await runAgentLoop({message:question,modelOverride:mainModel,allowContinuation:true,workRuntime:{tools:[...tools,{name:'history_search',description:'Read retained history',input_schema:{type:'object',properties:{query:{type:'string'}}}}],context:'Existing workflow is retained; answer the current question',execute:async name=>{assert.equal(name,'history_search');return {content:'SOP permits missing marketing figures'};}}});
+  assert.equal(round,2);assert.match(reply.speech,/remaining gaps/);assert(!reply.toolFailure);
+ }
+ const conversationChat=store.createChat('fixture',{});
+ store.put('task_plan','fixture',{id:'conversation-retained',chatId:conversationChat.id,requestId:'previous-work',steps:['Draft weekly emails'],nextStep:0});
+ mode='conversation';round=0;
+ const conversationResult=await runtime.runChat('fixture',conversationChat,'Do you need anything else from my end to do this task?',{allowContinuation:true,modelOverride:mainModel},'conversation-run');
+ assert.equal(conversationResult.needsVerification,false);assert.equal(store.get('task_plan','fixture','conversation-retained').requestId,'previous-work');assert.equal(round,2);
+ mode='promise_check';round=0;let checked=0;
+ const checkedReply=await runAgentLoop({message:'Check the current page',modelOverride:mainModel,allowContinuation:true,workRuntime:{tools,context:'Fixture',execute:async()=>{checked++;return {url:'https://fixture.invalid',listings:2};}}});
+ assert.equal(checked,1);assert.equal(checkedReply.verification.status,'completed');assert.match(checkedReply.speech,/two active/);
+ console.log('ok prerequisite/access conversation with history lookup avoids execution review; immediate check promise acts and returns verified result');
  mode='visual';round=0;let clicks=0;const events=[];
  const visual=await runAgentLoop({message:'Inspect fixture and save',modelOverride:'inception/mercury-2.5',allowContinuation:true,workRuntime:{tools,context:'Isolated fixture',execute:async(name,input)=>{
   assert.equal(name,'computer');if(input.tool==='browser_take_screenshot')return {_image:{media_type:'image/png',data:'fixture-image-bytes'}};
@@ -233,8 +254,8 @@ try{
  const formats=await runAgentLoop({message:'Read and verify the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({url:'https://fixture.invalid/',observed:true})}});assert.equal(formats.verification.status,'completed');assert(!formats.modelError);console.log('ok independent malformed responses recover after intervening successful progress');
  mode='rejected_review';round=0;
  const rejectedReview=await runAgentLoop({message:'Finish and verify the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
- assert.equal(rejectedReview.verification.status,'needs_verification');assert.match(rejectedReview.speech,/Evidence must reference successful tool receipts/);assert(!rejectedReview.speech.includes('The task is complete.'));
- console.log('ok unaccepted completion names its actual recorded rejection instead of a generic banner or unsupported success claim');
+ assert.equal(rejectedReview.verification.status,'needs_verification');assert.match(rejectedReview.speech,/confirm the result/);assert(rejectedReview.verification.receipts.some(r=>r.diagnostic?.message?.includes('Evidence must reference successful tool receipts')));assert(!rejectedReview.speech.includes('The task is complete.'));
+ console.log('ok unaccepted completion preserves exact rejection internally and explains the missing confirmation without a robotic banner');
  mode='navigation_recovery';round=0;let rejectedNavigations=0;
  const navigation=await runAgentLoop({message:'Read the attached sheet using the already signed-in browser',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>name==='workspace_read'?{file:'fixture.csv',content:'name,notes\nFixture Person,Observed history'}:input.tool==='browser_navigate'?(rejectedNavigations++,require(join(root,'harvey/work/browserState.js')).navigationProblem(input.arguments.url)):{url:'https://fixture.invalid/dashboard',authenticated:true}}});
  assert.equal(navigation.verification.status,'completed');assert.equal(rejectedNavigations,1);assert(navigation.verification.receipts.some(r=>r.actionOutcome==='not_executed'));assert(!navigation.continuation);
