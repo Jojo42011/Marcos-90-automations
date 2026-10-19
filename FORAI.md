@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Outcome review excludes private staging collections so abandoned selections cannot contradict current source observations and final saved outputs; native record provenance checks remain unchanged.
+
 - Outcome review treats valid quoted CSV decimals as numeric values and reports only unresolved discrepancies, avoiding false format failures after a correct export.
 
 - Configured outcome review also runs for short resumed segments; first-N completion requires observed source order, rather than trusting a reordered intermediate collection.

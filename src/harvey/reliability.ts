@@ -188,7 +188,8 @@ export class TurnVerification {
     for(const {receipt:r,index,source}of useful){
       if(r.tool==='workspace_sheet'){let data=source;if(source.cell){try{const full=this.sourceValue({evidenceId:r.id,path:'/content'});data={...source,content:{preview:full.slice(0,500),characters:full.length,sha256:createHash('sha256').update(full).digest('hex')},completeCellRead:!r.truncated||r.completeCellRead};}catch{data={...source,content:{preview:source.content?.slice(0,200),characters:source.content?.length,partial:true}};}}add('source',r,data);continue;}
       if(r.tool==='workspace_read'){if(firstWrites.has(source.file)&&index<firstWrites.get(source.file)!)add('original_file_before_edit',r,source);else if(latestFiles.get(source.file)===source.sha256)add('current_file',r,source);continue;}
-      if(r.tool==='work_records'&&r.observation){add('saved_source_records',r,{...source,items:source.items?.map((item:any)=>({key:item.key,fields:item.fields,sourceTools:[...new Set(Object.values(item.fieldSources||{}).map((v:any)=>v.tool))]}))});continue;}
+      // Private staging collections may contain abandoned selections; they are not source-order or final-output evidence.
+      if(r.tool==='work_records')continue;
       if(r.tool==='computer'){
         const url=pageUrl(source);if(source.sourceValueBindings||source.preservedFields)add('literal_transfer_input',r,{url:source.sourceValuePage||url,sourceValueBindings:source.sourceValueBindings,preservedFields:source.preservedFields,note:'Native source/preservation hashes describe editor input. Compare current reopened field hashes or values for persistence.'});if(!url)continue;
         if(Array.isArray(source.rows)){tablePages.add(url);const data=source.layout==='key_value'?{url,title:source.title,fields:source.fields,coverage:source.coverage}:{...source,rows:source.rows.map((row:any)=>({...row,links:row.links?.filter((link:any)=>link.href!==row.id)}))};add('source_table_in_observed_order',r,data);}
