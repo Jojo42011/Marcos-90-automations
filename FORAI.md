@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Completion verifies the latest authored revision per file, avoiding impossible read-back requirements for superseded drafts; missing current reads name the exact file and hash.
+
 - Configured outcome review uses a separately accounted read-only auxiliary model after native completion checks to compare user scope with actual source and saved-output evidence. The reviewer parser retains actionable structured criticism, treats contradictory passes as failures, and reports exact malformed-field types. Its evidence view separates source inputs, prior page values, current reopened page values and latest file hashes; it must not demand writes to already-correct records or replace missing writes with report edits. The reviewer returns a forced structured verdict without executable tools and sees latest actual post-action snapshots. Failed reviews return concrete corrections; unchanged evidence is cached, external actions are never replayed, and the selected executor stays unchanged. Verified native deliverables receive real owner/chat-scoped download links.
 
 - Harvey missing-only hosted-browser transfers retain existing scalar fields and append literal note/history text once at the tool boundary; repeated pure observations and guarded local file/record/plan checkpoints are allowed while uncertain external writes remain protected. Explicit wrapped browser references normalize to current observed references; harmless worksheet offset zero does not reject a range read. Completion receipt selection is runtime-owned.
