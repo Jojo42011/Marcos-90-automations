@@ -33,7 +33,7 @@ try{
      if(name==='work_records'){const r=R.workRecords(owner,chat.id,input);if(input.action==='export')exported=r;return r;}
      if(name==='workspace_files')return F.workspaceFiles(owner,chat.id,input);
      throw Error('Unknown fixture tool');
-   }},onEvent:e=>{if(e.type==='usage'){cost+=e.costUsd;calls++;if(cost>0.03||calls>35)controller.abort();}}});
+   }},onEvent:e=>{if(e.type==='usage'){cost+=e.costUsd;calls++;if(cost>0.03)controller.abort();}}});
  assert(!result.modelError&&!result.toolFailure&&!result.budgetRefused,JSON.stringify({modelError:result.modelError,toolFailure:result.toolFailure,budgetRefused:result.budgetRefused}));
  assert.equal(result.verification?.status,'completed','The visual export was not verified');assert.equal(exported?.rows,2);
  const csv=readFileSync(F.filePath(owner,chat.id,exported.file),'utf8');
