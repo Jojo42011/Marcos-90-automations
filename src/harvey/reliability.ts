@@ -21,11 +21,10 @@ export type VerificationStatus = "completed" | "blocked" | "needs_verification";
 export interface Receipt { id: string; tool: string; operation?: string; at: string; outcome: "returned" | "failed" | "held"; observation: boolean; discovery: boolean; scope: string; truncated: boolean; completeFileRead?: boolean; completeCellRead?: boolean; actionOutcome?: "not_executed" | "unknown"; limitation?: string; diagnostic?: {code:string;message:string;detail:string} }
 export interface Verification { status: VerificationStatus; evidenceIds: string[]; checks: string[]; limitations: string[]; receipts: Receipt[]; basis: "agent_review_with_receipt_checks" }
 export const VERIFICATION_TOOL: Tool = {
-  name: "report_verification", description: "Record task verification before final response. Prefer automaticEvidence=true: the runtime selects real, complete current receipts, so you do not need to manage receipt IDs. Explicit references are still checked. This records your review; it does not independently prove factual truth. No passwords or sensitive record contents. After a possible write, include a subsequent read-back observation. Mark partial/truncated results needs_verification.",
+  name: "report_verification", description: "Record task verification before final response. The runtime selects real, complete current receipts automatically; explain the checks and outcome without managing receipt IDs. This records your review; it does not independently prove factual truth. No passwords or sensitive record contents. After a possible write, include a subsequent read-back observation. Mark partial/truncated results needs_verification.",
   input_schema: { type: "object", properties: {
     status: { type: "string", enum: ["completed", "blocked", "needs_verification"] },
     automaticEvidence: {type:"boolean",description:"Select actual successful complete observations from this turn automatically. This does not verify factual meaning or unfinished scope."},
-    evidenceIds: { type: "array", items: { type: "string" } },
     checks: { type: "array", items: { type: "string" }, description: "Specific scope, source, completeness and outcome checks actually performed." },
     limitations: { type: "array", items: { type: "string" }, description: "Unmet requirements preventing the requested outcome. User-authorized exclusions or intentionally skipped ambiguous records belong in the outcome report, not unresolved limitations. Continue independent records before reporting a blocker." },
   }, required: ["status", "checks", "limitations"] },
@@ -111,7 +110,7 @@ export class TurnVerification {
     const receipt=this.receipts.find(r=>r.id===ref.evidenceId),source:any=this.sources.get(ref.evidenceId);
     if(!receipt?.observation||receipt.outcome!=='returned'||receipt.limitation||!source)throw Error('Source reference requires an actual readable observation from this turn');
     if(receipt.completeCellRead&&ref.path==='/content'){
-      const pages=[...this.sources.values()].filter((s:any)=>s.file===source.file&&s.sha256===source.sha256&&s.sheet===source.sheet&&s.cell===source.cell&&s.totalCharacters===source.totalCharacters&&typeof s.content==='string').sort((a:any,b:any)=>a.offset-b.offset) as any[];
+      const pages=this.receipts.filter(r=>r.tool==='workspace_sheet'&&r.outcome==='returned').map(r=>this.sources.get(r.id)).filter((s:any)=>s&&s.file===source.file&&s.sha256===source.sha256&&s.sheet===source.sheet&&s.cell===source.cell&&s.totalCharacters===source.totalCharacters&&typeof s.content==='string').sort((a:any,b:any)=>a.offset-b.offset) as any[];
       let full='';for(const page of pages){if(page.offset>full.length)throw Error('Source cell has a gap');const overlap=Math.min(full.length-page.offset,page.content.length);if(overlap>0&&full.slice(page.offset,page.offset+overlap)!==page.content.slice(0,overlap))throw Error('Source cell pages conflict');full+=page.content.slice(Math.max(0,full.length-page.offset));}
       if(full.length!==source.totalCharacters)throw Error('Read every part of this cell before copying it');return full;
     }
@@ -119,6 +118,7 @@ export class TurnVerification {
     if(receipt.truncated&&!nativeRow&&!(identity&&/^\/(?:rows\/\d+\/id|id|url|sourcePage)$/.test(ref.path)))throw Error('Read the complete selected source value before copying it');
     let value:any=source;
     for(const key of ref.path.slice(1).split('/').map((s:string)=>s.replace(/~1/g,'/').replace(/~0/g,'~'))){
+      if(typeof value==='string'){try{value=JSON.parse(value);}catch{throw Error('Path does not resolve to structured source data');}}
       if(value!==source&&value?.truncated===true)throw Error('A preview is not a complete source value');
       if(!value||typeof value!=='object'||!Object.prototype.hasOwnProperty.call(value,key))throw Error('Record path is missing from source');value=value[key];
     }
@@ -137,9 +137,11 @@ export class TurnVerification {
   observedPrefix(id:unknown,prefix:string):boolean {
     const r=this.receipts.find(r=>r.id===id),source:any=r&&this.sources.get(r.id);
     if(!r||r.tool!=='computer'||!r.observation||r.outcome!=='returned'||r.truncated||r.limitation)return false;
-    const current=this.browserPage();if(current&&source?.url&&source.url!==current.url)return false;
     const texts=Array.isArray(source?.content)?source.content.filter((v:any)=>v.type==='text').map((v:any)=>v.text):[];
-    return !prefix.trim()||texts.some((text:string)=>text.includes(prefix.trim()));
+    const url=source?.url||texts.join('\n').match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1];
+    const current=this.browserPage();
+    if(prefix.trim()){try{const page=new URL(url);if(!current||page.origin+page.pathname!==current.url)return false;}catch{return false;}}
+    return !prefix.trim()||texts.some((text:string)=>text.includes(prefix.trim()))||(source?.fields||[]).some((field:any)=>field.value===prefix.trim());
   }
   projectRecords(records:any) {
     if(!Array.isArray(records)||!records.length||records.length>30)throw Error('Provide 1–30 source-backed records');

@@ -1,5 +1,6 @@
+import {mergeMissingValue} from './valueFormats.js';
 import { scrollCode } from "./scroll.js";
-import { tableCode, formCode } from "./tables.js";
+import { tableCode, formCode, copyFieldInPage } from "./tables.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createHash, randomUUID } from "crypto";
@@ -266,6 +267,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
   if(name==="browser_take_screenshot"||name==="browser_snapshot")delete args.filename;
   if(name==="browser_take_screenshot"){args.type="jpeg";args.fullPage=false;}
   if(name==="browser_close"){await closeBrowser(owner,chat);return {content:[{type:"text",text:"Browser closed; saved login retained. Tabs will not reopen until requested."}]};}
+  const preserveExisting=args._preserveExisting===true;args={...args};delete args._preserveExisting;
   const s=await session(owner,chat);
   const schema=s.tools.find(t=>t.name===name)?.inputSchema;
   try{args=browserArguments(schema,args);}catch(error){return {error:(error as Error).message,recovery:{kind:"arguments",actionOutcome:"not_executed",safeToRetry:true,guidance:"No page action ran. Correct the arguments using this installed schema; do not retry guessed shapes or ask the user to perform the action."},inputSchema:schema};}
@@ -282,6 +284,20 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         }
       }
       if(name==="browser_mouse_click_xy"||name==="browser_mouse_drag_xy")if(!s.visionAt||Date.now()-s.visionAt>30000)throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
+      const preservedFields:any[]=[];
+      if(preserveExisting&&['browser_fill_form','browser_type'].includes(name)){
+        const fields=name==='browser_fill_form'?args.fields:[{target:args.target||args.ref,value:args.text}];
+        const changed=[];
+        for(const field of fields){
+          const evalArgs=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Current visible copy destination',target:field.target||field.ref,function:copyFieldInPage.toString()});
+          const current:any=parseBrowserJson(checked(await call(s,'browser_evaluate',evalArgs,15000,signal)));
+          const value=current.search?field.value:mergeMissingValue(current.value,String(field.value??''),current.history);
+          preservedFields.push({target:field.target||field.ref,characters:value.length,sha256:createHash('sha256').update(value).digest('hex'),changed:value!==current.value});
+          if(value!==current.value)changed.push({...field,value});
+        }
+        if(!changed.length){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,preservedFields,note:'The requested values were already present or existing scalar fields were retained. No field changed. Do not submit an unchanged form.'};}
+        if(name==='browser_fill_form')args.fields=changed;else args.text=changed[0].value;
+      }
       preflight=false;
       const result=checked(await call(s,name==="browser_mouse_drag_xy"?"browser_run_code_unsafe":name,name==="browser_mouse_drag_xy"?{code:dragCode({x:args.startX,y:args.startY},{x:args.endX,y:args.endY})}:args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
       if(name==="browser_mouse_drag_xy"){const gesture=parseBrowserJson(result);if(gesture.error)return {...gesture,recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};}
@@ -291,7 +307,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       try{remember(s,result,name==="browser_snapshot");}catch{s.saveWarning="The action returned successfully but tab state could not be saved. Inspect the page before repeating any action.";}
       s.lastUsed=Date.now();
       if(s.dirty){if(!s.savedAt || args.submit || name==="browser_press_key"&&/enter/i.test(args.key||""))await checkpoint(s);else deferCheckpoint(s);}
-      return normalized(s,result);
+      return {...normalized(s,result),...(preservedFields.length?{preservedFields,note:'Existing scalar values were retained and literal history was appended only when missing. These hashes describe editor values; save and reopen to verify persistence.'}:{})};
     }catch(e){
       s.failed=true;const message=(e as Error).message;let recovery=recoveryFor(message,preflight);s.visionAt=undefined;
       // A batch may have changed earlier fields before a later target failed.

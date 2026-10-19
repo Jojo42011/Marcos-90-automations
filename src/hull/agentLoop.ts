@@ -1,3 +1,4 @@
+import {createHash} from 'crypto';
 import {formatSourceValue} from '../harvey/work/valueFormats.js';
 import Anthropic from "@anthropic-ai/sdk";
 import { segmentLimit, executionRequest, recoveryReviewPolicy } from "../harvey/work/execution.js";
@@ -491,7 +492,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     const seen = (callCounts.get(sig) || 0) + 1;
     callCounts.set(sig, seen);
     const polling = opts.workRuntime && name==="computer" && input.action==="call" && input.tool==="browser_wait_for";
-    const limit = polling ? 6 : opts.workRuntime && !read ? 1 : MAX_IDENTICAL_CALLS;
+    const limit = polling ? 6 : opts.workRuntime ? (read ? Infinity : 1) : MAX_IDENTICAL_CALLS;
     const knownNotExecuted = opts.workRuntime && name === "computer" && seen === 2 && safeBrowserRetry.has(sig);
     if (seen > limit && !knownNotExecuted) {
       console.warn(`[agentLoop] refused repeat call ${seen}× ${name}`);
@@ -542,6 +543,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   };
 
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
+    const copiedValues:any[]=[];
     const copyTask=/\b(?:reconcil\w*|copy|transfer|import\w*|missing information|missing data)\b/i.test(opts.message)&&! /\b(?:summari\w*|rewrite|translate|compose|draft)\b/i.test(opts.message);
     const extractedCsv=/\b(?:collect|extract|export|scrape|take the first)\b/i.test(opts.message)&&verification.hasBrowserInput();
     if(opts.workRuntime&&name==='workspace_write'&&/\.csv$/i.test(String(input.file))&&extractedCsv){
@@ -559,12 +561,13 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
             if(bound.has(path))throw Error('Duplicate source binding');bound.add(path);
             let value=formatSourceValue(verification.sourceValue(binding),binding.format||'text');
             if(binding.prefix!==undefined){if(typeof binding.prefix!=='string'||!verification.observedPrefix(binding.prefixEvidenceId,binding.prefix))throw Error('Existing-text prefix must be quoted from a complete current browser observation; read the field before preserving it');value=binding.prefix+value;}
+            copiedValues.push({argumentPath:path,characters:value.length,sha256:createHash('sha256').update(value).digest('hex')});
             if(path==='/text')args.text=value;else{const index=Number(path.split('/')[2]);if(!Array.isArray(args.fields)||!args.fields[index])throw Error('Bind a field in this call');args.fields[index].value=value;}
           }
         }
         if(copyTask&&verification.hasWorkbookInput()){
           const values=input.tool==='browser_type'?[{value:args.text,label:args.element||args.target||'',path:'/text'}]:input.tool==='browser_fill_form'?(args.fields||[]).map((f:any,i:number)=>({value:f.value,label:f.name||f.target||'',path:'/fields/'+i+'/value'})):[];
-          for(const item of values)if(typeof item.value==='string'&&!bound.has(item.path)&&! /password|username|login|sign.?in|verification|search|filter|sort|find/i.test(item.label)&&!opts.message.includes(item.value)&&!verification.workbookCopyValue(item.value))throw Error('Copied workbook fields must preserve exact source text. Use computer sourceValues:[{argumentPath:"'+item.path+'",evidenceId:"eN",path:"/rows/0/values/C"}]. To preserve existing text add prefix and prefixEvidenceId from its current snapshot. No field was changed');
+          for(const item of values)if(typeof item.value==='string'&&!bound.has(item.path)&&! /password|username|login|sign.?in|verification|search|filter|sort|find/i.test(item.label)&&!opts.message.includes(item.value)&&!verification.workbookCopyValue(item.value))throw Error('Copied workbook fields must preserve exact source text. Use computer sourceValues:[{argumentPath:"'+item.path+'",evidenceId:"eN",path:"/rows/0/values/C"}]. Hosted missing-only imports preserve existing history automatically; bind the literal new source value. Other prefixes require prefixEvidenceId from a current snapshot. No field was changed');
         }
         input={...input,arguments:args};
       }catch(error){const result={error:(error as Error).message,recovery:{kind:'source_value',actionOutcome:'not_executed',safeToRetry:false}};const r=verification.record(name,input,result);opts.onEvidence?.(r);return {...result,_harveyEvidence:r};}
@@ -663,6 +666,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       input={...input,_executionProof:review.receipts.filter(r=>review.evidenceIds.includes(r.id)).map(r=>({tool:r.tool,at:r.at,scope:r.scope,outcome:r.outcome}))};
     }
     let result = await executeTool(name, input);
+    if(copiedValues.length&&result&&typeof result==='object')result={...(result as any),sourceValueBindings:copiedValues,sourceValueNote:'These hashes describe the literal input passed to the tool, not saved-state proof. Save and reopen the record, then compare browser_read_form field hashes to verify persistence.'};
     if(name==='computer'&&input.action==='call'&&!isObservation(name,input))assistedVisionAt=0;
     if (!opts.workRuntime) return result;
     if(result && typeof result==="object" && (result as any)._image && !opts.modelOverride){

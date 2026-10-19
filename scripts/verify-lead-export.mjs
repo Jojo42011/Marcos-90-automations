@@ -42,6 +42,11 @@ try{
  await call('browser_navigate',{url:base+'/form'});
  const form=await call('browser_read_form');assert.equal(form.fields.length,1);assert.equal(form.fields[0].characters,longFormText.length);assert.equal(form.fields[0].valueTruncated,true);assert(!JSON.stringify(form).includes('never-expose'));assert.equal(form.fields[0].sha256,(await import('node:crypto')).createHash('sha256').update(longFormText).digest('hex'));
  const detail=await call('browser_read_table');assert.equal(detail.layout,'key_value');assert.equal(detail.title,'Literal Book');assert.equal(detail.fields.UPC,'0123456789abcdef');assert.equal(detail.fields['Price (incl. tax)'],'£51.77');
+ const imported='Literal imported Ω history';
+ const preserved=await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'History',type:'textbox',target:'textarea[name="history"]',value:imported}]});assert(!preserved.error,JSON.stringify(preserved));
+ const mergedHash=(await import('node:crypto')).createHash('sha256').update(longFormText+'\n'+imported).digest('hex');
+ assert.equal((await call('browser_read_form')).fields[0].sha256,mergedHash,'Preserve full existing history and append literal missing history');
+ const repeated=await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'History',type:'textbox',target:'textarea[name="history"]',value:imported}]});assert.equal(repeated.unchanged,true);assert.equal((await call('browser_read_form')).fields[0].sha256,mergedHash);
  console.log('PASS visible long-form hashes, excluded passwords/hidden inputs, exact key-value product metadata');
  console.log('PASS: empty lazy table -> discover nested scrolling -> retrieve five virtualized batches -> exclude five records -> deduplicate/restart -> verified 35-row CSV -> authenticated download; no screenshots, external services or manual scrolling');
 }finally{await B.closeBrowsers();S.closeStore();server.closeAllConnections();await new Promise(r=>server.close(r));global.fetch=original;}

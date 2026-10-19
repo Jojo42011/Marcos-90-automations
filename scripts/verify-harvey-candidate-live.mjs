@@ -33,13 +33,16 @@ for(const [,href,title]of [...home.matchAll(/<h3>\s*<a href="([^"]+)" title="([^
  const page=await(await fetch(new URL(href,'https://books.toscrape.com/'))).text(),upc=page.match(/<th>UPC<\/th><td>([^<]+)<\/td>/)?.[1],price=page.match(/<th>Price \(incl\. tax\)<\/th><td>[^\d]*(\d+\.\d+)<\/td>/)?.[1];assert(upc&&price,'Independent public source parser failed');expectedBooks.push([decode(title),upc,price]);
 }
 assert.equal(expectedBooks.length,10);
+let browserTrace=[];const originalBrowserCall=B.browserCall;
+B.browserCall=async(owner,chat,tool,args,...rest)=>{const out=await originalBrowserCall(owner,chat,tool,args,...rest);browserTrace.push({tool,arguments:JSON.stringify(args).slice(0,600),error:out?.error||null});if(browserTrace.length>30)browserTrace.shift();return out;};
 let cost=0,calls=0,failed=0;const budget=Number(process.env.HARVEY_QA_BUDGET_USD||.25),outcomes=[];
 const run=async(chat,message)=>{
  console.log('CANDIDATE_START '+JSON.stringify({model:chat.model,chatId:chat.id,rerun:message.startsWith('Recheck')}));
+ const receiptTrace=[];browserTrace=[];
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),420000);let result,continuation,segments=0;
- try{do{result=await R.runChat('candidate-qa',chat,message+(continuation?'\nSaved continuation: '+continuation.reason:''),{workRequestId:chat.id,continuationTurn:segments>0,allowContinuation:true,modelOverride:chat.model,maxCostUsd:Math.max(0,budget-cost),signal:controller.signal,onEvent:e=>{if(e.type==='usage'){cost+=e.costUsd;calls++;if(calls%20===0)console.log('CANDIDATE_PROGRESS '+JSON.stringify({model:chat.model,calls,costUsd:cost}));if(cost>budget)controller.abort();}}});continuation=result.continuation;segments++;if(continuation)await new Promise(r=>setTimeout(r,Math.max(10,Math.min(60,continuation.delaySeconds))*1000));}while(continuation&&!controller.signal.aborted);
+ try{do{result=await R.runChat('candidate-qa',chat,message+(continuation?'\nSaved continuation: '+continuation.reason:''),{workRequestId:chat.id,continuationTurn:segments>0,allowContinuation:true,modelOverride:chat.model,maxCostUsd:Math.max(0,budget-cost),signal:controller.signal,onEvidence:r=>{receiptTrace.push({tool:r.tool,operation:r.operation,outcome:r.outcome,diagnostic:r.diagnostic});if(receiptTrace.length>30)receiptTrace.shift();},onEvent:e=>{if(e.type==='usage'){cost+=e.costUsd;calls++;if(calls%20===0)console.log('CANDIDATE_PROGRESS '+JSON.stringify({model:chat.model,calls,costUsd:cost}));if(cost>budget)controller.abort();}}});continuation=result.continuation;segments++;if(continuation)await new Promise(r=>setTimeout(r,Math.max(10,Math.min(60,continuation.delaySeconds))*1000));}while(continuation&&!controller.signal.aborted);
  assert(!result.modelError&&!result.budgetRefused&&!result.toolFailure,JSON.stringify({modelError:result.modelError,budgetRefused:result.budgetRefused,toolFailure:result.toolFailure}));if(result.verification?.status!=='completed')console.log('CANDIDATE_DIAGNOSTICS '+JSON.stringify(result.verification?.receipts.filter(r=>r.outcome==='failed').slice(-5).map(r=>({tool:r.tool,diagnostic:r.diagnostic}))));assert.equal(result.verification?.status,'completed',result.speech);return result;
- }finally{clearTimeout(timer);}
+ }catch(error){console.log('CANDIDATE_TRACE '+JSON.stringify({model:chat.model,receipts:receiptTrace,browser:browserTrace}));throw error;}finally{clearTimeout(timer);}
 };
 try{
  for(const model of ['inception/mercury-2.5','~openai/gpt-luna-latest']){

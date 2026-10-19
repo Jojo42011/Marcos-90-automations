@@ -48,3 +48,11 @@ export function readFormInPage(input:{target?:string}){
     return {label,name:el.name||null,type:el.type,value:String(el.value??''),checked:['checkbox','radio'].includes(el.type)?el.checked:undefined,selector};
   });return {url:location.origin+location.pathname,fields};
 }
+
+// The browser resolves the already-observed target. Read no password or hidden state.
+export function copyFieldInPage(element:any){
+  const rect=element.getBoundingClientRect(),type=String(element.type||'');
+  if(rect.width<=0||rect.height<=0||['password','hidden'].includes(type)||!['INPUT','TEXTAREA','SELECT'].includes(element.tagName))throw Error('Copy preservation requires a visible non-secret form field');
+  const label=[element.name,element.id,element.placeholder,element.getAttribute('aria-label'),...Array.from(element.labels||[]).map((l:any)=>l.textContent)].filter(Boolean).join(' ');
+  return {value:String(element.value??''),history:element.tagName==='TEXTAREA'||/notes?|history|messages?/i.test(label),search:/search|filter|find|username|login|verification/i.test(label)};
+}

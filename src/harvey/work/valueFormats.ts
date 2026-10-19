@@ -16,3 +16,12 @@ export function formatSourceValue(value:any,format='text'):string {
   }
   throw Error('Unknown source format');
 }
+
+/** Missing-only transfer: retain existing scalar fields and append literal history once. */
+export function mergeMissingValue(current:string,incoming:string,history:boolean){
+  if(!current)return incoming;
+  if(!incoming||current===incoming||current.includes(incoming))return current;
+  if(!history)return current;
+  if(incoming.includes(current))return incoming;
+  return current+'\n'+incoming;
+}
