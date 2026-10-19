@@ -4,7 +4,11 @@ export function formatSourceValue(value:any,format='text'):string {
   if(format==='date_only'){
     const text=value?.type==='excel_date'?value.value:String(value);
     if(!/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(text))throw Error('Source is not an explicit ISO calendar date; no date was inferred');
-    return text.slice(0,10);
+    const date=text.slice(0,10),[year,month,day]=date.split('-').map(Number);
+    const leap=year%4===0&&(year%100!==0||year%400===0);
+    const days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
+    if(month<1||month>12||day<1||day>days[month-1])throw Error('Source calendar date is invalid; correct the source or report the exact invalid-date blocker. No date was inferred');
+    return date;
   }
   if(typeof value==='object')throw Error('Select an actual scalar source value; objects are not silently converted to text');
   const text=String(value);

@@ -78,6 +78,9 @@ const orderedExport=R.workRecords('fixture',chat.id,{action:'export',collection:
 assert.equal(readFileSync(F.filePath('fixture',chat.id,orderedExport.file),'utf8'),'\uFEFF"name"\r\n"First observed"\r\n"Second observed"\r\n');
 const explicitOrder=R.workRecords('fixture',chat.id,{action:'export',collection:'order',keys:['a','z'],includeSourceId:false});assert.equal(readFileSync(F.filePath('fixture',chat.id,explicitOrder.file),'utf8'),'\uFEFF"name"\r\n"Second observed"\r\n"First observed"\r\n');const subset=R.workRecords('fixture',chat.id,{action:'export',collection:'order',keys:['z'],includeSourceId:false});assert.equal(subset.rows,1);for(const keys of [['a','a'],['unknown'],[]])assert.throws(()=>R.workRecords('fixture',chat.id,{action:'export',collection:'order',keys}),/unique existing record keys/);
 assert.equal(formatSourceValue({type:'excel_date',value:'2026-11-19T00:00:00Z'},'date_only'),'2026-11-19');
+for(const date of ['2026-02-29','2026-11-31','2026-13-01','2026-00-15','2026-01-00','1900-02-29'])assert.throws(()=>formatSourceValue(date,'date_only'),/calendar date is invalid/);
+for(const date of ['2024-02-29','2000-02-29','1900-02-28','2026-11-30'])assert.equal(formatSourceValue(date,'date_only'),date);
+assert.equal(formatSourceValue('2024-02-29T23:30:00-05:00','date_only'),'2024-02-29','Keep the observed calendar day without timezone conversion');
 assert.throws(()=>formatSourceValue('next Friday','date_only'),/explicit ISO/);
 assert.throws(()=>formatSourceValue('£51.777','decimal_currency'),/no rounding/);
 assert.equal(mergeMissingValue('Keep prior history','Imported history',true),'Keep prior history\nImported history');
