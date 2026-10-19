@@ -543,6 +543,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
   };
 
+  let sourceOrderRefreshed=false;
   const orderedExports=new Set<string>();
   const orderedCount=/\bfirst\s+(\d+)\b/i.exec(opts.message);
   const orderedFile=/(?:\b(?:save|write|create|export)\s+(?:csv\s+)?(?:as\s+|to\s+)?|\bas\s+)([A-Za-z0-9_.-]+\.csv)\b/i.exec(opts.message)?.[1];
@@ -641,7 +642,20 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
         return {error:'A global blocker has not been established by an actual failed operation. Consult capabilities, inspect a distinct supported route (including inspect_screen when text is insufficient), and finish independent steps. Report the specific observed blocker if those attempts fail; a missing destination connection alone does not prevent source collection.'};
       }
       if(input.status==='completed'){
-        if(requestedSourceOrder&&!orderedExports.has(orderedFile!))return {error:'Verify the requested first-N source order by exporting the requested CSV using work_records orderFrom bound to the actual observed source list, then read the saved file. Existing draft order is not proof.'};
+        if(requestedSourceOrder&&!orderedExports.has(orderedFile!)){
+          const error='Verify the requested first-N source order using work_records orderFrom from a current browser/workbook/connector source observation, then read the saved CSV. Old receipt IDs and history_search are not current source evidence.';
+          const urls=[...new Set(opts.message.match(/https?:\/\/[^\s"'<>),]+/g)||[])];
+          if(!sourceOrderRefreshed&&urls.length===1&&canResumeFromReceipts(verification.result().receipts,true)&&!verification.result().receipts.some(r=>r.scope==='browser'&&!r.observation&&!r.discovery&&r.actionOutcome!=='not_executed'&&!['browser_navigate','browser_navigate_back'].includes(r.operation||''))&&opts.workRuntime.tools.some(t=>t.name==='computer')){
+            sourceOrderRefreshed=true;
+            const navigationInput={action:'call',tool:'browser_navigate',arguments:{url:urls[0]}},navigation=await executeTool('computer',navigationInput),navReceipt=verification.record('computer',navigationInput,navigation);opts.onEvidence?.(navReceipt);
+            if(navReceipt.outcome==='returned'){
+              const readInput={action:'call',tool:'browser_read_table',arguments:{}},observed=await executeTool('computer',readInput),receipt=verification.record('computer',readInput,observed);opts.onEvidence?.(receipt);
+              const rows=(observed as any)?.rows;
+              if(receipt.outcome==='returned'&&Array.isArray(rows)&&rows.length>=requestedSourceOrder){const title=rows.slice(0,requestedSourceOrder).every((row:any)=>typeof row.title==='string'&&row.title);return {error,sourceOrder:{evidenceId:receipt.id,path:'/rows',keyPath:title?'/title':'/id',...(title?{field:'title'}:{}),count:requestedSourceOrder},currentObservation:{...(observed as any),_harveyEvidence:receipt},note:'Fresh source-list read only. Use this binding with the matching saved collection; do not search archived receipt IDs or recollect finished detail pages.'};}
+            }
+          }
+          return {error};
+        }
         const incomplete=opts.workRuntime.completionCheck?.();
         if(incomplete){
           const result={error:incomplete,plan:opts.workRuntime.tools.some(t=>t.name==='task_plan')?await opts.workRuntime.execute('task_plan',{action:'get'}):undefined,note:'Checkpoint only the genuinely completed zero-based plan steps with task_plan action=checkpoint, then report_verification again. If work remains, execute it; do not mark it complete just to satisfy this check.'};
