@@ -269,6 +269,50 @@ export class TurnVerification {
     const details=[rejection?`Completion check: ${rejection.diagnostic!.message}`:'No completion review was accepted after the latest operations.',failure?`Last recorded tool error: ${failure.diagnostic!.message}`:''];
     return details.filter(Boolean).join(' ');
   }
+  historyTransferCoverage(goal:string){
+    if(!/\b(?:reconcil\w*|copy|transfer|import\w*)\b/i.test(goal)||!/notes?|history|messages?|texts?/i.test(goal)||/(?:only|just).{0,20}(?:blank|empty).{0,20}(?:notes|history)|(?:notes|history).{0,20}(?:only|if).{0,20}(?:blank|empty)/i.test(goal))return {checked:0,missing:[]};
+    const sheets=new Map<string,any>(),forms=new Map<string,any>(),edits=new Map<string,number>(),reopens=new Map<string,number>();let page:string|undefined,transferObserved=false;
+    const key=(source:any,name=source.sheet)=>JSON.stringify([source.file,source.sha256,name]);
+    const schema=(source:any,name=source.sheet)=>{const k=key(source,name);if(!sheets.has(k))sheets.set(k,{file:source.file,sheet:name,sha256:source.sha256,headers:{},rows:new Map()});return sheets.get(k);};
+    const plain=(value:any):string|undefined=>typeof value==='string'?value:typeof value?.text==='string'?value.text:typeof value?.cachedResult==='string'?value.cachedResult:undefined;
+    const url=(source:any)=>{const raw=Array.isArray(source?.content)?source.content.filter((c:any)=>c.type==='text').map((c:any)=>c.text).join('\n'):'';return source?.url||raw.match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1];};
+    for(const [index,receipt]of this.receipts.entries()){
+      const source:any=this.sources.get(receipt.id);if(!source||receipt.outcome!=='returned')continue;
+      if(receipt.tool==='workspace_sheet'){
+        for(const sheet of source.sheets||[]){const s=schema(source,sheet.name);for(const h of sheet.headers||[])s.headers[h.column]=h.label;}
+        if(Array.isArray(source.rows)){const s=schema(source);for(const [i,row]of source.rows.entries()){if(row.row===1){for(const [col,value]of Object.entries(row.values||{}))if(typeof value==='string')s.headers[col]=value;continue;}const r=s.rows.get(row.row)||{row:row.row,values:{}};for(const [col,value]of Object.entries(row.values||{}))r.values[col]={value,receiptId:receipt.id,path:'/rows/'+i+'/values/'+col};s.rows.set(row.row,r);}}
+      }
+      if(receipt.tool==='computer'){
+        if(['browser_type','browser_fill_form'].includes(receipt.operation||'')&&(source.preservedFields?.length||source.sourceValueBindings?.length))transferObserved=true;
+        const previous=page;page=url(source)||page;if(!page)continue;
+        if(['browser_navigate','browser_navigate_back'].includes(receipt.operation||'')||receipt.operation==='browser_click'&&page!==previous)reopens.set(page,index);
+        if(['browser_type','browser_fill_form','browser_press_key','browser_mouse_click_xy'].includes(receipt.operation||'')&&!source.unchanged)edits.set(page,index);
+        if(receipt.operation==='browser_read_form'&&receipt.observation)forms.set(page,{...source,identityEmails:source.identityEmails?.length?source.identityEmails:forms.get(page)?.identityEmails||[],identityPhones:source.identityPhones?.length?source.identityPhones:forms.get(page)?.identityPhones||[],index});
+      }
+    }
+    if(!transferObserved&&!/\b(?:into|to|on)\s+(?:(?:the|my|your|existing|matched)\s+)*(?:contacts?|profiles?|leads?|CRM|Brivity)\b/i.test(goal))return {checked:0,missing:[]};
+    const missing:any[]=[];let checked=0;
+    const norm=(s:string)=>s.replace(/\r\n?/g,'\n');
+    const phone=(value:string)=>{let digits=value.replace(/\b(?:ext|x)\s*\d+$/i,'').replace(/\D/g,'');if(digits.length===11&&digits.startsWith('1'))digits=digits.slice(1);return digits.length>=7&&digits.length<=16?digits:'';};
+    for(const sheet of sheets.values()){
+      const emails=Object.keys(sheet.headers).filter(col=>/^(?:(?:primary|secondary|work|home|personal)\s+)?e-?mail(?:s|\s*(?:address(?:es)?|[1-9]))?$/i.test(String(sheet.headers[col]).replace(/\(s\)/gi,'s').trim())),history=Object.keys(sheet.headers).filter(col=>!/task/i.test(sheet.headers[col])&&/notes?|history|messages?|texts?|call logs?/i.test(sheet.headers[col]));
+      const phones=Object.keys(sheet.headers).filter(col=>/^(?:(?:primary|secondary|mobile|cell|home|work)\s+)?(?:phone|telephone|mobile|cell)(?:s|\s*(?:number|[1-9]))?$/i.test(String(sheet.headers[col]).replace(/\(s\)/gi,'s').trim()));
+      if((!emails.length&&!phones.length)||!history.length)continue;
+      for(const row of sheet.rows.values()){
+        const addresses=emails.flatMap(col=>(plain(row.values[col]?.value)||'').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[]).map(value=>value.toLowerCase());
+        const identities=addresses.length?addresses:phones.flatMap(col=>String(plain(row.values[col]?.value)??row.values[col]?.value??'').split(/[,;\n|]+/).map(phone)).filter(Boolean);if(!identities.length)continue;const identity=identities[0];
+        for(const col of history){const ref=row.values[col];if(!ref)continue;let value=plain(ref.value),sourceRef={evidenceId:ref.receiptId,path:ref.path};
+          if(value===undefined&&ref.value?.truncated){for(const receipt of [...this.receipts].reverse()){const cell:any=this.sources.get(receipt.id);if(receipt.tool==='workspace_sheet'&&cell?.cell===col+row.row&&key(cell)===key(sheet)){try{value=this.sourceValue({evidenceId:receipt.id,path:'/content'});sourceRef={evidenceId:receipt.id,path:'/content'};break;}catch{}}}}
+          if(typeof value!=='string'){if(ref.value?.truncated)missing.push({file:sheet.file,sheet:sheet.sheet,row:row.row,cell:col+row.row,reason:'Read the complete source history cell before verifying its transfer'});continue;}
+          if(!value.trim())continue;checked++;const hash=createHash('sha256').update(value).digest('hex');
+          const candidates=[...forms.entries()].filter(([,form])=>addresses.length?(form.identityEmails||[]).some((email:string)=>identities.includes(email.toLowerCase())):(form.identityPhones||[]).some((value:string)=>identities.includes(phone(value))));
+          const matched=candidates.some(([u,form])=>form.index>(edits.get(u)??-1)&&(reopens.get(u)??-1)>(edits.get(u)??-1)&&((form.textChecks||[]).some((check:any)=>check.sha256===hash&&check.matched===true)||(form.fields||[]).some((field:any)=>/notes?|history|messages?|texts?/i.test((field.label||'')+' '+(field.name||''))&&(field.sha256===hash||typeof field.value==='string'&&norm(field.value).includes(norm(value!))))));
+          if(!matched)missing.push({file:sheet.file,sheet:sheet.sheet,row:row.row,cell:col+row.row,identity,source:sourceRef,targetUrls:candidates.map(([u])=>u),reason:'Distinct source history was not verified on a saved/reopened matching profile. Preserve prior history, append missing text once, reopen, then browser_read_form with expected text (sourceValues /expected/0 supports long cells).'});
+        }
+      }
+    }
+    return {checked,missing};
+  }
   observedFileRevision(file:unknown):string|undefined{
     if(typeof file!=='string')return undefined;
     for(const receipt of [...this.receipts].reverse())if(receipt.tool==='workspace_read'&&receipt.outcome==='returned'){const source:any=this.sources.get(receipt.id);if(source?.file===file&&typeof source.sha256==='string')return source.sha256;}

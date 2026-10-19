@@ -204,7 +204,7 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   /** Owner-scoped work surface. Its executor enforces connection grants. */
   workDelegated?: boolean;
-  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; loginEmailAvailable?: boolean; pendingWork?:()=>boolean; completionCheck?:()=>string|undefined; reviewOutcome?:boolean; outcomeGoal?:()=>unknown; deliverables?:()=>{file:string;download:string}[]; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
+  workRuntime?: { tools: Anthropic.Messages.Tool[]; context: string; loginEmailAvailable?: boolean; pendingWork?:()=>boolean; completionCheck?:()=>string|undefined; reviewOutcome?:boolean; outcomeGoal?:()=>unknown; requestGoal?:()=>string; deliverables?:()=>{file:string;download:string}[]; execute: (name: string, input: Record<string, unknown>) => Promise<unknown> };
   message: string;
   history?: MessageParam[];
   /** Timestamped turns for the continuity layer (conversation state, deictic
@@ -545,15 +545,16 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
 
   let sourceOrderRefreshed=false;
   const orderedExports=new Set<string>();
-  const orderedCount=/\bfirst\s+(\d+)\b/i.exec(opts.message);
-  const orderedFile=/(?:\b(?:save|write|create|export)\s+(?:csv\s+)?(?:as\s+|to\s+)?|\bas\s+)([A-Za-z0-9_.-]+\.csv)\b/i.exec(opts.message)?.[1];
-  const requestedSourceOrder=orderedCount&&orderedFile&&/\b(?:homepage|source|listed|original)\s+order\b/i.test(opts.message)?Number(orderedCount[1]):undefined;
+  const nativeGoal=opts.workRuntime?.requestGoal?.()||opts.message;
+  const orderedCount=/\bfirst\s+(\d+)\b/i.exec(nativeGoal);
+  const orderedFile=/(?:\b(?:save|write|create|export)\s+(?:csv\s+)?(?:as\s+|to\s+)?|\bas\s+)([A-Za-z0-9_.-]+\.csv)\b/i.exec(nativeGoal)?.[1];
+  const requestedSourceOrder=orderedCount&&orderedFile&&/\b(?:homepage|source|listed|original)\s+order\b/i.test(nativeGoal)?Number(orderedCount[1]):undefined;
   const outcomeReviews=new Map<string,{passed:boolean;issues:string[]}>();
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
     if(opts.workRuntime&&(name==='workspace_write'||name==='work_records'&&input.action==='export')&&input.expectedSha256===undefined){const revision=verification.observedFileRevision(input.file);if(revision)input={...input,expectedSha256:revision};}
     const copiedValues:any[]=[];
-    const copyTask=/\b(?:reconcil\w*|copy|transfer|import\w*|missing information|missing data)\b/i.test(opts.message)&&! /\b(?:summari\w*|rewrite|translate|compose|draft)\b/i.test(opts.message);
-    const extractedCsv=/\b(?:collect|extract|export|scrape|take the first)\b/i.test(opts.message)&&verification.hasBrowserInput();
+    const copyTask=/\b(?:reconcil\w*|copy|transfer|import\w*|missing information|missing data)\b/i.test(nativeGoal)&&! /\b(?:summari\w*|rewrite|translate|compose|draft)\b/i.test(nativeGoal);
+    const extractedCsv=/\b(?:collect|extract|export|scrape|take the first)\b/i.test(nativeGoal)&&verification.hasBrowserInput();
     if(opts.workRuntime&&name==='workspace_write'&&/\.csv$/i.test(String(input.file))&&extractedCsv){
       const result={error:'For extracted website data use work_records export with file, includeSourceId:false and selected columns. It writes actual observed values and safely quotes CSV. Use column format decimal_currency when a decimal price is requested; do not invent or manually retype source values.'};const r=verification.record(name,input,result);return {...result,_harveyEvidence:r};
     }
@@ -565,23 +566,23 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(order){try{input={...input,keys:undefined,_orderValues:verification.sourceOrderValues(order,requestedSourceOrder),_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
     }
     if(opts.workRuntime&&name==='computer'){
-      const bindings=(input as any).sourceValues;input=computerArguments(input);
+      const bindings=(input as any).sourceValues;input=computerArguments(structuredClone(input));
       try{
         const args:any=input.arguments||{},bound=new Set<string>();
         if(bindings!==undefined){
           if(!Array.isArray(bindings)||bindings.length>30)throw Error('Use at most 30 source value bindings per call');
           for(const binding of bindings){
-            const path=String(binding.argumentPath||'');if(!((input.tool==='browser_type'&&path==='/text')||(input.tool==='browser_fill_form'&&/^\/fields\/\d+\/value$/.test(path))))throw Error('Source bindings only fill browser text values, never targets, navigation or actions');
+            const path=String(binding.argumentPath||'');if(!((input.tool==='browser_type'&&path==='/text')||(input.tool==='browser_fill_form'&&/^\/fields\/\d+\/value$/.test(path))||(input.tool==='browser_read_form'&&/^\/expected\/\d+$/.test(path))))throw Error('Source bindings only fill browser text values or read-only expected-text checks, never targets, navigation or actions');
             if(bound.has(path))throw Error('Duplicate source binding');bound.add(path);
             let value=formatSourceValue(verification.sourceValue(binding),binding.format||'text');
             if(binding.prefix!==undefined){if(typeof binding.prefix!=='string'||!verification.observedPrefix(binding.prefixEvidenceId,binding.prefix))throw Error('Existing-text prefix must be quoted from a complete current browser observation; read the field before preserving it');value=binding.prefix+value;}
             copiedValues.push({argumentPath:path,characters:value.length,sha256:createHash('sha256').update(value).digest('hex')});
-            if(path==='/text')args.text=value;else{const index=Number(path.split('/')[2]);if(!Array.isArray(args.fields)||!args.fields[index])throw Error('Bind a field in this call');args.fields[index].value=value;}
+            if(path==='/text')args.text=value;else if(path.startsWith('/expected/')){const index=Number(path.split('/')[2]);if(index>29)throw Error('Use at most 30 expected-text checks');args.expected||=[];args.expected[index]=value;}else{const index=Number(path.split('/')[2]);if(!Array.isArray(args.fields)||!args.fields[index])throw Error('Bind a field in this call');args.fields[index].value=value;}
           }
         }
         if(copyTask&&verification.hasWorkbookInput()){
           const values=input.tool==='browser_type'?[{value:args.text,label:args.element||args.target||'',path:'/text'}]:input.tool==='browser_fill_form'?(args.fields||[]).map((f:any,i:number)=>({value:f.value,label:f.name||f.target||'',path:'/fields/'+i+'/value'})):[];
-          for(const item of values)if(typeof item.value==='string'&&!bound.has(item.path)&&! /password|username|login|sign.?in|verification|search|filter|sort|find/i.test(item.label)&&!opts.message.includes(item.value)&&!verification.workbookCopyValue(item.value))throw Error('Copied workbook fields must preserve exact source text. Use computer sourceValues:[{argumentPath:"'+item.path+'",evidenceId:"eN",path:"/rows/0/values/C"}]. Hosted missing-only imports preserve existing history automatically; bind the literal new source value. Other prefixes require prefixEvidenceId from a current snapshot. No field was changed');
+          for(const item of values)if(typeof item.value==='string'&&!bound.has(item.path)&&! /password|username|login|sign.?in|verification|search|filter|sort|find/i.test(item.label)&&!nativeGoal.includes(item.value)&&!verification.workbookCopyValue(item.value))throw Error('Copied workbook fields must preserve exact source text. Use computer sourceValues:[{argumentPath:"'+item.path+'",evidenceId:"eN",path:"/rows/0/values/C"}]. Hosted missing-only imports preserve existing history automatically; bind the literal new source value. Other prefixes require prefixEvidenceId from a current snapshot. No field was changed');
         }
         input={...input,arguments:args};
       }catch(error){const result={error:(error as Error).message,recovery:{kind:'source_value',actionOutcome:'not_executed',safeToRetry:false}};const r=verification.record(name,input,result);opts.onEvidence?.(r);return {...result,_harveyEvidence:r};}
@@ -645,7 +646,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(input.status==='completed'){
         if(requestedSourceOrder&&!orderedExports.has(orderedFile!)){
           const error='Verify the requested first-N source order using work_records orderFrom from a current browser/workbook/connector source observation, then read the saved CSV. Old receipt IDs and history_search are not current source evidence.';
-          const urls=[...new Set(opts.message.match(/https?:\/\/[^\s"'<>),]+/g)||[])];
+          const urls=[...new Set(nativeGoal.match(/https?:\/\/[^\s"'<>),]+/g)||[])];
           if(!sourceOrderRefreshed&&urls.length===1&&canResumeFromReceipts(verification.result().receipts,true)&&!verification.result().receipts.some(r=>r.scope==='browser'&&!r.observation&&!r.discovery&&r.actionOutcome!=='not_executed'&&!['browser_navigate','browser_navigate_back'].includes(r.operation||''))&&opts.workRuntime.tools.some(t=>t.name==='computer')){
             sourceOrderRefreshed=true;
             const navigationInput={action:'call',tool:'browser_navigate',arguments:{url:urls[0]}},navigation=await executeTool('computer',navigationInput),navReceipt=verification.record('computer',navigationInput,navigation);opts.onEvidence?.(navReceipt);
@@ -657,6 +658,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
           }
           return {error};
         }
+        const history=verification.historyTransferCoverage(nativeGoal);
+        if(history.missing.length){const result={error:'Source history transfer is incomplete or unverified for '+history.missing.length+' read source fields.',checkedSourceFields:history.checked,missing:history.missing.slice(0,20),note:'A nonempty old note is not proof that distinct imported history was added. Fix these actual source/destination gaps; do not substitute report edits.'};const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};}
         const incomplete=opts.workRuntime.completionCheck?.();
         if(incomplete){
           const result={error:incomplete,plan:opts.workRuntime.tools.some(t=>t.name==='task_plan')?await opts.workRuntime.execute('task_plan',{action:'get'}):undefined,note:'Checkpoint only the genuinely completed zero-based plan steps with task_plan action=checkpoint, then report_verification again. If work remains, execute it; do not mark it complete just to satisfy this check.'};

@@ -38,15 +38,21 @@ export function readTableInPage(input:{target?:string;offset?:number}) {
 export function tableCode(input:{target?:string;offset?:number}) {return `() => (${readTableInPage.toString()})(${JSON.stringify(input)})`;}
 
 /** Visible form data only; never passwords, hidden fields or application internals. */
-export function formCode(input:{target?:string}){return '() => ('+readFormInPage.toString()+')('+JSON.stringify(input)+')';}
-export function readFormInPage(input:{target?:string}){
+export function formCode(input:{target?:string;expected?:string[]}){return '() => ('+readFormInPage.toString()+')('+JSON.stringify(input)+')';}
+export function readFormInPage(input:{target?:string;expected?:string[]}){
   const root=input.target?document.querySelector(input.target):document;
   if(!root)return {error:'Observed form target was not found'};
   const fields=Array.from(root.querySelectorAll('input,textarea,select')).filter((el:any)=>{const r=el.getBoundingClientRect(),style=getComputedStyle(el);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.opacity!=='0'&&!el.closest('[hidden],[aria-hidden="true"]')&&!['password','hidden','submit','button'].includes(el.type);}).slice(0,100).map((el:any)=>{
     const label=el.getAttribute('aria-label')||Array.from(el.labels||[]).map((l:any)=>Array.from(l.childNodes).filter((n:any)=>n!==el).map((n:any)=>n.textContent||'').join('').trim()).join(' ')||el.name||el.id;
     const selector=el.id?'#'+CSS.escape(el.id):el.name?el.tagName.toLowerCase()+'[name='+JSON.stringify(el.name)+']':null;
     return {label,name:el.name||null,type:el.type,value:String(el.value??''),checked:['checkbox','radio'].includes(el.type)?el.checked:undefined,selector};
-  });return {url:location.origin+location.pathname,fields};
+  });const visible=(document.body?.innerText||'');
+  const labelledEmails=Array.from(document.querySelectorAll('p,span,div,label,dd')).filter((el:any)=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&!el.closest('textarea,[role="log"],[class*="note" i],[class*="history" i],[class*="message" i]');}).map((el:any)=>(el.innerText||'').match(/^\s*e-?mail(?: address)?\s*:?\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})\s*$/i)?.[1]).filter(Boolean);
+  const identityEmails=[...new Set([...fields.filter((f:any)=>f.type==='email'||/^e-?mail(?: address)?$/i.test(f.label||f.name||'')).map((f:any)=>f.value),...labelledEmails])];
+  const labelledPhones=Array.from(document.querySelectorAll('p,span,div,label,dd')).filter((el:any)=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&!el.closest('textarea,[role="log"],[class*="note" i],[class*="history" i],[class*="message" i]');}).map((el:any)=>(el.innerText||'').match(/^\s*(?:phone|mobile|cell|telephone)(?: number|\(s\)|s)?\s*:?\s*([+()0-9 .-]{7,})\s*$/i)?.[1]).filter(Boolean);
+  const identityPhones=[...new Set([...fields.filter((f:any)=>f.type==='tel'||/phone|mobile|cell|telephone/i.test((f.label||'')+' '+(f.name||''))).map((f:any)=>f.value),...labelledPhones])];
+  const historyValues=fields.filter((f:any)=>/notes?|history|messages?|texts?/i.test((f.label||'')+' '+(f.name||''))).map((f:any)=>f.value);
+  const norm=(text:string)=>text.replace(/\r\n?/g,'\n');return {url:location.origin+location.pathname,fields,identityEmails,identityPhones,contains:input.expected?.map(value=>norm(visible).includes(norm(value))||historyValues.some((text:string)=>norm(text).includes(norm(value))))};
 }
 
 // The browser resolves the already-observed target. Read no password or hidden state.

@@ -22,6 +22,10 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Native verification retains the original user-message reference across simple continuations, so resuming does not drop source-copy and first-N order requirements. No extra credential copy is stored.
+
+- Workbook history transfers have a native per-source-field coverage check against matching visible email/phone identities and reopened destination state. Distinct imported history cannot be skipped because an old note is populated or a model reviewer approves it. browser_read_form supports source-bound expected-text presence checks for long displayed history without echoing it.
+
 - Local output replacement can bind expectedSha256 from the actual same-file workspace_read receipt when omitted. Explicit version assertions and native on-disk concurrency checks remain authoritative; listings and cross-file hashes cannot supply the version.
 
 - Missing first-N order proof can refresh the single explicitly requested source URL once and provide a current native source binding. This read-only recovery respects uncertain-write checks and avoids searching archives for obsolete receipt IDs.

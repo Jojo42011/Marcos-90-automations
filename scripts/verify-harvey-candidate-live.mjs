@@ -28,11 +28,13 @@ const server=http.createServer(async(req,res)=>{
 });await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
 const parseCSV=text=>{const rows=[];let row=[],value='',quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){value+='"';i++;}else quoted=!quoted;}else if(c===','&&!quoted){row.push(value);value='';}else if(c==='\n'&&!quoted){row.push(value.replace(/\r$/,''));rows.push(row);row=[];value='';}else value+=c;}if(value||row.length){row.push(value);rows.push(row);}return rows;};
 const decode=s=>s.replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&amp;/g,'&');
-const home=await(await fetch('https://books.toscrape.com/')).text(),expectedBooks=[];
+const onlyCrm=process.env.HARVEY_QA_CASE==='crm';
+assert(!process.env.HARVEY_QA_CASE||onlyCrm,'Unknown QA case');
+const home=onlyCrm?'':await(await fetch('https://books.toscrape.com/')).text(),expectedBooks=[];
 for(const [,href,title]of [...home.matchAll(/<h3>\s*<a href="([^"]+)" title="([^"]+)"/g)].slice(0,10)){
  const page=await(await fetch(new URL(href,'https://books.toscrape.com/'))).text(),upc=page.match(/<th>UPC<\/th><td>([^<]+)<\/td>/)?.[1],price=page.match(/<th>Price \(incl\. tax\)<\/th><td>[^\d]*(\d+\.\d+)<\/td>/)?.[1];assert(upc&&price,'Independent public source parser failed');expectedBooks.push([decode(title),upc,price]);
 }
-assert.equal(expectedBooks.length,10);
+if(!onlyCrm)assert.equal(expectedBooks.length,10);
 let browserTrace=[];const originalBrowserCall=B.browserCall;
 B.browserCall=async(owner,chat,tool,args,...rest)=>{const out=await originalBrowserCall(owner,chat,tool,args,...rest);browserTrace.push({tool,arguments:JSON.stringify(args).slice(0,600),error:out?.error||null});if(browserTrace.length>30)browserTrace.shift();return out;};
 let cost=0,calls=0,failed=0;const budget=Number(process.env.HARVEY_QA_BUDGET_USD||.50),outcomes=[];
@@ -72,6 +74,7 @@ try{
    const out={model,test:'xlsx-to-authenticated-synthetic-crm',status:'passed',verifiedContacts:5,ambiguousRowsUntouched:1,initialWrites:writes,rerunWrites:0};outcomes.push(out);console.log('CANDIDATE_PASS '+JSON.stringify(out));
   }catch(e){failed++;console.log('CANDIDATE_FAIL '+JSON.stringify({model,test:'xlsx-to-authenticated-synthetic-crm',error:e.message,writes,independentDestination:{matchingNotes:records.filter(r=>r.notes.includes(source.find(s=>s.id===r.id).notes)).length,matchingDates:records.filter(r=>r.due===source.find(s=>s.id===r.id).due).length,matchingRelationships:records.filter(r=>r.relationship===source.find(s=>s.id===r.id).relationship).length,preservedPrior:records[1].notes.includes('Keep prior history'),alreadyCorrectProfileRewritten:writtenIds.has('1')}}));}
   finally{await B.closeBrowsers();}
+  if(onlyCrm)continue;
   const browserChat=S.createChat('candidate-qa',{mode:'work',model});
   try{
    const result=await run(browserChat,'Public browser QA: Open https://books.toscrape.com/ and take the first 10 books in homepage order. Open each product detail page and collect its full title, UPC and price including tax. Save books.csv with columns title,upc,price. Preserve UPCs as text and price as a decimal number. Read the saved file back and check 10 unique products before returning its download link. Complete end to end without asking me to continue. No purchases, logins, email or other connected apps.');
