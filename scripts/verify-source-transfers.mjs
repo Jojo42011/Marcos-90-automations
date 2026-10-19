@@ -68,6 +68,12 @@ const page=v.record('computer',{action:'call',tool:'browser_read_table'},{url:'h
 const encoded=v.record('business_call',{tool:'get_fixture'},{body:JSON.stringify({id:'connector-id',upc:'00123abcd'})});
 assert.equal(v.projectRecords([{evidenceId:encoded.id,idPath:'/body/id',fieldPaths:{upc:'/body/upc'}}])[0].fields.upc,'00123abcd');
 const chat=S.createChat('fixture',{});
+const orderedSource=[{url:'https://fixture.invalid/1',title:'One'},{url:'https://fixture.invalid/2',title:'Two'},{url:'https://fixture.invalid/3',title:'Three'}];
+R.workRecords('fixture',chat.id,{action:'save',collection:'repair-order',_verifiedRecords:orderedSource.map((r,i)=>({key:r.url,fields:{title:i===1?null:i===2?'Unrelated':r.title},source:{tool:'computer'}}))});
+const missingOrder=R.workRecords('fixture',chat.id,{action:'export',collection:'repair-order',file:'repair-order.csv',_orderValues:orderedSource.map(r=>r.title),_orderRows:orderedSource,_orderField:'title'});
+assert.match(missingOrder.error,/No export was written/);assert.equal(missingOrder.missingCount,2);assert.deepEqual(missingOrder.missingSourceRows.map(r=>r.position),[2,3]);assert.equal(missingOrder.missingSourceRows[0].sourceRow.url,orderedSource[1].url);assert.equal(missingOrder.missingSourceRows[1].expectedValue,'Three');assert(!F.files('fixture',chat.id).some(f=>f.name==='repair-order.csv'));
+R.workRecords('fixture',chat.id,{action:'save',collection:'repair-order',_verifiedRecords:orderedSource.slice(1).map(r=>({key:r.url,fields:{title:r.title},source:{tool:'computer'}}))});
+assert.equal(R.workRecords('fixture',chat.id,{action:'export',collection:'repair-order',file:'repair-order.csv',_orderValues:orderedSource.map(r=>r.title),_orderRows:orderedSource,_orderField:'title'}).rows,3);
 R.workRecords('fixture',chat.id,{action:'save',collection:'api',_verifiedRecords:v.projectRecords([{evidenceId:encoded.id,idPath:'/body/id',fieldPaths:{upc:'/body/upc'}}])});
 assert.equal(R.workRecords('fixture',chat.id,{action:'export',collection:'api',_requireObserved:true}).rows,1);
 R.workRecords('fixture',chat.id,{action:'save',collection:'books',_verifiedRecords:v.projectRecords([{evidenceId:page.id,idPath:'/url',fieldPaths:{title:'/title',upc:'/fields/UPC',price:'/fields/Price'}}])});

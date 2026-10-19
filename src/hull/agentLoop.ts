@@ -560,10 +560,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     if(opts.workRuntime&&name==='work_records'&&input.action==='export'&&extractedCsv)input={...input,_requireObserved:true};
     if(opts.workRuntime&&name==='work_records'&&input.action==='export'){
-      delete input._orderValues;delete input._orderField;
+      delete input._orderValues;delete input._orderField;delete input._orderRows;
       const order:any=input.orderFrom;
       if(requestedSourceOrder&&!order)return {error:'For this first-N source-order export use orderFrom:{evidenceId,path:"/rows",keyPath:"/title",field:"title",count:N} from the observed source list. Native selection/order must match the actual source, not saved insertion/key order.'};
-      if(order){try{input={...input,keys:undefined,_orderValues:verification.sourceOrderValues(order,requestedSourceOrder),_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
+      if(order){try{input={...input,keys:undefined,_orderValues:verification.sourceOrderValues(order,requestedSourceOrder),_orderRows:(verification.sourceValue({evidenceId:order.evidenceId,path:order.path}) as any[]).slice(0,order.count),_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
     }
     if(opts.workRuntime&&name==='computer'){
       const bindings=(input as any).sourceValues;input=computerArguments(structuredClone(input));
