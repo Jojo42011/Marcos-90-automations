@@ -560,10 +560,10 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     if(opts.workRuntime&&name==='work_records'&&input.action==='export'&&extractedCsv)input={...input,_requireObserved:true};
     if(opts.workRuntime&&name==='work_records'&&input.action==='export'){
-      delete input._orderValues;delete input._orderField;
+      delete input._orderValues;delete input._orderField;delete input._orderRows;
       const order:any=input.orderFrom;
       if(requestedSourceOrder&&!order)return {error:'For this first-N source-order export use orderFrom:{evidenceId,path:"/rows",keyPath:"/title",field:"title",count:N} from the observed source list. Native selection/order must match the actual source, not saved insertion/key order.'};
-      if(order){try{input={...input,keys:undefined,_orderValues:verification.sourceOrderValues(order,requestedSourceOrder),_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
+      if(order){try{input={...input,keys:undefined,_orderValues:verification.sourceOrderValues(order,requestedSourceOrder),_orderRows:(verification.sourceValue({evidenceId:order.evidenceId,path:order.path}) as any[]).slice(0,order.count),_orderField:order.field};}catch(error){return {error:(error as Error).message};}}
     }
     if(opts.workRuntime&&name==='computer'){
       const bindings=(input as any).sourceValues;input=computerArguments(structuredClone(input));
@@ -694,7 +694,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }
     if(opts.workRuntime&&name==="work_records"&&input.action==="save"){
       try{input={...input,_verifiedRecords:verification.projectRecords(input.records)};}catch(e){
-        const result={error:(e as Error).message,note:'No record was saved. Use successful structured observation JSON: records:[{evidenceId:"eN",idPath:"/rows/0/id",fieldPaths:{name:"/rows/0/name"}}]. Paths must match actual observed data, not literal values. For visual-only rows use inspect_screen structured=true, then project its data paths. A visible unique title or profile link can be a stable key; do not invent IDs.'};
+        const result={error:(e as Error).message,currentSources:verification.projectionGuidance(),note:'No record was saved. currentSources lists real current observation IDs and validated readable scalar paths, not guessed examples or a claim of field meaning. Choose the matching observed key and fields. records:[{evidenceId:"eN",idPath:"/rows/0/id",fieldPaths:{name:"/rows/0/name"}}]. Paths are JSON pointer strings, not literal values or nested objects for idPath. If these observations only contain unstructured snapshot text, read browser_read_table or use inspect_screen structured=true to obtain actual structured fields before saving; never reuse invented or historical evidence IDs. A visible unique title or profile link can be a stable key; do not invent IDs.'};
         const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};
       }
     }

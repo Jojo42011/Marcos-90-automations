@@ -13,7 +13,13 @@ export function workRecords(owner:string,chatId:string,input:any) {
   if(input.action==="export"){
     let all=rows().sort(input.order==='saved'?(a,b)=>(a.sourceOrder??0)-(b.sourceOrder??0):(a,b)=>a.key.localeCompare(b.key));
     if(input._orderValues){
-      all=input._orderValues.map((value:any,index:number)=>{const matches=all.filter(r=>input._orderField?r.fields[input._orderField]===value:r.key===value);if(matches.length!==1)throw Error('Source-order row '+(index+1)+' matched '+matches.length+' saved records using '+(input._orderField?'field '+JSON.stringify(input._orderField):'record key')+'. Read that source row and compare with work_records list. Saved fields: '+JSON.stringify([...new Set(all.flatMap(r=>Object.keys(r.fields)))])+'; retrieve missing records or bind an unambiguous actual saved field.');return matches[0];});
+      const selected=input._orderValues.map((value:any,index:number)=>({value,index,matches:all.filter(r=>input._orderField?r.fields[input._orderField]===value:r.key===value)}));
+      const missing=selected.filter((row:any)=>row.matches.length!==1);
+      if(missing.length)return {error:'Source-order rows do not match the saved collection. No export was written. Retrieve or repair the specific observed source rows below, then retry the source-bound export.',missingCount:missing.length,
+        missingSourceRows:missing.slice(0,30).map((row:any)=>({position:row.index+1,expectedValue:row.value,matches:row.matches.length,sourceRow:input._orderRows?.[row.index],sourceReference:input.orderFrom?{evidenceId:input.orderFrom.evidenceId,path:input.orderFrom.path+'/'+row.index}:undefined})),
+        matchingField:input._orderField||'record key',savedFields:[...new Set(all.flatMap(r=>Object.keys(r.fields)))],
+        note:'These are actual observed source values, not permission to invent data. Use each source row to retrieve its missing details or correct its missing field. For projections use the original sourceReference, not this repair response receipt. Preserve already verified records, exclude out-of-scope extras through source-bound export, and do not manually author the extracted CSV.'};
+      all=selected.map((row:any)=>row.matches[0]);
       if(new Set(all.map(r=>r.key)).size!==all.length)throw Error('Observed source order contains duplicate record identities.');
     }
     if(input.keys!==undefined){

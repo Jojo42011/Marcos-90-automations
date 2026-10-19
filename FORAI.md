@@ -22,6 +22,10 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Source-order export mismatches return the specific unmatched observed rows and original evidence references as a repair list, without writing an incomplete file. This lets recovery retrieve missing records or repair null fields while preserving already verified records; exact source-order matching still gates export.
+
+- Invalid work_records saves now return real current observation IDs and bounded readable JSON-pointer paths, without source values or guessed field mappings. Repair can discover the actual source shape; native source/coverage checks still decide what can be saved.
+
 - Live invoice QA exposed space-padded angle-bracket download links rendering as plain text. Existing-file link normalization and the local download renderer now accept this form; owner/chat file checks and unsafe-scheme rejection remain in place.
 
 - Failure explanations use the saved job's own receipts; a newer provider-only failure cannot borrow an older browser error from the same chat. Legacy checkpoint-only diagnostics use the latest checkpoint, including an empty one, rather than reviving earlier failures.

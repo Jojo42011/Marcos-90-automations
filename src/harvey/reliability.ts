@@ -155,6 +155,28 @@ export class TurnVerification {
     if(prefix.trim()){try{const page=new URL(url);if(!current||page.origin+page.pathname!==current.url)return false;}catch{return false;}}
     return !prefix.trim()||texts.some((text:string)=>text.includes(prefix.trim()))||(source?.fields||[]).some((field:any)=>field.value===prefix.trim());
   }
+  projectionGuidance() {
+    const readable=this.receipts.filter(r=>r.observation&&r.outcome==='returned'&&!r.limitation&&!r.discovery&&r.tool!=='work_records');
+    // Prefer structured reads over repeated snapshot envelopes; cover one full
+    // supported save batch so repair does not hide the first pages it needs.
+    const structured=readable.filter(r=>{const s:any=this.sources.get(r.id);return s&&(s.rows||s.fields||s.data||s.values);});
+    return (structured.length?structured:readable).slice(-30).map(r=>{
+      const paths:string[]=[];
+      const walk=(value:any,path:string,depth:number)=>{
+        if(depth>6||paths.length>=40)return;
+        if(typeof value==='string'){try{const parsed=JSON.parse(value);if(parsed&&typeof parsed==='object'){walk(parsed,path,depth+1);return;}}catch{}}
+        if(value===null||['string','number','boolean'].includes(typeof value)){
+          if(path)try{this.sourceValue({evidenceId:r.id,path});paths.push(path);}catch{}return;
+        }
+        if(value&&typeof value==='object')for(const [key,child]of Object.entries(value)){
+          if(/password|secret|token|cookie|authorization|_harveyEvidence/i.test(key))continue;
+          walk(child,path+'/'+key.replace(/~/g,'~0').replace(/\//g,'~1'),depth+1);
+        }
+      };
+      walk(this.sources.get(r.id),'',0);
+      return {evidenceId:r.id,tool:r.tool,operation:r.operation,paths};
+    }).filter(r=>r.paths.length);
+  }
   projectRecords(records:any) {
     if(!Array.isArray(records)||!records.length||records.length>30)throw Error('Provide 1–30 source-backed records');
     return records.map((record:any)=>{
