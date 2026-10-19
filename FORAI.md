@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Invalid computer envelopes are recorded as unexecuted, allowing safe saved-progress recovery; successful model responses reset consecutive format-repair failures during long workflows.
+
 - Completion verifies the latest authored revision per file, avoiding impossible read-back requirements for superseded drafts; missing current reads name the exact file and hash.
 
 - Configured outcome review uses a separately accounted read-only auxiliary model after native completion checks to compare user scope with actual source and saved-output evidence. The reviewer parser retains actionable structured criticism, treats contradictory passes as failures, and reports exact malformed-field types. Its evidence view separates source inputs, prior page values, current reopened page values and latest file hashes; it must not demand writes to already-correct records or replace missing writes with report edits. The reviewer returns a forced structured verdict without executable tools and sees latest actual post-action snapshots. Failed reviews return concrete corrections; unchanged evidence is cached, external actions are never replayed, and the selected executor stays unchanged. Verified native deliverables receive real owner/chat-scoped download links.

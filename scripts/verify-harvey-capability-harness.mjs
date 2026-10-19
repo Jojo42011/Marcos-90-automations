@@ -20,7 +20,9 @@ const server=http.createServer(async(req,res)=>{
  else if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
-  if(mode==='unavailable'){
+  if(mode==='format_progress'){
+   message=[0,2,4].includes(n)?{role:'assistant',content:''}:n<6?tc('computer',{action:'call',tool:'browser_snapshot',arguments:{}}):n===6?tc('report_verification',{status:'completed',automaticEvidence:true,checks:['Recovered separate formatting failures after successful observations'],limitations:[]}):{role:'assistant',content:'Verified after recovered responses.'};
+  }else if(mode==='unavailable'){
    const steps=[['unavailable_fixture_tool',{action:'write'}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',automaticEvidence:true,checks:['The unavailable operation never ran; the supported source was read'],limitations:[]}]];
    if(n===1){const r=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(r._harveyEvidence.actionOutcome,'not_executed');}
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Recovered with the actual available capability.'};
@@ -210,6 +212,8 @@ try{
  const compactReadback=await runAgentLoop({message:'Read fixture report and verify it',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools:[...tools,...fileTools],context:'Fixture',execute:async(name,input)=>name==='workspace_read'?{file:'fixture.md',content:'Verified fixture report'}:input.tool==='browser_snapshot'?{url:'https://fixture.invalid/report',truncated:true,content:'Partial page'}:input.tool==='browser_read_table'?(compactReadbacks++,{url:'https://fixture.invalid/report',rows:[{name:'Report',value:'Verified fixture report'}]}):{url:'https://fixture.invalid/report',navigated:true}}});
  assert.equal(compactReadback.verification.status,'completed');assert.equal(compactReadbacks,1);
  console.log('ok completion repair replaces a truncated browser snapshot with a complete compact DOM read without replaying navigation');
+ mode='format_progress';round=0;
+ const formats=await runAgentLoop({message:'Read and verify the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({url:'https://fixture.invalid/',observed:true})}});assert.equal(formats.verification.status,'completed');assert(!formats.modelError);console.log('ok independent malformed responses recover after intervening successful progress');
  mode='rejected_review';round=0;
  const rejectedReview=await runAgentLoop({message:'Finish and verify the fixture',allowContinuation:true,modelOverride:mainModel,workRuntime:{tools,context:'Fixture',execute:async()=>({observed:true})}});
  assert.equal(rejectedReview.verification.status,'needs_verification');assert.match(rejectedReview.speech,/Evidence must reference successful tool receipts/);assert(!rejectedReview.speech.includes('The task is complete.'));

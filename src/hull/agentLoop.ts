@@ -894,6 +894,8 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       }
       return {speech:"The AI service repeatedly returned an empty or unusable response. The task is unfinished. Saved work is retained; any action without a confirmed result must be inspected before retrying.",modelError:"Empty or malformed model response after bounded repair; finish reason: "+String(out.stopReason||"unknown"),verification:verification.result(),toolRounds,model,modelUsed:lastModelUsed,costUsd,promptTokens,completionTokens,cachedTokens,contextPlan:lastPlan};
     }
+    // A valid response ends the formatting failure streak; long tasks get a fresh repair chance after progress.
+    malformedRepairs=0;
     if (!out.toolUses.length) {
       if(uninterrupted && segmentLimit(out.text) && falseLimitReminders<2){
         falseLimitReminders++;
