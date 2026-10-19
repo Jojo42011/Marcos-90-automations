@@ -10,6 +10,8 @@ const S=require('../dist/src/harvey/work/store.js'),B=require('../dist/src/harve
 const app=require('express')();
 app.get('/',(_req,res)=>res.type('html').send(`<style>body{margin:0}#viewport{height:300px;overflow:auto;width:700px}#space{height:3500px;position:relative}table{position:absolute;width:100%}td{height:25px}</style><h1>40 eligible-to-review leads</h1><div id="viewport" aria-label="Leads"><div id="space"><table aria-rowcount="40"><thead><tr><th>Name</th><th>Source</th></tr></thead><tbody></tbody></table></div></div><script>const pane=document.querySelector('#viewport'),table=document.querySelector('table');pane.addEventListener('scroll',()=>{const page=Math.min(4,Math.floor(pane.scrollTop/600));table.style.top=pane.scrollTop+'px';table.querySelector('tbody').innerHTML=Array.from({length:8},(_,j)=>{const i=page*8+j;return '<tr><td><a href="/people/'+i+'">'+(i===0?'=Formula-like name':'Lead '+i)+'</a></td><td>'+(j===7?'Mojo FL':'Listing Lead')+'</td></tr>'}).join('')});</script>`));
 app.use('/api/harvey',require('../dist/src/harvey/work/routes.js').createWorkRouter(req=>req.headers.authorization==='Bearer fixture',req=>req.headers['x-owner']||'alice'));
+const longFormText='Exact Ω 😀 history\n'.repeat(1500);
+app.get('/form',(_req,res)=>res.send('<label>History<textarea name="history">'+longFormText+'</textarea></label><input type="password" value="never-expose"><input type="hidden" value="secret"><h1>Literal Book</h1><table><tr><th>UPC</th><td>0123456789abcdef</td></tr><tr><th>Price (incl. tax)</th><td>£51.77</td></tr></table>'));
 const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
 const original=global.fetch;global.fetch=(url,...args)=>{assert.equal(new URL(String(url)).hostname,'127.0.0.1');return original(url,...args);};
 const chat=S.createChat('alice',{}),v=new TurnVerification();
@@ -37,5 +39,9 @@ try{
  assert.equal((await fetch(base+exported.download)).status,401);
  assert.throws(()=>R.workRecords('alice',chat.id,{action:'export',collection:'filtered',columns:['unreadNotes']}),/never been observed/);
  const readback=v.record('workspace_files',{},F.workspaceFiles('alice',chat.id));assert(readback.observation);assert(F.workspaceFiles('alice',chat.id).files.some(f=>f.name===exported.file));
+ await call('browser_navigate',{url:base+'/form'});
+ const form=await call('browser_read_form');assert.equal(form.fields.length,1);assert.equal(form.fields[0].characters,longFormText.length);assert.equal(form.fields[0].valueTruncated,true);assert(!JSON.stringify(form).includes('never-expose'));assert.equal(form.fields[0].sha256,(await import('node:crypto')).createHash('sha256').update(longFormText).digest('hex'));
+ const detail=await call('browser_read_table');assert.equal(detail.layout,'key_value');assert.equal(detail.title,'Literal Book');assert.equal(detail.fields.UPC,'0123456789abcdef');assert.equal(detail.fields['Price (incl. tax)'],'£51.77');
+ console.log('PASS visible long-form hashes, excluded passwords/hidden inputs, exact key-value product metadata');
  console.log('PASS: empty lazy table -> discover nested scrolling -> retrieve five virtualized batches -> exclude five records -> deduplicate/restart -> verified 35-row CSV -> authenticated download; no screenshots, external services or manual scrolling');
 }finally{await B.closeBrowsers();S.closeStore();server.closeAllConnections();await new Promise(r=>server.close(r));global.fetch=original;}

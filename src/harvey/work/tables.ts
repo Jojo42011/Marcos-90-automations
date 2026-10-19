@@ -30,8 +30,21 @@ export function readTableInPage(input:{target?:string;offset?:number}) {
   }
   let scroll:Element|null=root;
   while(scroll&&!(scroll.scrollHeight>scroll.clientHeight+2&&/auto|scroll/.test(getComputedStyle(scroll).overflowY)))scroll=scroll.parentElement;
-  return {url:location.origin+location.pathname,headers,rows,offset,nextOffset:offset+rows.length<all.length?offset+rows.length:null,renderedRowCount:all.length,totalFromAria:root.getAttribute('aria-rowcount'),truncated,
+  const detail=all.length&&all.every(r=>r.querySelectorAll('th').length===1&&r.querySelectorAll('td').length===1)&&!truncated?{layout:'key_value',title:(document.querySelector('h1')?.textContent||'').trim(),fields:Object.fromEntries(all.map(r=>[(r.querySelector('th')?.textContent||'').trim(),(r.querySelector('td') as HTMLElement).innerText.trim()]))}:{};
+  return {url:location.origin+location.pathname,...detail,headers,rows,offset,nextOffset:offset+rows.length<all.length?offset+rows.length:null,renderedRowCount:all.length,totalFromAria:root.getAttribute('aria-rowcount'),truncated,
     scroll:scroll?{top:scroll.scrollTop,clientHeight:scroll.clientHeight,scrollHeight:scroll.scrollHeight}:null,
     coverage:"Only currently rendered DOM rows. A null nextOffset is NOT proof the dataset is complete. Read the status filter and total, navigate actual pagination or scroll the table, then inspect fresh rows. Null IDs need a stable profile identifier before saving."};
 }
 export function tableCode(input:{target?:string;offset?:number}) {return `() => (${readTableInPage.toString()})(${JSON.stringify(input)})`;}
+
+/** Visible form data only; never passwords, hidden fields or application internals. */
+export function formCode(input:{target?:string}){return '() => ('+readFormInPage.toString()+')('+JSON.stringify(input)+')';}
+export function readFormInPage(input:{target?:string}){
+  const root=input.target?document.querySelector(input.target):document;
+  if(!root)return {error:'Observed form target was not found'};
+  const fields=Array.from(root.querySelectorAll('input,textarea,select')).filter((el:any)=>{const r=el.getBoundingClientRect(),style=getComputedStyle(el);return r.width>0&&r.height>0&&style.visibility!=='hidden'&&style.opacity!=='0'&&!el.closest('[hidden],[aria-hidden="true"]')&&!['password','hidden','submit','button'].includes(el.type);}).slice(0,100).map((el:any)=>{
+    const label=el.getAttribute('aria-label')||Array.from(el.labels||[]).map((l:any)=>Array.from(l.childNodes).filter((n:any)=>n!==el).map((n:any)=>n.textContent||'').join('').trim()).join(' ')||el.name||el.id;
+    const selector=el.id?'#'+CSS.escape(el.id):el.name?el.tagName.toLowerCase()+'[name='+JSON.stringify(el.name)+']':null;
+    return {label,name:el.name||null,type:el.type,value:String(el.value??''),checked:['checkbox','radio'].includes(el.type)?el.checked:undefined,selector};
+  });return {url:location.origin+location.pathname,fields};
+}

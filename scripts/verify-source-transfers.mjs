@@ -1,0 +1,35 @@
+// Exact source transfers and exports: no provider or customer calls.
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {mkdtempSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {resolve,join} from 'node:path';
+const dir=mkdtempSync(join(tmpdir(),'source-transfer-'));
+Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),DOTENV_CONFIG_PATH:join(dir,'missing')});
+const require=createRequire(import.meta.url),root=resolve('dist/src');
+const {TurnVerification}=require(join(root,'harvey/reliability.js'));
+const S=require(join(root,'harvey/work/store.js')),R=require(join(root,'harvey/work/records.js')),F=require(join(root,'harvey/work/files.js'));
+const {formatSourceValue}=require(join(root,'harvey/work/valueFormats.js'));
+const runtime=require(join(root,'harvey/work/runtime.js'));
+assert(runtime.WORK_TOOLS.find(t=>t.name==='computer').input_schema.properties.sourceValues);
+const v=new TurnVerification(),history=('Literal history Ω 😀\n').repeat(1400);
+let last;
+for(let offset=0;offset<history.length;offset+=8000){last=v.record('workspace_sheet',{},{file:'source.xlsx',sha256:'same',sheet:'Leads',cell:'C2',id:'cell-id',offset,content:history.slice(offset,offset+8000),totalCharacters:history.length,truncated:true});if(offset===0)assert.throws(()=>v.sourceValue({evidenceId:last.id,path:'/content'}),/complete/);}
+assert.equal(v.sourceValue({evidenceId:last.id,path:'/content'}),history);
+const row=v.record('workspace_sheet',{},{file:'source.xlsx',rows:[{id:'person',values:{A:'person@example.invalid',C:{preview:history.slice(0,1000),truncated:true}}}],truncated:true});
+assert.equal(v.sourceValue({evidenceId:row.id,path:'/rows/0/values/A'}),'person@example.invalid');
+assert.throws(()=>v.sourceValue({evidenceId:row.id,path:'/rows/0/values/C/preview'}),/preview/);
+const projected=v.projectRecords([{evidenceId:row.id,idPath:'/rows/0/id',fieldPaths:{notes:{evidenceId:last.id,path:'/content'}}}]);
+assert.equal(projected[0].fields.notes,history);
+const page=v.record('computer',{action:'call',tool:'browser_read_table'},{url:'https://fixture.invalid/book',title:'Book, Exact',fields:{UPC:'0123456789abcdef',Price:'£51.77'}});
+const chat=S.createChat('fixture',{});
+R.workRecords('fixture',chat.id,{action:'save',collection:'books',_verifiedRecords:v.projectRecords([{evidenceId:page.id,idPath:'/url',fieldPaths:{title:'/title',upc:'/fields/UPC',price:'/fields/Price'}}])});
+const exported=R.workRecords('fixture',chat.id,{action:'export',collection:'books',file:'books.csv',includeSourceId:false,_requireObserved:true,columns:['title','upc',{field:'price',header:'price',format:'decimal_currency'}]});
+assert.equal(readFileSync(F.filePath('fixture',chat.id,exported.file),'utf8'),'\uFEFF"title","upc","price"\r\n"Book, Exact","0123456789abcdef","51.77"\r\n');
+assert.throws(()=>R.workRecords('fixture',chat.id,{action:'export',collection:'books',file:'books.csv',columns:['title']}),/exists|hash|expected/i);
+R.workRecords('fixture',chat.id,{action:'save',collection:'fake',_verifiedRecords:[{key:'fake',fields:{upc:'fabricated'},source:{tool:'workspace_read'}}]});
+assert.throws(()=>R.workRecords('fixture',chat.id,{action:'export',collection:'fake',_requireObserved:true}),/actual website/);
+assert.equal(formatSourceValue({type:'excel_date',value:'2026-11-19T00:00:00Z'},'date_only'),'2026-11-19');
+assert.throws(()=>formatSourceValue('next Friday','date_only'),/explicit ISO/);
+assert.throws(()=>formatSourceValue('£51.777','decimal_currency'),/no rounding/);
+S.closeStore();console.log('PASS exact Unicode long-cell projection, preview rejection, source-backed quoted CSV, requested headers/filename, immutable existing file, fabricated export rejection, explicit conversions');

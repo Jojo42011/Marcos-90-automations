@@ -54,7 +54,7 @@ export function isObservation(name: string, input: any): boolean {
     const calls = input.tools;
     return Array.isArray(calls) && calls.length > 0 && calls.every(c => typeof c.tool_slug === "string" && /_(GET|LIST|FETCH|SEARCH|RETRIEVE)_/.test(c.tool_slug) && !/_(CREATE|UPDATE|DELETE|SEND|UPSERT|EXECUTE)_/.test(c.tool_slug));
   }
-  if (name === "computer") return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_inspect_scroll_regions|browser_read_table|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
+  if (name === "computer") return input.action === "call" && (/^(browser_snapshot|browser_read_snapshot|browser_take_screenshot|browser_inspect_targets|browser_inspect_scroll_regions|browser_read_table|browser_read_form|browser_wait_for)$/.test(input.tool) || input.tool === "browser_tabs" && input.arguments?.action === "list");
   if (name === "plugin_request") return String(input.method || "GET").toUpperCase() === "GET";
   if (name === "business_call" && input.tool === "crm_api") return String(input.arguments?.method||"GET").toUpperCase()==="GET";
   if (name === "business_call" && input.tool === "crm_api_index") return true;
@@ -105,24 +105,56 @@ export class TurnVerification {
     const page=this.browserPage();
     return page?stableCallKey('observed_browser_location',page.url):undefined;
   }
+  sourceValue(ref:any,identity=false):any {
+    if(typeof ref?.path==='string'&&/\/preview$/.test(ref.path))throw Error('A preview is not a complete source value');
+    if(!ref||typeof ref.evidenceId!=='string'||typeof ref.path!=='string'||!ref.path.startsWith('/')||ref.path.length>1000)throw Error('Use a current evidenceId and JSON pointer path');
+    const receipt=this.receipts.find(r=>r.id===ref.evidenceId),source:any=this.sources.get(ref.evidenceId);
+    if(!receipt?.observation||receipt.outcome!=='returned'||receipt.limitation||!source)throw Error('Source reference requires an actual readable observation from this turn');
+    if(receipt.completeCellRead&&ref.path==='/content'){
+      const pages=[...this.sources.values()].filter((s:any)=>s.file===source.file&&s.sha256===source.sha256&&s.sheet===source.sheet&&s.cell===source.cell&&s.totalCharacters===source.totalCharacters&&typeof s.content==='string').sort((a:any,b:any)=>a.offset-b.offset) as any[];
+      let full='';for(const page of pages){if(page.offset>full.length)throw Error('Source cell has a gap');const overlap=Math.min(full.length-page.offset,page.content.length);if(overlap>0&&full.slice(page.offset,page.offset+overlap)!==page.content.slice(0,overlap))throw Error('Source cell pages conflict');full+=page.content.slice(Math.max(0,full.length-page.offset));}
+      if(full.length!==source.totalCharacters)throw Error('Read every part of this cell before copying it');return full;
+    }
+    const nativeRow=receipt.tool==='workspace_sheet'&&Array.isArray(source.rows)&&ref.path.startsWith('/rows/');
+    if(receipt.truncated&&!nativeRow&&!(identity&&/^\/(?:rows\/\d+\/id|id|url|sourcePage)$/.test(ref.path)))throw Error('Read the complete selected source value before copying it');
+    let value:any=source;
+    for(const key of ref.path.slice(1).split('/').map((s:string)=>s.replace(/~1/g,'/').replace(/~0/g,'~'))){
+      if(value!==source&&value?.truncated===true)throw Error('A preview is not a complete source value');
+      if(!value||typeof value!=='object'||!Object.prototype.hasOwnProperty.call(value,key))throw Error('Record path is missing from source');value=value[key];
+    }
+    if(value&&typeof value==='object'&&JSON.stringify(value).includes('"truncated":true'))throw Error('A preview is not a complete source value');
+    return value;
+  }
+  workbookCopyValue(value:string):boolean {
+    for(const receipt of this.receipts.filter(r=>r.tool==='workspace_sheet'&&r.outcome==='returned')){
+      const source:any=this.sources.get(receipt.id);
+      for(const row of source?.rows||[])for(const cell of Object.values(row.values||{}))if(cell!==null&&typeof cell!=='object'&&String(cell)===value)return true;
+      if(source?.cell&&(!receipt.truncated||receipt.completeCellRead))try{if(this.sourceValue({evidenceId:receipt.id,path:'/content'})===value)return true;}catch{}
+    }return false;
+  }
+  hasWorkbookInput(){return this.receipts.some(r=>r.tool==='workspace_sheet'&&r.outcome==='returned');}
+  hasBrowserInput(){return this.receipts.some(r=>r.tool==='computer'&&r.observation&&!r.discovery&&r.outcome==='returned');}
+  observedPrefix(id:unknown,prefix:string):boolean {
+    const r=this.receipts.find(r=>r.id===id),source:any=r&&this.sources.get(r.id);
+    if(!r||r.tool!=='computer'||!r.observation||r.outcome!=='returned'||r.truncated||r.limitation)return false;
+    const current=this.browserPage();if(current&&source?.url&&source.url!==current.url)return false;
+    const texts=Array.isArray(source?.content)?source.content.filter((v:any)=>v.type==='text').map((v:any)=>v.text):[];
+    return !prefix.trim()||texts.some((text:string)=>text.includes(prefix.trim()));
+  }
   projectRecords(records:any) {
-    if(!Array.isArray(records)||!records.length||records.length>30)throw Error("Provide 1–30 records with observed IDs and field paths");
+    if(!Array.isArray(records)||!records.length||records.length>30)throw Error('Provide 1–30 source-backed records');
     return records.map((record:any)=>{
       const receipt=this.receipts.find(r=>r.id===record.evidenceId);
-      if(!receipt?.observation||receipt.outcome!=="returned"||receipt.limitation||receipt.truncated)throw Error("Records require successful readable, untruncated observation evidence");
-      const read=(path:any)=>{
-        if(typeof path!=="string"||!path.startsWith("/")||path.length>1000)throw Error("Use a JSON pointer into observed structured data");
-        let value:any=this.sources.get(receipt.id);
-        for(const key of path.slice(1).split("/").map((s:string)=>s.replace(/~1/g,"/").replace(/~0/g,"~"))){
-          if(!value||typeof value!=="object"||!Object.prototype.hasOwnProperty.call(value,key))throw Error("Record path is missing from source");value=value[key];
-        }
-        return value;
-      };
-      const key=read(record.idPath);if(!['string','number'].includes(typeof key)||!String(key).trim()||String(key).length>1000)throw Error("Use a stable observed record ID or profile link");
-      if(!record.fieldPaths||Array.isArray(record.fieldPaths)||typeof record.fieldPaths!=="object"||!Object.keys(record.fieldPaths).length||Object.keys(record.fieldPaths).length>30)throw Error("Provide 1–30 field paths");
-      const fields=Object.fromEntries(Object.entries(record.fieldPaths).map(([name,path])=>{if(name.length>80)throw Error("Field label too long");return [name,read(path)];}));
-      if(JSON.stringify(fields).length>8000)throw Error("Record too large; save its sections separately with observed stable IDs");
-      return {key:String(key),fields,source:{tool:receipt.tool,observedAt:receipt.at,paths:record.fieldPaths},updatedAt:new Date().toISOString()};
+      const key=this.sourceValue({evidenceId:record.evidenceId,path:record.idPath},true);
+      if(!['string','number'].includes(typeof key)||!String(key).trim()||String(key).length>1000)throw Error('Use a stable observed record ID or profile link');
+      if(!record.fieldPaths||Array.isArray(record.fieldPaths)||typeof record.fieldPaths!=='object'||!Object.keys(record.fieldPaths).length||Object.keys(record.fieldPaths).length>30)throw Error('Provide 1–30 source field paths');
+      const fields:any={},paths:any={},fieldSources:any={};
+      for(const [name,path] of Object.entries(record.fieldPaths)){
+        if(name.length>80)throw Error('Field label too long');const ref=typeof path==='string'?{evidenceId:record.evidenceId,path}:path as any;
+        fields[name]=this.sourceValue(ref);paths[name]=ref.path;const origin=this.receipts.find(r=>r.id===ref.evidenceId)!;fieldSources[name]={tool:origin.tool,observedAt:origin.at,path:ref.path};
+      }
+      if(JSON.stringify(fields).length>512*1024)throw Error('Record exceeds 512 KiB; retain separate source sections');
+      return {key:String(key),fields,fieldSources,source:{tool:receipt!.tool,observedAt:receipt!.at,paths},updatedAt:new Date().toISOString()};
     });
   }
   continuationCheckpoint(): {progressKey:string}|null {

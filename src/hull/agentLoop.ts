@@ -1,3 +1,4 @@
+import {formatSourceValue} from '../harvey/work/valueFormats.js';
 import Anthropic from "@anthropic-ai/sdk";
 import { segmentLimit, executionRequest, recoveryReviewPolicy } from "../harvey/work/execution.js";
 import {computerArguments} from '../harvey/work/computerArguments.js';
@@ -541,7 +542,33 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
   };
 
   const runTool = async (name: string, input: Record<string, unknown>): Promise<unknown> => {
-    if(opts.workRuntime&&name==='computer')input=computerArguments(input);
+    const copyTask=/\b(?:reconcil\w*|copy|transfer|import\w*|missing information|missing data)\b/i.test(opts.message)&&! /\b(?:summari\w*|rewrite|translate|compose|draft)\b/i.test(opts.message);
+    const extractedCsv=/\b(?:collect|extract|export|scrape|take the first)\b/i.test(opts.message)&&verification.hasBrowserInput();
+    if(opts.workRuntime&&name==='workspace_write'&&/\.csv$/i.test(String(input.file))&&extractedCsv){
+      const result={error:'For extracted website data use work_records export with file, includeSourceId:false and selected columns. It writes actual observed values and safely quotes CSV. Use column format decimal_currency when a decimal price is requested; do not invent or manually retype source values.'};const r=verification.record(name,input,result);return {...result,_harveyEvidence:r};
+    }
+    if(opts.workRuntime&&name==='work_records'&&input.action==='export'&&extractedCsv)input={...input,_requireObserved:true};
+    if(opts.workRuntime&&name==='computer'){
+      const bindings=(input as any).sourceValues;input=computerArguments(input);
+      try{
+        const args:any=input.arguments||{},bound=new Set<string>();
+        if(bindings!==undefined){
+          if(!Array.isArray(bindings)||bindings.length>30)throw Error('Use at most 30 source value bindings per call');
+          for(const binding of bindings){
+            const path=String(binding.argumentPath||'');if(!((input.tool==='browser_type'&&path==='/text')||(input.tool==='browser_fill_form'&&/^\/fields\/\d+\/value$/.test(path))))throw Error('Source bindings only fill browser text values, never targets, navigation or actions');
+            if(bound.has(path))throw Error('Duplicate source binding');bound.add(path);
+            let value=formatSourceValue(verification.sourceValue(binding),binding.format||'text');
+            if(binding.prefix!==undefined){if(typeof binding.prefix!=='string'||!verification.observedPrefix(binding.prefixEvidenceId,binding.prefix))throw Error('Existing-text prefix must be quoted from a complete current browser observation; read the field before preserving it');value=binding.prefix+value;}
+            if(path==='/text')args.text=value;else{const index=Number(path.split('/')[2]);if(!Array.isArray(args.fields)||!args.fields[index])throw Error('Bind a field in this call');args.fields[index].value=value;}
+          }
+        }
+        if(copyTask&&verification.hasWorkbookInput()){
+          const values=input.tool==='browser_type'?[{value:args.text,label:args.element||args.target||'',path:'/text'}]:input.tool==='browser_fill_form'?(args.fields||[]).map((f:any,i:number)=>({value:f.value,label:f.name||f.target||'',path:'/fields/'+i+'/value'})):[];
+          for(const item of values)if(typeof item.value==='string'&&!bound.has(item.path)&&! /password|username|login|sign.?in|verification|search|filter|sort|find/i.test(item.label)&&!opts.message.includes(item.value)&&!verification.workbookCopyValue(item.value))throw Error('Copied workbook fields must preserve exact source text. Use computer sourceValues:[{argumentPath:"'+item.path+'",evidenceId:"eN",path:"/rows/0/values/C"}]. To preserve existing text add prefix and prefixEvidenceId from its current snapshot. No field was changed');
+        }
+        input={...input,arguments:args};
+      }catch(error){const result={error:(error as Error).message,recovery:{kind:'source_value',actionOutcome:'not_executed',safeToRetry:false}};const r=verification.record(name,input,result);opts.onEvidence?.(r);return {...result,_harveyEvidence:r};}
+    }
     if(opts.workRuntime&&name==='inspect_screen'&&opts.workRuntime.tools.some(t=>t.name===name)){
       let result:any;
       try{

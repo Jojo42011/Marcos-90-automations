@@ -19,7 +19,11 @@ const server=http.createServer(async(req,res)=>{
  else if(!body.tools?.length&&body.messages.some(m=>Array.isArray(m.content)&&m.content.some(c=>c.type==='image_url'))){visionCalls++;message={role:'assistant',content:JSON.stringify({summary:'The fixture Save button is visible.',data:{control:{label:'Save',x:20,y:30},rows:[{id:'fixture-one',name:'Fixture Person'}]}})};}
  else{
   mainCalls++;const n=round++;
-  if(mode==='visual'){
+  if(mode==='source_bindings'){
+   const steps=[['workspace_sheet',{file:'source.xlsx'}],['computer',{action:'call',tool:'browser_fill_form',arguments:{fields:[{name:'Notes',target:'textarea',value:'Wrong paraphrase'}]}}],['computer',{action:'call',tool:'browser_fill_form',arguments:{fields:[{name:'Notes',target:'textarea',value:''}]},sourceValues:[{argumentPath:'/fields/0/value',evidenceId:'e1',path:'/rows/0/values/C'}]}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',automaticEvidence:true,checks:['Exact source text copied; paraphrased attempt was rejected without changing fields; destination read back'],limitations:[]}]];
+   if(n===2){const r=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert.equal(r.recovery.actionOutcome,'not_executed');assert.match(r.error,/preserve exact source/);}
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Copied exact history and checked the destination.'};
+  }else if(mode==='visual'){
    assert.equal(body.model,mainModel,'The main model must stay pinned');
    const steps=[['inspect_screen',{question:'Locate the visible fixture Save button'}],['computer',{action:'call',tool:'browser_mouse_click_xy',arguments:{x:20,y:30}}],['computer',{action:'call',tool:'browser_snapshot',arguments:{}}],['report_verification',{status:'completed',evidenceIds:['e4'],checks:['Read back saved fixture state after click'],limitations:[]}]];
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Saved and checked.'};
@@ -253,5 +257,14 @@ try{
  const learned=await runAgentLoop({message:'Retain a verified method',modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='workflow')],execute:async(name,input)=>name==='workflow'?input.action==='learn'?learning.learnWorkflow('fixture',chat.id,input):{workflows:learning.workflows('fixture',chat.id)}:{id:'observed-fixture-record'}}});
  assert.equal(learned.verification.status,'completed');assert.equal(learning.workflows('fixture',chat.id)[0].basis,'verified_execution_require_current_prerequisites');assert.equal(learning.workflows('other-owner',store.createChat('other-owner',{}).id).length,0);
  console.log('ok a completed observed procedure is retained and read back without crossing owners');
+ mode='source_bindings';round=0;let copied='',copyCalls=0;
+ const literalHistory='Exact source Ω 😀\nKeep every word.';
+ const boundResult=await runAgentLoop({message:'Reconcile imported workbook notes into the existing contact',modelOverride:mainModel,workRuntime:{tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='workspace_sheet')],context:'Fixture',execute:async(name,input)=>{
+  if(name==='workspace_sheet')return {file:'source.xlsx',rows:[{id:'person',values:{C:literalHistory}}]};
+  if(input.tool==='browser_fill_form'){copyCalls++;copied=input.arguments.fields[0].value;return {saved:true};}
+  return {url:'https://fixture.invalid/person',content:[{type:'text',text:'Notes: '+copied}]};
+ }}});
+ assert.equal(boundResult.verification.status,'completed');assert.equal(copyCalls,1);assert.equal(copied,literalHistory);
+ console.log('ok source-bound browser input copies literal Unicode/newlines and rejects paraphrased input before execution');
  console.log(`PASS ${mainCalls} local model calls, ${visionCalls} local vision calls, ${recoveryReviews} read-only recovery reviews; $0 provider spend; no customer data accessed`);
 }finally{global.fetch=originalFetch;store.closeStore();server.closeAllConnections();await new Promise(r=>server.close(r));}

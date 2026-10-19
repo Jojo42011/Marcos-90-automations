@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Harvey exact source transfer: computer sourceValues fills observed workbook/website values directly, complete long-cell pages are joined without model transcription, and work_records exports requested CSV filenames/headers using literal source-backed fields. Visible form hashes support long-text read-back. Independent live QA must pass before merge; no production deployment authorized.
+
 - 2026-10-18: Completion review can gather valid current receipts automatically without a model-managed ID count ceiling; service and file-hash read-back checks use indexed positions rather than repeated receipt scans. It retains source/read-back/hash, approval and scope checks. Explicit invalid IDs still fail. Persistent stalled execution or unaccepted stop can request a metadata-only, read-only recovery consultation once per distinct observed progress state through HARVEY_RECOVERY_MODEL (default Sonnet 4.6), with a $0.05 consultation ceiling inside the existing task budget and separately accounted usage. Model advice exposes the helper policy. The main selected model stays pinned; advice grants no permission and cannot execute/replay actions. User-permitted exclusions are distinguished from unmet requirements.
 
 - 2026-10-18: Real-model candidate QA exposed malformed authored CSV and accumulated MCP abort listeners. CSV writes now reject inconsistent columns and malformed quoting before touching the prior file. Each hosted MCP request uses a detached request signal so the task signal does not accumulate SDK listeners; cancellation still propagates. No tool/time ceiling is introduced.
