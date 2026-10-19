@@ -656,7 +656,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       if(opts.allowContinuation && input.status==="blocked" && segmentLimit(JSON.stringify(input.limitations||[])))return {error:"The turn limit does not block this saved job. Inspect current state, retain unfinished task_plan steps and continue_work automatically."};
       try {
         const reviewed=verification.review(input);
-        if(input.status==='completed'&&opts.workRuntime.reviewOutcome&&verification.result().receipts.length>=8){
+        if(input.status==='completed'&&opts.workRuntime.reviewOutcome){
           const audit=await auditOutcome();
           if(!audit.passed){const result={error:'The outcome review found unfinished or inaccurate work: '+audit.issues.join(' '),note:'Correct these specific gaps using current source evidence, then read back and review again. Do not repeat uncertain writes or ask the user for another continue.'};const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);return {...result,_harveyEvidence:receipt};}
         }
