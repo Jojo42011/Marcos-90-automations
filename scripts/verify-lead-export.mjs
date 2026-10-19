@@ -59,10 +59,11 @@ try{
  const repeated=await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'History',type:'textbox',target:'textarea[name="history"]',value:imported}]});assert.equal(repeated.unchanged,true);assert.equal((await call('browser_read_form')).fields[0].sha256,mergedHash);
  await call('browser_navigate',{url:base+'/no-op-form'});
  const noChange=await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'Notes',type:'textbox',target:'textarea',value:'Already saved'}]});assert.equal(noChange.unchanged,true);
- const noSubmit=await call('browser_click',{target:'button'});assert.equal(noSubmit.submissionSkipped,true);assert.equal(unchangedPosts,0);
+ const noSubmit=await call('browser_click',{target:'button',_preserveExisting:true});assert.equal(noSubmit.submissionSkipped,true);assert.equal(unchangedPosts,0);
+ const explicitSave=await call('browser_click',{target:'button'});assert(!explicitSave.submissionSkipped);assert.equal(unchangedPosts,1,'A separate explicit Save is not globally blocked by prior missing-only state');
  await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'Notes',type:'textbox',target:'textarea',value:'New history'}]});
  const scalarNoChange=await call('browser_fill_form',{_preserveExisting:true,fields:[{name:'Relationship',type:'textbox',target:'input[name="relationship"]',value:'Sibling'}]});assert.equal(scalarNoChange.unchanged,true);
- const realSubmit=await call('browser_click',{target:'button'});assert(!realSubmit.submissionSkipped);assert.equal(unchangedPosts,1,'An unchanged later field cannot suppress pending history edits');
+ const realSubmit=await call('browser_click',{target:'button',_preserveExisting:true});assert(!realSubmit.submissionSkipped);assert.equal(unchangedPosts,2,'An unchanged later field cannot suppress pending history edits');
  console.log('PASS visible long-form hashes, excluded passwords/hidden inputs, exact key-value product metadata');
  console.log('PASS: empty lazy table -> discover nested scrolling -> retrieve five virtualized batches -> exclude five records -> deduplicate/restart -> verified 35-row CSV -> authenticated download; no screenshots, external services or manual scrolling');
 }finally{await B.closeBrowsers();S.closeStore();server.closeAllConnections();await new Promise(r=>server.close(r));global.fetch=original;}

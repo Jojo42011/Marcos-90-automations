@@ -22,6 +22,12 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Browser history coverage does not force a connector-only transfer through the browser, and numeric count columns are not treated as literal history. Source content-read and connector read-back requirements remain separate.
+
+- Model-created task plans retain the native original-message reference as well as automatically initialized plans. Header-only workbook reads cannot satisfy history-transfer coverage.
+
+- Unchanged Save suppression is scoped to the active missing-only import request; an independently authorized explicit Save is not blocked by stale comparison state.
+
 - A workbook range/cell request without sheet reads the sole worksheet when unambiguous, and returns an actionable error for multi-sheet workbooks. It no longer silently substitutes metadata for a requested content read.
 
 - Unexpected job exceptions retain their sanitized actual error and observed receipts instead of replacing them with a generic interruption. Diagnostic follow-ups use this persisted execution error and never infer a site or login failure.

@@ -291,7 +291,7 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
       if(name==='browser_click'&&(s.unchangedPreservedForm||s.preservedFormChanged)){
         const evaluated=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Observed save control',target:args.target||args.ref,function:`element => /^(?:save(?: changes)?|update(?: contact|profile|record)?)$/i.test((element.innerText||element.value||element.getAttribute('aria-label')||'').trim())`});
         saveControl=parseBrowserJson(checked(await call(s,'browser_evaluate',evaluated,15000,signal)))===true;
-        if(saveControl&&s.unchangedPreservedForm&&!s.preservedFormChanged){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,submissionSkipped:true,note:'The missing-only fields were already present. This unchanged Save/Update was not submitted; reopen and verify the existing saved state.'};}
+        if(preserveExisting&&saveControl&&s.unchangedPreservedForm&&!s.preservedFormChanged){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,submissionSkipped:true,note:'The missing-only fields were already present. This unchanged Save/Update was not submitted; reopen and verify the existing saved state.'};}
       }
       const preservedFields:any[]=[];
       if(preserveExisting&&['browser_fill_form','browser_type'].includes(name)){

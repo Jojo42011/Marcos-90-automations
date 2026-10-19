@@ -268,7 +268,7 @@ try{
  console.log('ok missing contract fields identify exact labels and counts without exposing saved contact values');
  mode='contract';round=0;const other=store.createChat('fixture',{});
  const incomplete=await runtime.runChat('fixture',other,'Export two fixture records',{modelOverride:'inception/mercury-2.5'});
- const retainedContract=store.list('task_plan','fixture').find(p=>p.chatId===other.id).contract;
+ const savedContractPlan=store.list('task_plan','fixture').find(p=>p.chatId===other.id);assert.equal(learning.sourceMessage('fixture',other.id,savedContractPlan.sourceUserSeq).content,'Export two fixture records','Model-created plans retain the actual original request reference too');const retainedContract=savedContractPlan.contract;
  assert.equal(retainedContract.count,2,'Partial contract updates must retain the requested count');assert.equal(retainedContract.collection,'profiles');assert.deepEqual(retainedContract.exclusions,['Mojo FL']);assert.equal(retainedContract.destination,'Google Sheets');
  assert.notEqual(incomplete.verification.status,'completed');assert.equal(store.list('work_record','fixture').filter(r=>r.chatId===other.id).length,0);
  console.log('ok model cannot mark missing contracted records complete');
