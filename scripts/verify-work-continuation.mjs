@@ -107,4 +107,13 @@ const toolFailed=S.get('job','alice',failureJob.id);assert.equal(toolFailed.stat
 const thrownChat=S.createChat('alice',{}),thrownJob=J.enqueueJob('alice',thrownChat.id,{requestId:'thrown-diagnostic',message:'Finish source retrieval'});
 await J.executeJob('alice',thrownJob.id,async(_owner,_chat,_prompt,opts)=>{opts.onEvidence(receipt(true));throw Error('Fixture read timeout at https://user:private-password@example.invalid/record?token=private-token; token=private-secret');});const thrown=S.get('job','alice',thrownJob.id);assert.equal(thrown.status,'needs_attention');assert.equal(thrown.result.failure.kind,'execution_error');assert.match(thrown.result.failure.message,/Fixture read timeout/);assert(!JSON.stringify(thrown.result).includes('private-password'));assert(!JSON.stringify(thrown.result).includes('private-secret'));assert.equal(thrown.result.verification.receipts.length,1);S.closeStore();assert.equal(S.get('job','alice',thrownJob.id).result.failure.kind,'execution_error');const diagnosis=require('../dist/src/harvey/work/failureReport.js').failureReport('alice',thrownChat.id,'What failed?');assert.match(diagnosis,/Fixture read timeout/);assert(!/lazy.loading|earlier login failed/.test(diagnosis));
 console.log('ok saved job retains browser tool failure separately from provider or credit failures');
+const staleChat=S.createChat('alice',{}),oldDiagnostic={id:'old-diagnostic',chatId:staleChat.id,receipts:[{outcome:'failed',tool:'computer',diagnostic:{code:'old_timeout',detail:'computer/browser_snapshot',message:'OLD unrelated timeout'}}]};
+S.put('verification','alice',oldDiagnostic);
+const report=require('../dist/src/harvey/work/failureReport.js').failureReport;
+assert.match(report('alice',staleChat.id,'What failed?'),/OLD unrelated timeout/,'Legacy checkpoint-only failures remain diagnosable');
+S.put('verification','alice',{id:'latest-empty',chatId:staleChat.id,receipts:[]});assert.equal(report('alice',staleChat.id,'What failed?'),undefined,'Empty latest checkpoint cannot revive older failures');
+S.put('job','alice',{id:'new-provider-failure',chatId:staleChat.id,status:'failed',result:{failure:{kind:'provider_error'},text:'Provider failed before any browser calls'}});
+S.put('verification','alice',{...oldDiagnostic,id:'unrelated-later-checkpoint'});
+assert.equal(report('alice',staleChat.id,'What failed?'),undefined,'A saved job without browser receipts cannot borrow another run diagnostics');
+console.log('ok diagnostics do not attribute stale browser errors to a newer provider-only job or empty checkpoint');
 S.closeStore();
