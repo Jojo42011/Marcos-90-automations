@@ -26,7 +26,7 @@ jobs:
           flyctl ssh console -a marco-90-automation -C "sh -c 'mkdir -p /tmp/harvey-qa-${{ github.run_id }} && tar xzf /tmp/harvey-qa-${{ github.run_id }}.tar.gz -C /tmp/harvey-qa-${{ github.run_id }} && ln -s /app/node_modules /tmp/harvey-qa-${{ github.run_id }}/node_modules'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Workbook-to-CRM, idempotent reruns and ten-page browser extraction; $0.25 QA budget
+      - name: Workbook-to-CRM, idempotent reruns and ten-page browser extraction with outcome review; $0.50 QA budget
         run: flyctl ssh console -a marco-90-automation -C "sh -c 'cd /tmp/harvey-qa-${{ github.run_id }} && NODE_PATH=/tmp/harvey-qa-${{ github.run_id }}/candidate-input-deps/node_modules node scripts/verify-harvey-candidate-live.mjs'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

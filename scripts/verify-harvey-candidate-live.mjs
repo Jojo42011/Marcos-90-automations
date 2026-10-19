@@ -10,7 +10,7 @@ const require=createRequire(import.meta.url),dir=mkdtempSync(join(tmpdir(),'harv
 assert(process.env.OPENROUTER_API_KEY,'Configured model access required');
 const sharedBudget=process.env.SHARED_OPENROUTER_BUDGET_DB_PATH||join(process.env.TENANT_DATA_ROOT||'/data','openrouter-budget.db');
 for(const key of Object.keys(process.env))if(/API_KEY|TOKEN|PASSWORD|SECRET|COMPOSIO|TENANT_OWNER_ID|DB_JSON_PATH/.test(key)&&key!=='OPENROUTER_API_KEY')delete process.env[key];
-Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:sharedBudget,DOTENV_CONFIG_PATH:join(dir,'missing'),HARVEY_BROWSER_ENABLED:'true',HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_MAX_SESSIONS:'1',AETHON_MAX_TOKENS:'4500'});
+Object.assign(process.env,{ACCOUNT_ISOLATION:'false',TENANT_DATA_ROOT:dir,HARVEY_WORK_DIR:join(dir,'work'),AI_USAGE_DB_PATH:join(dir,'usage.db'),SHARED_OPENROUTER_BUDGET_DB_PATH:sharedBudget,DOTENV_CONFIG_PATH:join(dir,'missing'),HARVEY_BROWSER_ENABLED:'true',HARVEY_WORKER_ENABLED:'false',HARVEY_BROWSER_MAX_SESSIONS:'1',AETHON_MAX_TOKENS:'4500',HARVEY_OUTCOME_AUDIT_MODEL:'anthropic/claude-sonnet-4.6'});
 const S=require('../dist/src/harvey/work/store.js'),B=require('../dist/src/harvey/work/browser.js'),F=require('../dist/src/harvey/work/files.js'),R=require('../dist/src/harvey/work/runtime.js'),Excel=require('exceljs');
 const originalFetch=global.fetch;
 global.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url||String(url));assert(['localhost','127.0.0.1','openrouter.ai','books.toscrape.com'].includes(u.hostname),'External fixture destination refused');return originalFetch(url,...args);};
@@ -35,7 +35,7 @@ for(const [,href,title]of [...home.matchAll(/<h3>\s*<a href="([^"]+)" title="([^
 assert.equal(expectedBooks.length,10);
 let browserTrace=[];const originalBrowserCall=B.browserCall;
 B.browserCall=async(owner,chat,tool,args,...rest)=>{const out=await originalBrowserCall(owner,chat,tool,args,...rest);browserTrace.push({tool,arguments:JSON.stringify(args).slice(0,600),error:out?.error||null});if(browserTrace.length>30)browserTrace.shift();return out;};
-let cost=0,calls=0,failed=0;const budget=Number(process.env.HARVEY_QA_BUDGET_USD||.25),outcomes=[];
+let cost=0,calls=0,failed=0;const budget=Number(process.env.HARVEY_QA_BUDGET_USD||.50),outcomes=[];
 const run=async(chat,message)=>{
  console.log('CANDIDATE_START '+JSON.stringify({model:chat.model,chatId:chat.id,rerun:message.startsWith('Recheck')}));
  const receiptTrace=[];browserTrace=[];

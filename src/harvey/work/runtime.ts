@@ -233,8 +233,9 @@ async function runtime(owner: string, chat: Chat, unattended: boolean, onEvent?:
       default: throw new Error("Unknown work tool");
     }
   };
+  const produced=new Map<string,{file:string;download:string}>();
   return {
-    tools,
+    tools,reviewOutcome:!!process.env.HARVEY_OUTCOME_AUDIT_MODEL,outcomeGoal:()=>{const p=list<any>('task_plan',owner).find(p=>p.chatId===chat.id&&p.requestId===requestId);return p?{objective:p.objective,contract:p.contract,successCriteria:p.successCriteria,requiredSources:p.requiredSources}:undefined;},deliverables:()=>[...produced.values()],
     completionCheck:()=>{
       const p=list<any>('task_plan',owner).find(p=>p.chatId===chat.id&&p.requestId===requestId);
       if(!p)return undefined;
@@ -255,6 +256,7 @@ async function runtime(owner: string, chat: Chat, unattended: boolean, onEvent?:
     loginEmailAvailable: !unattended && !!chat.allowChatCredentials && connected.some(c=>/gmail|outlook|email/i.test(c.slug)),
     // Serialize actions so parallel model tool calls cannot race page navigation.
     execute: (name, input) => { const result = chain.catch(() => {}).then(() => execute(name, input)).then(value => {
+      if((name==='workspace_write'||name==='work_records'&&input.action==='export')&&(value as any)?.file&&(value as any)?.download&&!(value as any)?.error){const file=value as any;produced.set(file.file,{file:file.file,download:file.download});}
       try{recordProgress(owner,chat.id,name,input,value);}catch{
         if(value&&typeof value==="object")value={...value,progressWarning:"The action returned, but its resume record could not be saved. Inspect current state before retrying; do not repeat the action just to repair the record."};
       }
@@ -329,6 +331,7 @@ export async function runChat(owner: string, chat: Chat, message: string, option
       onEvidence: receipt => { checkpoint!.receipts.push(receipt);checkpoint!.updatedAt=new Date().toISOString();put("verification",owner,checkpoint!);options.onEvidence?.(receipt); },
       onEvent: e => { if (e.type === "tool" && e.status === "error") toolFailed = true; options.onEvent?.(e); } });
     result.speech = publicFileLinks(owner,chat.id,hidePassphrase(result.speech));
+    if(result.verification?.status==='completed'){const made=workRuntime.deliverables?.()||[],requested=made.filter(f=>message.includes(f.file)),deliver=requested.length?requested:made.slice(-1);for(const file of deliver)if(!result.speech.includes(file.download))result.speech+='\n\n['+file.file+']('+file.download+')';}
     if(result.verification?.status === "completed")toolFailed=false;
     const unsupportedActionClaim = /\b(?:I(?:'ve| have)?|successfully)\s+(?:sent|saved|created|updated|deleted|scheduled|connected|verified|checked|retrieved|completed|logged\s+in|signed\s+in|filled)\b/i.test(result.speech) && result.toolRounds === 0;
     const unfinished = !!options.allowContinuation && !!workRuntime.pendingWork?.();

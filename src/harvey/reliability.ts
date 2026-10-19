@@ -159,6 +159,28 @@ export class TurnVerification {
       return {key:String(key),fields,fieldSources,source:{tool:receipt!.tool,observedAt:receipt!.at,paths},updatedAt:new Date().toISOString()};
     });
   }
+  outcomeContext(){
+    const redact=(value:any,key='',depth=0):any=>{
+      if(/password|secret|token|credential|authorization|cookie|api.?key|verification.?code|^otp$/i.test(key))return '[redacted]';
+      if(depth>12)return '[nested data omitted]';
+      if(typeof value==='string'){const text=value.replace(/^.*(?:textbox|searchbox).*password.*$/gim,'[password field redacted]').replace(/((?:access_token|api_key|token|secret|password|code)=)[^&\s"'<>]+/gi,'$1[redacted]').replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi,'Bearer [redacted]');return text.length>(key==='content'?10000:5000)?{preview:text.slice(0,1200),characters:text.length,sha256:createHash('sha256').update(text).digest('hex'),partial:true}:text;}
+      if(Array.isArray(value)){const items=value.slice(0,100).map(v=>redact(v,'',depth+1));return value.length>100?{items,totalItems:value.length,partial:true}:items;}
+      if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([k])=>!['_image','_harveyEvidence','observedAt','updatedAt','at'].includes(k)).map(([k,v])=>[k,redact(v,k,depth+1)]));
+      return value;
+    };
+    const evidence:any[]=[],seen=new Set<string>();let characters=0,omitted=0;
+    const useful=this.receipts.filter(r=>r.outcome==='returned'&&!r.discovery&&!r.limitation&&!['task_plan','continuity','report_verification','verify_source_values'].includes(r.tool));
+    // Source lists/ranges and saved artifacts have priority over redundant page trees.
+    const priority=(r:Receipt)=>r.tool==='workspace_sheet'?0:r.tool==='workspace_read'?1:r.tool==='computer'&&(this.sources.get(r.id) as any)?.rows?2:r.tool==='work_records'?3:4;
+    for(const receipt of [...useful].sort((a,b)=>priority(a)-priority(b))){
+      const source:any=this.sources.get(receipt.id);if(!source||receipt.tool==='computer'&&receipt.operation==='browser_take_screenshot')continue;
+      if(!receipt.observation&&!source.preservedFields&&!source.sourceValueBindings&&receipt.tool!=='work_records')continue;
+      const item={tool:receipt.tool,operation:receipt.operation,partial:receipt.truncated&&!receipt.completeFileRead&&!receipt.completeCellRead,data:redact(source)};
+      const encoded=JSON.stringify(item),hash=stableCallKey('audit-source',item);if(seen.has(hash))continue;seen.add(hash);
+      if(characters+encoded.length>40000){omitted++;continue;}evidence.push(item);characters+=encoded.length;
+    }
+    return {evidence,omitted,failures:this.receipts.filter(r=>r.outcome==='failed'&&r.diagnostic&&!['report_verification','task_plan','continuity'].includes(r.tool)).slice(-6).map(r=>({tool:r.tool,operation:r.operation,diagnostic:r.diagnostic}))};
+  }
   continuationCheckpoint(): {progressKey:string}|null {
     const relevant=this.receipts.filter(r=>!r.discovery&&!['task_plan','continuity','work_records','report_verification','verify_source_values'].includes(r.tool));
     const last=relevant.at(-1);

@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Configured outcome review uses a separately accounted read-only auxiliary model after native completion checks to compare user scope with actual source and saved-output evidence. Failed reviews return concrete corrections; unchanged evidence is cached, external actions are never replayed, and the selected executor stays unchanged. Verified native deliverables receive real owner/chat-scoped download links.
+
 - Harvey missing-only hosted-browser transfers retain existing scalar fields and append literal note/history text once at the tool boundary; repeated pure observations and guarded local file/record/plan checkpoints are allowed while uncertain external writes remain protected. Explicit wrapped browser references normalize to current observed references; harmless worksheet offset zero does not reject a range read. Completion receipt selection is runtime-owned.
 - Harvey exact source transfer: computer sourceValues fills observed workbook/website values directly, complete long-cell pages are joined without model transcription, and work_records exports requested CSV filenames/headers using literal source-backed fields. Visible form hashes support long-text read-back. Independent live QA must pass before merge; no production deployment authorized.
 

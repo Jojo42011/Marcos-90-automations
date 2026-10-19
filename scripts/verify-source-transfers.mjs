@@ -29,6 +29,7 @@ assert.equal(v.sourceValue({evidenceId:last.id,path:'/content'}),history);
 const row=v.record('workspace_sheet',{},{file:'source.xlsx',rows:[{id:'person',values:{A:'person@example.invalid',C:{preview:history.slice(0,1000),truncated:true}}}],truncated:true});
 assert.equal(v.sourceValue({evidenceId:row.id,path:'/rows/0/values/A'}),'person@example.invalid');
 assert.throws(()=>v.sourceValue({evidenceId:row.id,path:'/rows/0/values/C/preview'}),/preview/);
+const privacy=new TurnVerification();privacy.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/page?access_token=never-show-token',password:'never-show-password',content:[{type:'text',text:'textbox "Password" [ref=e1]: never-show-field'}]});const auditData=JSON.stringify(privacy.outcomeContext());assert(!auditData.includes('never-show-token'));assert(!auditData.includes('never-show-password'));assert(!auditData.includes('never-show-field'));
 const projected=v.projectRecords([{evidenceId:row.id,idPath:'/rows/0/id',fieldPaths:{notes:{evidenceId:last.id,path:'/content'}}}]);
 assert.equal(projected[0].fields.notes,history);
 const oldPage=v.record('computer',{action:'call',tool:'browser_snapshot'},{content:[{type:'text',text:'- Page URL: https://fixture.invalid/one\nPrior history'}]});
