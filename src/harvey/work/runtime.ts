@@ -240,7 +240,8 @@ async function runtime(owner: string, chat: Chat, unattended: boolean, onEvent?:
       if(p.contract?.count&&p.contract?.collection){
         const rows=list<any>('work_record',owner).filter(r=>r.chatId===chat.id&&r.collection===p.contract.collection);
         if(rows.length!==p.contract.count)return `Saved record count is ${rows.length}; the contract requires ${p.contract.count}. Reconcile unique eligible profiles before completion.`;
-        if(p.contract.fields?.some((field:string)=>rows.some(r=>!Object.prototype.hasOwnProperty.call(r.fields||{},field))))return 'Required contract fields are absent from saved records. Read missing sections or report them explicitly; do not claim complete coverage.';
+        const missing=p.contract.fields?.map((field:string)=>({field,recordsMissing:rows.filter(r=>!Object.prototype.hasOwnProperty.call(r.fields||{},field)).length})).filter((item:any)=>item.recordsMissing>0);
+        if(missing?.length)return 'Required contract fields are absent from saved records: '+JSON.stringify(missing.slice(0,20))+'. Saved field names: '+JSON.stringify([...new Set(rows.flatMap(r=>Object.keys(r.fields||{})))].slice(0,30))+'. Align field labels only when they refer to the same verified source values; otherwise read the missing sections. Do not remove user requirements or claim complete coverage.';
       }
       return undefined;
     },

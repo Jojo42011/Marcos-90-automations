@@ -22,7 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
-- 2026-10-18: Public multi-page QA exposed completion repair failures. Runtime-refused browser repeats now retain their known not-executed outcome, and automatic completion read-back tries the compact DOM reader when the snapshot is truncated. Partial observations still cannot verify completion; no navigation or uncertain write is retried.
+- 2026-10-18: Public multi-page QA exposed completion repair failures. Missing-field rejections identify the required labels and missing-record counts plus available field labels, without returning contact values. Runtime-refused browser repeats now retain their known not-executed outcome, and automatic completion read-back tries the compact DOM reader when the snapshot is truncated. Partial observations still cannot verify completion; no navigation or uncertain write is retried.
 
 - 2026-10-18: Browser recovery includes the schema of the actual failed operation and rearms after a changed successful browser observation. Repeated unchanged observations, schema discovery and automatic diagnostic snapshots do not rearm recovery. This preserves later recovery in long workflows without replaying uncertain writes; live CRM completion remains unverified.
 

@@ -76,6 +76,10 @@ const server=http.createServer(async(req,res)=>{
    message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'Retained the verified method.'};
   }else if(mode==='resume'){
    message=n===0?tc('task_plan',{action:'get'}):n===1?tc('report_verification',{status:'blocked',evidenceIds:[],checks:['Previous approval still needs inspection'],limitations:['No connected browser in this fixture']}):{role:'assistant',content:'The browser is disabled in this fixture; no site action ran.'};
+  }else if(mode==='missing_fields'){
+   const steps=[['workspace_sheet',{file:'source.xlsx',sheet:'Inputs',range:'A2:C2'}],['work_records',{action:'save',collection:'missing-fields',records:[{evidenceId:'e1',idPath:'/rows/0/id',fieldPaths:{title:'/rows/0/values/B',price:'/rows/0/values/C'}}]}],['task_plan',{action:'save',objective:'Export one product with title, UPC and price',steps:['Read and verify all requested fields'],successCriteria:['All three fields'],requiredSources:['fixture'],contract:{count:1,collection:'missing-fields',fields:['title','upc','price']}}],['task_plan',{action:'checkpoint',completedSteps:[0],nextStep:1}],['report_verification',{status:'completed',evidenceIds:['e1'],checks:['Attempted missing-field completion'],limitations:[]}],['report_verification',{status:'needs_verification',evidenceIds:['e1'],checks:['UPC is missing from the saved source projection'],limitations:['The required UPC has not been saved']}]];
+   if(n===5){const reply=JSON.parse(body.messages.filter(m=>m.role==='tool').at(-1).content);assert(reply.error.includes('"field":"upc","recordsMissing":1'));assert(reply.error.includes('"title","price"'));assert(!reply.error.includes('Private fixture value'));}
+   message=n<steps.length?tc(...steps[n]):{role:'assistant',content:'The UPC is still missing; completion is not verified.'};
   }else if(mode==='contract'){
    const steps=[['task_plan',{action:'save',objective:'Export two fixture records',steps:['Read records','Deliver file'],successCriteria:['Two unique records'],requiredSources:['fixture'],contract:{count:2,collection:'profiles',fields:['name'],exclusions:['Mojo FL'],destination:'CSV'}}],['task_plan',{action:'checkpoint',completedSteps:[0,1],nextStep:2}],['report_verification',{status:'completed',evidenceIds:['e1'],checks:['Attempted completion'],limitations:[]}],['report_verification',{status:'needs_verification',evidenceIds:[],checks:['Saved count was checked'],limitations:['Two requested profiles have not been saved']}]];
    if(n===1)message=tc('task_plan',{action:'save',contract:{destination:'Google Sheets'}});
@@ -192,6 +196,12 @@ try{
  const savedVisual=await runAgentLoop({message:'Read visual profile fields',modelOverride:'inception/mercury-2.5',workRuntime:{tools:[...tools,...runtime.WORK_TOOLS.filter(t=>t.name==='work_records')],context:'Fixture',execute:async(name,input)=>name==='work_records'?records.workRecords('fixture',chat.id,input):input.tool==='browser_take_screenshot'?{_image:{media_type:'image/png',data:'fixture-profile-pixels'}}:{url:'https://fixture.invalid/people/42?token=secret'}}});
  assert.equal(savedVisual.verification.status,'completed');const visualRecord=records.workRecords('fixture',chat.id,{action:'list',collection:'visual-profiles'}).items[0];assert.equal(visualRecord.key,'https://fixture.invalid/people/42');assert.equal(visualRecord.fields.Name,'Fixture Person');assert(!JSON.stringify(visualRecord).includes('secret'));
  console.log('ok structured visual fields persist under the observed profile path without inventing IDs or retaining URL tokens');
+ mode='missing_fields';round=0;
+ const missingChat=store.createChat('fixture',{});
+ const missingBook=new Excel.Workbook(),missingSheet=missingBook.addWorksheet('Inputs');missingSheet.addRows([['ID','Title','Price'],['one','Private fixture value','9.00']]);await missingBook.xlsx.writeFile(join(fileApi.filesDir('fixture',missingChat.id),'source.xlsx'));
+ const missingFields=await runtime.runChat('fixture',missingChat,'Export one product with title, UPC and price',{modelOverride:mainModel});
+ assert.notEqual(missingFields.verification.status,'completed');
+ console.log('ok missing contract fields identify exact labels and counts without exposing saved contact values');
  mode='contract';round=0;const other=store.createChat('fixture',{});
  const incomplete=await runtime.runChat('fixture',other,'Export two fixture records',{modelOverride:'inception/mercury-2.5'});
  const retainedContract=store.list('task_plan','fixture').find(p=>p.chatId===other.id).contract;
