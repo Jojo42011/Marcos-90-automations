@@ -249,9 +249,10 @@ try{
  console.log('ok native XLSX records retain observed notes, task dates and relationships through both model adapter paths without browser or connector calls (local provider fixtures)');
 
  mode='resume';round=0;
- store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});
+ const originalScopeSeq=store.append('fixture',chat.id,{role:'user',content:'Export 20 leads excluding Mojo FL to Google Sheets',at:new Date().toISOString()});assert(Number.isSafeInteger(originalScopeSeq));
+ store.put('task_plan','fixture',{id:'retained',chatId:chat.id,requestId:'old',sourceUserSeq:originalScopeSeq,steps:['Read','Deliver'],nextStep:0,blocker:'CAPTCHA requires user approval',contract:{count:20,exclusions:['Mojo FL'],destination:'Google Sheets'}});
  await runtime.runChat('fixture',chat,'yes, do it',{allowContinuation:true,workRequestId:'new',modelOverride:'inception/mercury-2.5'});
- const p=store.get('task_plan','fixture','retained');assert.equal(p.requestId,'new');assert.equal(p.blocker,'');assert.match(p.lastBlocker,/CAPTCHA/);assert.equal(p.contract.count,20);
+ const p=store.get('task_plan','fixture','retained');assert.equal(p.requestId,'new');assert.equal(p.blocker,'');assert.match(p.lastBlocker,/CAPTCHA/);assert.equal(p.contract.count,20);assert.equal(p.sourceUserSeq,originalScopeSeq);
  for(const text of ['yes, do it','Google Sheets is connected now','I authorized Google Sheets','Authorize Google Sheets, then do whatever you can','well just time it correctly and try again'])assert(execution.taskFollowup(text));
  assert(!execution.taskFollowup('Are Google Sheets connected?'));assert(!execution.taskFollowup('stop'));assert(!execution.taskFollowup('just explain the plan'));
  console.log('ok follow-up retains exact contract and rechecks historical blockers without bypassing security');

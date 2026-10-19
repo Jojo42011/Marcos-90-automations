@@ -28,7 +28,7 @@ const EXTRA_TOOLS = [
   {name:"browser_recover",description:"Restart this chat's unresponsive hosted browser and restore saved tabs/cookies. Only after observing a connection or browser crash. Never replays a click, form submission or other action; unsaved page state can be lost. Inspect the restored page before continuing.",inputSchema:{type:"object",properties:{}}}
 ];
 type Frame = { image: string; capturedAt: string; url: string; title: string };
-type Session = {owner:string;chat:string;client:Client;tools:any[];lastUsed:number;statePath:string;tabsPath:string;tabs?:TabState;busy:number;chain:Promise<any>;action?:string;failed?:boolean;frame?:Frame;preview?:Promise<void>;previewAbort?:AbortController;closing?:boolean;snapshot?:{id:string;raw:string;at:number};visionAt?:number;dirty:boolean;savedAt:number;saveTimer?:NodeJS.Timeout;saveWarning?:string;restoreWarning?:string;metrics:{calls:number;preflights:number;checkpoints:number;previewCalls:number}};
+type Session = {owner:string;chat:string;client:Client;tools:any[];lastUsed:number;statePath:string;tabsPath:string;tabs?:TabState;busy:number;chain:Promise<any>;action?:string;failed?:boolean;frame?:Frame;preview?:Promise<void>;previewAbort?:AbortController;closing?:boolean;snapshot?:{id:string;raw:string;at:number};visionAt?:number;preservedFormChanged?:boolean;unchangedPreservedForm?:boolean;dirty:boolean;savedAt:number;saveTimer?:NodeJS.Timeout;saveWarning?:string;restoreWarning?:string;metrics:{calls:number;preflights:number;checkpoints:number;previewCalls:number}};
 const sessions = new Map<string, Promise<Session>>();
 let shuttingDown=false;
 let shutdownRegistered=false;
@@ -286,6 +286,12 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         }
       }
       if(name==="browser_mouse_click_xy"||name==="browser_mouse_drag_xy")if(!s.visionAt||Date.now()-s.visionAt>30000)throw new Error("Capture a fresh viewport screenshot before coordinate targeting");
+      let saveControl=false;
+      if(name==='browser_click'&&(s.unchangedPreservedForm||s.preservedFormChanged)){
+        const evaluated=browserArguments(s.tools.find(t=>t.name==='browser_evaluate')?.inputSchema,{element:'Observed save control',target:args.target||args.ref,function:`element => /^(?:save(?: changes)?|update(?: contact|profile|record)?)$/i.test((element.innerText||element.value||element.getAttribute('aria-label')||'').trim())`});
+        saveControl=parseBrowserJson(checked(await call(s,'browser_evaluate',evaluated,15000,signal)))===true;
+        if(saveControl&&s.unchangedPreservedForm&&!s.preservedFormChanged){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,submissionSkipped:true,note:'The missing-only fields were already present. This unchanged Save/Update was not submitted; reopen and verify the existing saved state.'};}
+      }
       const preservedFields:any[]=[];
       if(preserveExisting&&['browser_fill_form','browser_type'].includes(name)){
         const fields=name==='browser_fill_form'?args.fields:[{target:args.target||args.ref,value:args.text}];
@@ -298,11 +304,14 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
           preservedFields.push({target:field.target||field.ref,characters:value.length,sha256:createHash('sha256').update(value).digest('hex'),changed:value!==current.value});
           if(value!==current.value)changed.push({...field,value});
         }
-        if(!changed.length){const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,preservedFields,note:'The requested values were already present or existing scalar fields were retained. No field changed. Do not submit an unchanged form.'};}
+        if(!changed.length){s.unchangedPreservedForm=!s.preservedFormChanged;const snap=checked(await call(s,'browser_snapshot',{},15000,signal));remember(s,snap,true);return {...normalized(s,snap),unchanged:true,preservedFields,note:'The requested values were already present or existing scalar fields were retained. No field changed. Do not submit an unchanged form.'};}
+        s.preservedFormChanged=true;s.unchangedPreservedForm=false;
         if(name==='browser_fill_form')args.fields=changed;else args.text=changed[0].value;
       }
+      if(['browser_type','browser_fill_form','browser_select_option','browser_press_key'].includes(name)){s.unchangedPreservedForm=false;s.preservedFormChanged=true;}
       preflight=false;
       const result=checked(await call(s,name==="browser_mouse_drag_xy"?"browser_run_code_unsafe":name,name==="browser_mouse_drag_xy"?{code:dragCode({x:args.startX,y:args.startY},{x:args.endX,y:args.endY})}:args,name==="browser_navigate"||name==="browser_wait_for"||name==="browser_tabs"&&args.action==="new"?35000:name==="browser_file_upload"?120000:15000,signal));
+      if(saveControl||['browser_navigate','browser_navigate_back','browser_tabs'].includes(name)){s.preservedFormChanged=false;s.unchangedPreservedForm=false;}
       if(name==="browser_mouse_drag_xy"){const gesture=parseBrowserJson(result);if(gesture.error)return {...gesture,recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};}
       if(!browserRead(name,args))canvasObservations.delete(owner+":"+chat);
       if(!browserRead(name,args)){s.visionAt=undefined;s.snapshot=undefined;s.dirty=true;}

@@ -287,7 +287,7 @@ export class TurnVerification {
         const previous=page;page=url(source)||page;if(!page)continue;
         if(['browser_navigate','browser_navigate_back'].includes(receipt.operation||'')||receipt.operation==='browser_click'&&page!==previous)reopens.set(page,index);
         if(['browser_type','browser_fill_form','browser_press_key','browser_mouse_click_xy'].includes(receipt.operation||'')&&!source.unchanged)edits.set(page,index);
-        if(receipt.operation==='browser_read_form'&&receipt.observation)forms.set(page,{...source,identityEmails:source.identityEmails?.length?source.identityEmails:forms.get(page)?.identityEmails||[],identityPhones:source.identityPhones?.length?source.identityPhones:forms.get(page)?.identityPhones||[],index});
+        if(receipt.operation==='browser_read_form'&&receipt.observation){const prior=forms.get(page),sameVisit=prior&&prior.index>=(reopens.get(page)??-1);forms.set(page,{...source,identityEmails:source.identityEmails?.length?source.identityEmails:sameVisit?prior.identityEmails:[],identityPhones:source.identityPhones?.length?source.identityPhones:sameVisit?prior.identityPhones:[],index});}
       }
     }
     if(!transferObserved&&!/\b(?:into|to|on)\s+(?:(?:the|my|your|existing|matched)\s+)*(?:contacts?|profiles?|leads?|CRM|Brivity)\b/i.test(goal))return {checked:0,missing:[]};

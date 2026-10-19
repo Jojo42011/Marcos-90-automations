@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- Hosted missing-only copy workflows skip an observed Save/Update after a fully unchanged field comparison, while retaining genuinely pending edits across later unchanged field checks. Profile identities cannot be carried across navigation without a fresh observation. Long source-history coverage uses complete source cells and native presence hashes.
+
 - Native form/table reads reject an ignored url argument rather than silently reading the wrong current page. Source-order failures identify the exact missing/ambiguous row and actual saved field names for recovery.
 
 - Native verification retains the original user-message reference across simple continuations, so resuming does not drop source-copy and first-N order requirements. No extra credential copy is stored.
