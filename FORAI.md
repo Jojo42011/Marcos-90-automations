@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-20: Hard UI / canvas recovery: canvas inspect/connect results carry page `url` and `graph.nodes`/`graph.wires`; obstructed ports get one uncover attempt then `obstructedPorts`; targeting uncertainty no longer clears page identity; page-identity errors demand a fresh inspect before retry. Runtime guidance grounds claims to the latest graph only (Beeble cutout→Compositor FG, Stallion/house→BG, then Compositor→SwitchX).
+
 - 2026-10-20: Unlabeled Beeble Compositor ports match by `role`/`slot` (top/middle/bottom) and inferred handle direction/position, not guessed port ids. Inspect prefers ports, adds `nodeLabel`/`slotName`, auto-focuses relevant nodes during `browser_connect_ports`, and returns `availablePorts` on mismatch. Beeble guidance covers disconnecting house-from-Matte and wiring cutout→Compositor foreground plus house→background.
 
 - 2026-10-20: Harvey unfinished explanations retain both the latest tool failure and a failed verification rejection when both exist, so recovery text keeps the concrete read-back reason. Canvas merges prefer atomic `browser_connect_ports` (inspect + match + drag + edge verification in one call) so Beeble cutout/house composites cannot fail solely because a 30s observation expired between model turns. Time-expired `browser_drag_targets` IDs rematch once by port identity; consumed IDs stay non-replayable. `connectionVerified` requires an observed graph edge. Fixture coverage updated; live Beeble completion still needs a separate authorized check.

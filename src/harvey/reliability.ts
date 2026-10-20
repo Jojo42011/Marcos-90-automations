@@ -106,7 +106,11 @@ export class TurnVerification {
   browserPage():{url:string;observedAt:string}|undefined {
     for(const r of [...this.receipts].reverse()){
       if(r.tool!=='computer'||r.discovery||r.actionOutcome==='not_executed')continue;
-      if(r.outcome!=='returned')return undefined;
+      // Canvas/targeting uncertainty did not navigate; keep scanning for a prior location.
+      if(r.outcome!=='returned'){
+        if(r.diagnostic?.code==='browser_targeting'||r.diagnostic?.code==='browser_target')continue;
+        return undefined;
+      }
       const source:any=this.sources.get(r.id);
       const raw=Array.isArray(source?.content)?source.content.filter((c:any)=>c.type==='text').map((c:any)=>c.text).join('\n'):'';
       const url=source?.url||raw.match(/^- Page URL: (https?:\/\/\S+)\s*$/m)?.[1];

@@ -199,6 +199,15 @@ try{
  locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=details'});const before=locationProof.browserLocation();
  locationProof.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1?tab=notes#changed'});assert.equal(locationProof.browserLocation(),before,'Query/hash changes must not permit a duplicate write');
  locationProof.record('computer',{action:'call',tool:'browser_click'},{error:'REPEATED CALL REFUSED',recovery:{kind:'repeat_refused',actionOutcome:'not_executed',safeToRetry:false}});assert.equal(locationProof.browserLocation(),before,'A known unexecuted call cannot erase observed page identity');
+ // Canvas targeting uncertainty must not wipe page identity (Harvey was blocked mid Beeble wire by this).
+ locationProof.record('computer',{action:'call',tool:'browser_connect_ports'},{error:'Canvas port is obscured',recovery:{kind:'targeting',actionOutcome:'unknown',safeToRetry:true},url:'https://fixture.invalid/people/1'});
+ assert.equal(locationProof.browserLocation(),before,'Targeting uncertainty must keep prior page identity');
+ const canvasLoc=new (require(join(root,'harvey/reliability.js')).TurnVerification)();
+ canvasLoc.record('computer',{action:'call',tool:'browser_snapshot'},{url:'https://fixture.invalid/people/1'});
+ canvasLoc.record('computer',{action:'call',tool:'browser_connect_ports'},{url:'https://app.beeble.ai/canvas/demo',gesture:{connectionVerified:true},edges:[{source:'a',target:'b'}]});
+ const afterConnect=canvasLoc.browserLocation();
+ assert.ok(afterConnect,'Successful canvas write with url must preserve/update page identity');
+ assert.notEqual(afterConnect,undefined);
  locationProof.record('computer',{action:'call',tool:'browser_click'},{error:'Connection lost after submission'});assert.equal(locationProof.browserLocation(),undefined,'An uncertain write still invalidates prior page identity');
 
  console.log('ok identical profile controls work across observed URLs while same-page replay stays refused');

@@ -11,7 +11,7 @@ import {navigationProblem, browserRead, parseTabs, readTabs, recoveryFor, restor
 
 import { browserArguments } from "./browserArguments.js";
 import { uploadArguments } from "./uploadFiles.js";
-import { inspectCode, parseBrowserJson, dragCode, CanvasTarget, matchCanvasPort, rematchCanvasTarget, edgeConnects, CanvasPortQuery, focusNodeIds } from "./canvas.js";
+import { inspectCode, uncoverPortsCode, parseBrowserJson, dragCode, CanvasTarget, matchCanvasPort, rematchCanvasTarget, edgeConnects, CanvasPortQuery, focusNodeIds } from "./canvas.js";
 
 const canvasObservations = new Map<string,{id:string;at:number;targets:CanvasTarget[]}>();
 /** Observation TTL for drag_targets. Time-expired IDs rematch once from stored identity; consumed IDs are not replayed. */
@@ -26,9 +26,9 @@ const EXTRA_TOOLS = [
   {name:"browser_scroll",description:"Scroll an observed container or the document using DOM scrolling, without screenshot coordinates. Supports text-only models. Use a selector from browser_inspect_scroll_regions or the observed table. Then read fresh rows/snapshot; do not ask the user to scroll for you.",inputSchema:{type:"object",properties:{target:{type:"string"},deltaY:{type:"number",minimum:-2000,maximum:2000},deltaX:{type:"number",minimum:-2000,maximum:2000}}}},
   {name:"browser_read_form",description:"Read visible form values, identity emails and full-value hashes. Password/hidden fields are excluded. expected:[source text] checks literal history on the visible page without returning long text. computer sourceValues can bind /expected/0 directly from a source cell. Save and reopen before verifying persistence.",inputSchema:{type:"object",properties:{target:{type:"string"},expected:{type:"array",maxItems:30,items:{type:"string",maxLength:262144}}}}},
   {name:"browser_read_table",description:"Read compact structured rendered table/grid rows or article/list cards, including stable links and full link titles/alt text. Use this for catalog cards as well as tables before relying on screenshots. Optional target is an observed table/container selector or repeating article/list-card selector; multiple matching cards are allowed. Prefer row.title/full link titles over shortened display text. offset/nextOffset page DOM rows only: use actual UI pagination or scrolling for unseen/virtualized records. Verify filters and total separately; save sourced rows with work_records before continuing.",inputSchema:{type:"object",properties:{target:{type:"string"},offset:{type:"integer",minimum:0}}}},
-  {name:"browser_inspect_targets",description:"Inspect visible canvas nodes, ports, controls and exposed graph edges with precise viewport rectangles and a screenshot. Ports include nodeLabel, inferred direction, and slot/slotName for unlabeled multi-input nodes. Optionally focus on observed nodeIds when the graph is large.",inputSchema:{type:"object",properties:{nodeIds:{type:"array",items:{type:"string"},maxItems:4}}}},
+  {name:"browser_inspect_targets",description:"Inspect visible canvas nodes, ports, controls and exposed graph edges with precise viewport rectangles and a screenshot. Returns graph.nodes/graph.wires as the grounded inventory — do not invent node types. Ports include nodeLabel, inferred direction, and slot/slotName for unlabeled multi-input nodes. Optionally focus on observed nodeIds when the graph is large.",inputSchema:{type:"object",properties:{nodeIds:{type:"array",items:{type:"string"},maxItems:4}}}},
   {name:"browser_drag_targets",description:"Connect two freshly observed port targets with a controlled mouse gesture. Requires observationId and target IDs from browser_inspect_targets. Time-expired observations rematch once by port identity; consumed IDs are not replayed. Rejects moved/obscured targets before pressing. Returns fresh graph and pixels with connectionVerified when the edge appears.",inputSchema:{type:"object",properties:{observationId:{type:"string"},start:{type:"string"},end:{type:"string"}},required:["observationId","start","end"]}},
-  {name:"browser_connect_ports",description:"Atomically inspect, match, drag and edge-verify two canvas ports. For unlabeled Beeble Compositor inputs use role=foreground|background or slot=top|middle|bottom with label/nodeId of the node. Prefer this over separate inspect+drag.",inputSchema:{type:"object",properties:{start:portQuerySchema,end:portQuerySchema,nodeIds:{type:"array",items:{type:"string"},maxItems:4}},required:["start","end"]}},
+  {name:"browser_connect_ports",description:"Atomically inspect, match, uncover once if needed, drag and edge-verify two canvas ports. For unlabeled multi-input nodes use role=foreground|background or slot=top|middle|bottom with the observed node label/nodeId. Prefer this over separate inspect+drag or coordinate drags.",inputSchema:{type:"object",properties:{start:portQuerySchema,end:portQuerySchema,nodeIds:{type:"array",items:{type:"string"},maxItems:4}},required:["start","end"]}},
   {name:"browser_read_snapshot",description:"Read another bounded page of the most recent full snapshot without recapturing it. Use snapshotId and nextOffset returned by the previous result. For a new state or a specific region use browser_snapshot with target/depth instead.",inputSchema:{type:"object",properties:{snapshotId:{type:"string"},offset:{type:"integer",minimum:0}},required:["snapshotId","offset"]}},
   {name:"browser_recover",description:"Restart this chat's unresponsive hosted browser and restore saved tabs/cookies. Only after observing a connection or browser crash. Never replays a click, form submission or other action; unsaved page state can be lost. Inspect the restored page before continuing.",inputSchema:{type:"object",properties:{}}}
 ];
@@ -103,6 +103,17 @@ function normalized(s:Session,result:any){
   if(s.saveWarning)output.persistenceWarning=s.saveWarning;
   if(s.restoreWarning)output.restoreWarning=s.restoreWarning;
   return output;
+}
+function pageUrl(s:Session):string|undefined {
+  const raw=s.tabs?.urls[s.tabs.active];
+  if(!raw)return undefined;
+  try{const u=new URL(raw);return u.origin+u.pathname;}catch{return undefined;}
+}
+/** Attach the active page URL so canvas writes preserve page identity after inspect/drag. */
+function withPage(s:Session,result:any){
+  if(!result||typeof result!=="object"||result.url)return result;
+  const url=pageUrl(s);
+  return url?{...result,url}:result;
 }
 async function session(owner:string,chat:string):Promise<Session>{
   if(!browserEnabled())throw new Error("Harvey's hosted browser is not enabled");
@@ -243,11 +254,12 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
     if(args.nodeIds!==undefined&&(!Array.isArray(args.nodeIds)||args.nodeIds.length>4||args.nodeIds.some((id:any)=>typeof id!=="string"||id.length>200)))return {error:"nodeIds must contain up to four observed node IDs"};
     const s=await session(owner,chat),key=owner+":"+chat;
     return observedAction(s,name,async()=>{
-      const inspectNow=async()=>parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode(args.nodeIds)},15000,signal)));
+      const inspectNow=async(nodeIds?:string[])=>parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode(nodeIds||args.nodeIds)},15000,signal)));
+      const stripTargets=(targets:CanvasTarget[])=>targets.map(({selector,...target}:CanvasTarget)=>target);
       const runDrag=async(start:CanvasTarget,end:CanvasTarget)=>{
         canvasObservations.delete(key);s.visionAt=undefined;s.snapshot=undefined;
         try{return parseBrowserJson(checked(await call(s,"browser_run_code_unsafe",{code:dragCode({x:start.rect.x+start.rect.width/2,y:start.rect.y+start.rect.height/2},{x:end.rect.x+end.rect.width/2,y:end.rect.y+end.rect.height/2},[start,end])},15000,signal)));}
-        catch{return {error:"Canvas gesture outcome is unknown; inspect the destination before another attempt",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:false}};}
+        catch{return withPage(s,{error:"Canvas gesture outcome is unknown; inspect the destination before another attempt",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:false}});}
       };
       const finishInspect=async(gesture:any,start?:CanvasTarget,end?:CanvasTarget,extras:Record<string,any>={})=>{
         try{
@@ -259,18 +271,35 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
             const verified=edgeConnects(geometry.edges||[],start,end);
             verifiedGesture={...gesture,connectionVerified:verified,note:verified?"Observed graph edge matches the requested ports.":gesture.note||"Inspect the destination input and graph; gesture success alone does not prove a connection."};
           }
-          return {...normalized(s,shot),...geometry,targets:geometry.targets.map(({selector,...target}:CanvasTarget)=>target),observationId:id,...(verifiedGesture?{gesture:verifiedGesture}:{}),coordinateSpace:"CSS viewport pixels; do not use the scaled Computer preview coordinates",...extras};
-        }catch(error){return {error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),...(gesture?{gesture}:{}),recovery:{kind:"targeting",actionOutcome:gesture&&!gesture.error?"unknown":"not_executed",safeToRetry:!(gesture&&!gesture.error),guidance:"Use a fresh semantic snapshot or screenshot. This is an observation/targeting failure, not proof the app cannot complete the workflow."},...extras};}
+          return withPage(s,{...normalized(s,shot),...geometry,targets:stripTargets(geometry.targets),observationId:id,...(verifiedGesture?{gesture:verifiedGesture}:{}),coordinateSpace:"CSS viewport pixels; do not use the scaled Computer preview coordinates",...extras});
+        }catch(error){return withPage(s,{error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),...(gesture?{gesture}:{}),recovery:{kind:"targeting",actionOutcome:gesture&&!gesture.error?"unknown":"not_executed",safeToRetry:!(gesture&&!gesture.error),guidance:"Use a fresh semantic snapshot or screenshot. This is an observation/targeting failure, not proof the app cannot complete the workflow."},...extras});}
+      };
+      const preparePorts=async(start:CanvasTarget,end:CanvasTarget,focus:string[])=>{
+        let readyStart=start,readyEnd=end,geometry:any=null,uncovered=false;
+        if(!start.unobstructed||!end.unobstructed){
+          try{
+            await call(s,"browser_evaluate",{function:uncoverPortsCode([start.selector,end.selector])},15000,signal);
+            uncovered=true;
+            geometry=await inspectNow(focus.length?focus:args.nodeIds);
+            const nextStart=rematchCanvasTarget(geometry.targets,start),nextEnd=rematchCanvasTarget(geometry.targets,end);
+            if(nextStart&&nextEnd&&nextStart.id!==nextEnd.id){readyStart=nextStart;readyEnd=nextEnd;}
+          }catch{/* keep prior targets; obstruction check below */}
+        }
+        if(!readyStart.unobstructed||!readyEnd.unobstructed){
+          const obstructed=[readyStart,readyEnd].filter(t=>!t.unobstructed).map(t=>({nodeId:t.nodeId,nodeLabel:t.nodeLabel,port:t.port,slot:t.slot,slotName:t.slotName,direction:t.direction,label:t.label}));
+          return {error:withPage(s,{error:"Canvas port is obscured; pan/zoom or move overlapping nodes so both ports are unobstructed, then retry browser_connect_ports. No drag was executed.",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true},obstructedPorts:obstructed,targets:geometry?stripTargets(geometry.targets):undefined,edges:geometry?.edges,graph:geometry?.graph,guidance:"Do not use coordinate drags. Re-inspect after adjusting the viewport, then retry with the same role/slot queries."})};
+        }
+        return {start:readyStart,end:readyEnd,uncovered};
       };
 
       if(name==="browser_connect_ports"){
         const startQ=args.start as CanvasPortQuery,endQ=args.end as CanvasPortQuery;
         let geometry:any;
         try{geometry=await inspectNow();}
-        catch(error){return {error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),recovery:{kind:"targeting",actionOutcome:"not_executed",safeToRetry:true}};}
+        catch(error){return withPage(s,{error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),recovery:{kind:"targeting",actionOutcome:"not_executed",safeToRetry:true}});}
         const focus=focusNodeIds(geometry.targets||[],startQ,endQ,args.nodeIds);
         if(focus.length&&JSON.stringify(focus)!==JSON.stringify(args.nodeIds||[])){
-          try{geometry=parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode(focus)},15000,signal)));}
+          try{geometry=await inspectNow(focus);}
           catch{/* keep wide inspect */}
         }
         let startMatch=matchCanvasPort(geometry.targets,startQ),endMatch=matchCanvasPort(geometry.targets,endQ);
@@ -284,11 +313,11 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
               const exact=(geometry.targets||[]).some((t:CanvasTarget)=>t.kind==="port"&&t.port===next.port);
               return exact?next:{...next,port:undefined};
             };
-            if(/house|background|bg|plate|floor/i.test(blob))return clearBadPort({...q,role:"background",direction:q.direction||(which==="start"?"output":"input")});
+            if(/house|background|bg|plate|floor|stallion|driveway/i.test(blob))return clearBadPort({...q,role:"background",direction:q.direction||(which==="start"?"output":"input")});
             if(/cutout|matte|alpha|person|foreground|fg/i.test(blob))return clearBadPort({...q,role:which==="start"&&q.direction!=="input"?"cutout":"foreground",direction:q.direction||(which==="start"?"output":"input")});
             // Sink side named only as Compositor: inherit role from the other query's cutout/house semantics.
             if(/compositor|merge|composite/i.test(blob)){
-              if(/house|background|bg|plate|floor/i.test(otherBlob))return clearBadPort({...q,role:"background",direction:q.direction||"input"});
+              if(/house|background|bg|plate|floor|stallion|driveway/i.test(otherBlob))return clearBadPort({...q,role:"background",direction:q.direction||"input"});
               if(/cutout|matte|alpha|person|foreground|fg/i.test(otherBlob))return clearBadPort({...q,role:"foreground",direction:q.direction||"input"});
             }
             return q;
@@ -298,18 +327,20 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
             startMatch=matchCanvasPort(geometry.targets,s2);endMatch=matchCanvasPort(geometry.targets,e2);
           }
         }
-        if(startMatch.error||endMatch.error||!startMatch.target||!endMatch.target)return {error:startMatch.error||endMatch.error||"Could not resolve both ports",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true},availablePorts:startMatch.available||endMatch.available,targets:geometry.targets.map(({selector,...target}:CanvasTarget)=>target),edges:geometry.edges,guidance:"For unlabeled Beeble Compositor inputs retry with end:{label:\"Compositor\",role:\"foreground\"|\"background\",direction:\"input\"} or slot:\"top\"|\"bottom\". Focus nodeIds on the Compositor if ports were truncated."};
-        if(startMatch.target.id===endMatch.target.id)return {error:"Select two distinct observed targets",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};
+        if(startMatch.error||endMatch.error||!startMatch.target||!endMatch.target)return withPage(s,{error:startMatch.error||endMatch.error||"Could not resolve both ports",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true},availablePorts:startMatch.available||endMatch.available,targets:stripTargets(geometry.targets),edges:geometry.edges,graph:geometry.graph,guidance:"Use only node labels from graph.nodes. For unlabeled multi-input ports retry with role:\"foreground\"|\"background\" or slot:\"top\"|\"bottom\". Focus nodeIds if ports were truncated."});
+        if(startMatch.target.id===endMatch.target.id)return withPage(s,{error:"Select two distinct observed targets",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true},graph:geometry.graph});
         if(edgeConnects(geometry.edges||[],startMatch.target,endMatch.target)){
           const shot=checked(await call(s,"browser_take_screenshot",{type:"jpeg",fullPage:false},15000,signal));
           const id=randomUUID();canvasObservations.set(key,{id,at:Date.now(),targets:geometry.targets});s.visionAt=Date.now();
-          return {...normalized(s,shot),...geometry,targets:geometry.targets.map(({selector,...target}:CanvasTarget)=>target),observationId:id,gesture:{gestureCompleted:false,connectionVerified:true,note:"Requested ports were already connected; no drag executed."},alreadyConnected:true,coordinateSpace:"CSS viewport pixels; do not use the scaled Computer preview coordinates"};
+          return withPage(s,{...normalized(s,shot),...geometry,targets:stripTargets(geometry.targets),observationId:id,gesture:{gestureCompleted:false,connectionVerified:true,note:"Requested ports were already connected; no drag executed."},alreadyConnected:true,coordinateSpace:"CSS viewport pixels; do not use the scaled Computer preview coordinates"});
         }
-        const gesture=await runDrag(startMatch.target,endMatch.target);
-        if(gesture.error)return {...gesture,recovery:gesture.recovery||{kind:"target",actionOutcome:"not_executed",safeToRetry:true},targets:geometry.targets.map(({selector,...target}:CanvasTarget)=>target),edges:geometry.edges};
+        const prepared=await preparePorts(startMatch.target,endMatch.target,focus);
+        if(prepared.error)return prepared.error;
+        const gesture=await runDrag(prepared.start!,prepared.end!);
+        if(gesture.error)return withPage(s,{...gesture,recovery:gesture.recovery||{kind:"target",actionOutcome:"not_executed",safeToRetry:true},targets:stripTargets(geometry.targets),edges:geometry.edges,graph:geometry.graph});
         s.dirty=true;deferCheckpoint(s);
-        const result=await finishInspect(gesture,startMatch.target,endMatch.target,{connectedPorts:{start:{nodeId:startMatch.target.nodeId,port:startMatch.target.port,label:startMatch.target.label,slot:startMatch.target.slot,slotName:startMatch.target.slotName},end:{nodeId:endMatch.target.nodeId,port:endMatch.target.port,label:endMatch.target.label,slot:endMatch.target.slot,slotName:endMatch.target.slotName}},focusedNodeIds:focus});
-        if(result.gesture&&!result.gesture.connectionVerified)return {...result,error:"Gesture completed but the expected graph edge was not observed. Uncover/zoom the Compositor inputs and retry browser_connect_ports with role/slot; do not claim the merge is done.",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:true}};
+        const result=await finishInspect(gesture,prepared.start,prepared.end,{connectedPorts:{start:{nodeId:prepared.start!.nodeId,port:prepared.start!.port,label:prepared.start!.label,slot:prepared.start!.slot,slotName:prepared.start!.slotName},end:{nodeId:prepared.end!.nodeId,port:prepared.end!.port,label:prepared.end!.label,slot:prepared.end!.slot,slotName:prepared.end!.slotName}},focusedNodeIds:focus,portsUncovered:prepared.uncovered});
+        if(result.gesture&&!result.gesture.connectionVerified)return {...result,error:"Gesture completed but the expected graph edge was not observed. Pan/zoom so both ports are visible, retry browser_connect_ports with role/slot from graph.nodes, and do not claim the wire is done.",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:true}};
         return result;
       }
 
@@ -331,11 +362,13 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
             }catch{/* fall through to expired error */}
           }
         }
-        if(!start||!end||start.id===end.id)return {error:"Canvas observation expired; inspect targets again",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};
-        gesture=await runDrag(start,end);
-        if(gesture.error)return {...gesture,recovery:gesture.recovery||{kind:"target",actionOutcome:"not_executed",safeToRetry:true}};
+        if(!start||!end||start.id===end.id)return withPage(s,{error:"Canvas observation expired; inspect targets again",recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}});
+        const prepared=await preparePorts(start,end,[]);
+        if(prepared.error)return prepared.error;
+        gesture=await runDrag(prepared.start!,prepared.end!);
+        if(gesture.error)return withPage(s,{...gesture,recovery:gesture.recovery||{kind:"target",actionOutcome:"not_executed",safeToRetry:true}});
         s.dirty=true;deferCheckpoint(s);
-        return finishInspect(gesture,start,end,refreshed?{observationRefreshed:true}:{});
+        return finishInspect(gesture,prepared.start,prepared.end,{...(refreshed?{observationRefreshed:true}:{}),portsUncovered:prepared.uncovered});
       }
       return finishInspect(undefined);
     });
