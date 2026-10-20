@@ -85,14 +85,20 @@ const alphaDrag=r=>({observationId:r.observationId,start:r.targets.find(t=>t.por
  assert.equal(C.rematchCanvasTarget(targets,{nodeId:'matte',port:'alpha',kind:'port',direction:'output'}).id,'t0');
  assert.equal(C.edgeConnects([{source:'matte',target:'compositor',sourcePort:'alpha',targetPort:'foreground'}],targets[0],targets[1]),true);
  assert.equal(C.edgeConnects([{source:'matte',target:'compositor',sourcePort:'',targetPort:''}],targets[0],targets[1]),true);
+ assert.match(C.uncoverPortsCode(['html > body']),/scrollIntoView/);
  console.log('ok canvas port match/rematch helpers including unlabeled slots');
 }
 
 try{
  await call('browser_navigate',{url});
+ const grounded=await inspect();
+ assert.ok(grounded.graph?.nodes?.some(n=>/Compositor/i.test(n.nodeLabel||'')),JSON.stringify(grounded.graph));
+ assert.ok(Array.isArray(grounded.graph?.wires));
+ assert.ok(grounded.url&&/127\.0\.0\.1/.test(grounded.url),JSON.stringify({url:grounded.url}));
  // Atomic Beeble-style merges: each connect_ports call inspects+drags+verifies in one round-trip.
  let merge=await call('browser_connect_ports',{start:{label:'Matte alpha',direction:'output'},end:{label:'Compositor foreground',direction:'input'}});
  assert(!merge.error,JSON.stringify({error:merge.error,gesture:merge.gesture,edges:merge.edges}));assert.equal(merge.gesture.connectionVerified,true);assert.equal(connected,1);
+ assert.ok(merge.url&&/127\.0\.0\.1/.test(merge.url),'connect_ports must return page url so page identity survives');
  const already=await call('browser_connect_ports',{start:{nodeId:'matte',port:'alpha'},end:{nodeId:'compositor',port:'foreground'}});
  assert.equal(already.alreadyConnected,true);assert.equal(already.gesture.connectionVerified,true);assert.equal(connected,1);
  await call('browser_navigate',{url});connected=0;
@@ -149,6 +155,7 @@ try{
 
  await call('browser_navigate',{url});await call('browser_click',{target:'button:has-text("Cover port")'});r=await inspect();
  const covered=await call('browser_drag_targets',alphaDrag(r));assert.equal(covered.recovery.actionOutcome,'not_executed');assert.match(covered.error,/obscured/);assert.equal(connected,0);
+ assert.ok(covered.obstructedPorts?.length||/obscured/.test(covered.error||''),JSON.stringify(covered.obstructedPorts));
  console.log('ok covered/stale-after-write targets fail before mouse-down; no duplicate connection');
  const wrongOwner=await B.browserCall('bob','canvas','browser_drag_targets',alphaDrag(r));assert(wrongOwner.error);assert.equal(connected,0);
  const tools=await B.browserTools('alice','canvas');assert(tools.some(t=>t.name==='browser_connect_ports'));assert(!tools.some(t=>/evaluate|unsafe/.test(t.name)));

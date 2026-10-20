@@ -53,13 +53,21 @@ export function inspectTargetsInPage(nodeIds:string[]=[]) {
   const edges=allEdges.slice(0,24).map(el=>({
     id:el.getAttribute("data-id")||el.id,label:el.getAttribute("aria-label"),source:el.getAttribute("data-source"),target:el.getAttribute("data-target"),sourcePort:el.getAttribute("data-sourcehandle"),targetPort:el.getAttribute("data-targethandle")
   }));
-  return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},targets:raw,edges,truncated:ranked.length>limit||allEdges.length>24,note:"DOM labels/ports/edges are observations, not proof of their meaning. Ports include nodeLabel, inferred direction, and slot/slotName (top/middle/bottom) when a node has multiple inputs/outputs. If truncated, focus with nodeIds. For unlabeled Beeble Compositor inputs use nodeLabel+direction+slot/role. Null edge endpoints are unknown; inspect destination inputs."};
+  const nodeMap=new Map<string,string>();
+  for(const t of raw)if(t.nodeId&&!nodeMap.has(t.nodeId))nodeMap.set(t.nodeId,t.nodeLabel||t.nodeId);
+  const graph={nodes:[...nodeMap].map(([nodeId,nodeLabel])=>({nodeId,nodeLabel})),edgeCount:allEdges.length,wires:edges.map(e=>({source:e.source,target:e.target,sourcePort:e.sourcePort,targetPort:e.targetPort}))};
+  return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},targets:raw,edges,graph,truncated:ranked.length>limit||allEdges.length>24,note:"DOM labels/ports/edges are observations, not proof of their meaning. Use graph.nodes/graph.wires as the only grounded node inventory. Ports include nodeLabel, inferred direction, and slot/slotName (top/middle/bottom) when a node has multiple inputs/outputs. If truncated, focus with nodeIds. For unlabeled multi-input nodes use nodeLabel+direction+slot/role. Null edge endpoints are unknown; inspect destination inputs."};
 }
 
 export type CanvasTarget = ReturnType<typeof inspectTargetsInPage>["targets"][number] & {slot?:number;slotCount?:number;slotName?:string};
 export type CanvasEdge = ReturnType<typeof inspectTargetsInPage>["edges"][number];
 export type CanvasPortQuery = {nodeId?:string;port?:string;label?:string;direction?:string;kind?:string;slot?:string|number;role?:string};
 export function inspectCode(nodeIds:string[]=[]) { return `(${inspectTargetsInPage.toString()})(${JSON.stringify(nodeIds)})`; }
+/** Bring matched port elements into view once before a drag; does not change application graph state. */
+export function uncoverPortsCode(selectors:string[]) {
+  const safe=selectors.filter(s=>typeof s==="string"&&s.length>0&&s.length<2000).slice(0,4);
+  return `(() => { let moved=0; for(const sel of ${JSON.stringify(safe)}){ const el=document.querySelector(sel); if(!el)continue; el.scrollIntoView({block:"center",inline:"center",behavior:"auto"}); moved++; } return {moved,note:"Ports scrolled into view when possible; re-inspect obstruction before dragging."}; })()`;
+}
 export function parseBrowserJson(result:any) {
   const raw=(result.content||[]).filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n");
   const block=raw.match(/### Result\s*\n([\s\S]*?)(?=\n### |$)/)?.[1]?.trim();

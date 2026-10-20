@@ -485,7 +485,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     // Same-page repeats (including uncertain submissions) remain refused.
     const pageScope=opts.workRuntime&&name==='computer'&&!read?verification.browserLocation():undefined;
     const operation=signature(name,input);
-    if(opts.workRuntime&&name==='computer'&&!read&&!pageScope&&scopedBrowserActions.has(operation))return {error:'The current page identity is unknown after the last operation. Inspect a fresh page before considering this action again; no action was replayed.',recovery:{kind:'page_identity',actionOutcome:'not_executed',safeToRetry:false}};
+    if(opts.workRuntime&&name==='computer'&&!read&&!pageScope&&scopedBrowserActions.has(operation))return {error:'The current page identity is unknown after the last operation. Call computer browser_inspect_targets or browser_snapshot to re-establish the current page from a fresh observation, then retry using only labels/ports/edges from that result; no action was replayed.',recovery:{kind:'page_identity',actionOutcome:'not_executed',safeToRetry:false,guidance:'Do not invent nodes or claim graph state. After a successful inspect/snapshot on this tab, retry the intended write once with arguments grounded in that observation.'}};
     if(pageScope)scopedBrowserActions.add(operation);
     if(opts.workRuntime&&name==='computer'&&!read&&!pageScope)unscopedBrowserActions.add(operation);
     const sig = operation + (pageScope&&!unscopedBrowserActions.has(operation)?':'+pageScope:'') + (scrolling?":"+scrollCheckpoint!.progressKey:"") + (opts.workRuntime && read ? `:${observationRevision}` : "");
