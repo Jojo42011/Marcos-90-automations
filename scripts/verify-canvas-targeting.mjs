@@ -26,9 +26,19 @@ const page=(mode='labeled')=>`<style>
  `}<div id="cover"></div></div>
  <script>
  const edges=new Set(), unlabeled=${mode==='unlabeled'?'true':'false'};
+ let selectedEdgeKey=null;
  function sync(){
   document.querySelectorAll('.react-flow__edge').forEach(e=>e.remove());
-  for(const key of edges){const [source,target,sh,th]=key.split('|');const edge=document.createElement('div');edge.className='react-flow__edge';edge.dataset.source=source;edge.dataset.target=target;edge.dataset.sourcehandle=sh;edge.dataset.targethandle=th;edge.style.cssText='position:absolute;left:-9999px;width:1px;height:1px';document.body.append(edge);}
+  let i=0;
+  for(const key of edges){
+   const [source,target,sh,th]=key.split('|');
+   const sEl=document.querySelector('[data-id="'+source+'"]'),tEl=document.querySelector('[data-id="'+target+'"]');
+   const edge=document.createElement('div');edge.className='react-flow__edge';edge.dataset.source=source;edge.dataset.target=target;edge.dataset.sourcehandle=sh;edge.dataset.targethandle=th;edge.tabIndex=0;
+   if(sEl&&tEl){const sr=sEl.getBoundingClientRect(),tr=tEl.getBoundingClientRect();edge.style.cssText='position:fixed;left:'+((sr.right+tr.left)/2-24)+'px;top:'+((sr.top+tr.top)/2)+'px;width:48px;height:12px;background:orange;z-index:30;';}
+   else edge.style.cssText='position:fixed;left:12px;top:'+(420+i*16)+'px;width:48px;height:12px;background:orange;z-index:30;';
+   if(key===selectedEdgeKey)edge.style.outline='2px solid red';
+   document.body.append(edge);i++;
+  }
   const ok=unlabeled?(edges.has('matte|compositor||')||[...edges].some(k=>k.startsWith('matte|compositor')))&&[...edges].some(k=>k.startsWith('house|compositor')):edges.has('matte|compositor|alpha|foreground')&&edges.has('house|compositor|video|background');
   document.querySelector('#state').textContent=ok?'Merged cutout over house':edges.size?'Partially connected':'Not merged';
  }
@@ -43,6 +53,8 @@ const page=(mode='labeled')=>`<style>
   return best;
  }
  document.addEventListener('mousedown',e=>{
+  const edge=e.target.closest('.react-flow__edge');
+  if(edge){selectedEdgeKey=[edge.dataset.source,edge.dataset.target,edge.dataset.sourcehandle||'',edge.dataset.targethandle||''].join('|');sync();return;}
   const src=nearestPort(e.clientX,e.clientY,'source');
   if(!src)return;start=src;moves=0;lastX=e.clientX;lastY=e.clientY;
  });
@@ -53,6 +65,9 @@ const page=(mode='labeled')=>`<style>
   if(!target){start=null;return;}
   const sourceNode=start.closest('[data-id]').dataset.id,targetNode=target.closest('[data-id]').dataset.id;
   edges.add([sourceNode,targetNode,start.dataset.handleid||'',target.dataset.handleid||''].join('|'));sync();fetch('/connected');start=null;
+ });
+ document.addEventListener('keydown',e=>{
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedEdgeKey){edges.delete(selectedEdgeKey);selectedEdgeKey=null;sync();}
  });
  </script>`;
 const server=http.createServer((req,res)=>{
@@ -86,6 +101,9 @@ const alphaDrag=r=>({observationId:r.observationId,start:r.targets.find(t=>t.por
  assert.equal(C.edgeConnects([{source:'matte',target:'compositor',sourcePort:'alpha',targetPort:'foreground'}],targets[0],targets[1]),true);
  assert.equal(C.edgeConnects([{source:'matte',target:'compositor',sourcePort:'',targetPort:''}],targets[0],targets[1]),true);
  assert.match(C.uncoverPortsCode(['html > body']),/scrollIntoView/);
+ assert.match(C.uncoverPortsCode(['html > body']),/harveyClearAbove|pointerEvents/);
+ assert.match(C.restoreUncoverCode(),/harveyRestore|harvey-uncover/);
+ assert.match(C.disconnectEdgeCode('house','matte'),/Delete/);
  console.log('ok canvas port match/rematch helpers including unlabeled slots');
 }
 
@@ -153,12 +171,24 @@ try{
  await call('browser_click',{target:'button:has-text("Move node")'});
  assert((await call('browser_drag_targets',afterWrite)).error,'Write clears canvas observation');assert.equal(connected,0);
 
- await call('browser_navigate',{url});await call('browser_click',{target:'button:has-text("Cover port")'});r=await inspect();
- const covered=await call('browser_drag_targets',alphaDrag(r));assert.equal(covered.recovery.actionOutcome,'not_executed');assert.match(covered.error,/obscured/);assert.equal(connected,0);
- assert.ok(covered.obstructedPorts?.length||/obscured/.test(covered.error||''),JSON.stringify(covered.obstructedPorts));
- console.log('ok covered/stale-after-write targets fail before mouse-down; no duplicate connection');
- const wrongOwner=await B.browserCall('bob','canvas','browser_drag_targets',alphaDrag(r));assert(wrongOwner.error);assert.equal(connected,0);
- const tools=await B.browserTools('alice','canvas');assert(tools.some(t=>t.name==='browser_connect_ports'));assert(!tools.some(t=>/evaluate|unsafe/.test(t.name)));
+ // Overlay covering a port: force-uncover clears pointer-events so the wire still completes.
+ await call('browser_navigate',{url});connected=0;
+ await call('browser_click',{target:'button:has-text("Cover port")'});
+ const throughCover=await call('browser_connect_ports',{start:{label:'Matte alpha',direction:'output'},end:{label:'Compositor foreground',direction:'input'}});
+ assert(!throughCover.error,JSON.stringify({error:throughCover.error,gesture:throughCover.gesture}));
+ assert.equal(throughCover.gesture.connectionVerified,true);assert.equal(connected,1);
+ console.log('ok covered ports are force-uncovered and still connect with verification');
+
+ // Disconnect a wrong matte feed, then wire house→background.
+ await call('browser_navigate',{url});connected=0;
+ await call('browser_connect_ports',{start:{nodeId:'house',port:'video'},end:{nodeId:'compositor',port:'background',label:'background'}});
+ const cut=await call('browser_disconnect_edge',{sourceNodeId:'house',targetNodeId:'compositor'});
+ assert.equal(cut.disconnected,true,JSON.stringify(cut));
+ assert.ok(!(cut.edges||[]).some(e=>e.source==='house'&&e.target==='compositor'),JSON.stringify(cut.edges));
+ console.log('ok browser_disconnect_edge removes an observed wire');
+
+ const wrongOwner=await B.browserCall('bob','canvas','browser_drag_targets',alphaDrag(await inspect()));assert(wrongOwner.error);
+ const tools=await B.browserTools('alice','canvas');assert(tools.some(t=>t.name==='browser_connect_ports'));assert(tools.some(t=>t.name==='browser_disconnect_edge'));assert(!tools.some(t=>/evaluate|unsafe/.test(t.name)));
  await assert.rejects(()=>call('browser_run_code_unsafe',{code:'() => 1'}),/Unsupported browser action/);
  console.log('ok owner isolation and arbitrary-code boundary');
 }

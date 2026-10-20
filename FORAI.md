@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-20: Canvas force-wire: connect/drag raises handles, clears overlay pointer-events, and re-reads live centers before dragging; `browser_disconnect_edge` removes wrong wires; canvas/wiring `inspect_screen` calls are refused in favor of `browser_inspect_targets`/`browser_connect_ports`. Beeble recipe uses disconnect then FG/BG compositor wires.
+
 - 2026-10-20: Hard UI / canvas recovery: canvas inspect/connect results carry page `url` and `graph.nodes`/`graph.wires`; obstructed ports get one uncover attempt then `obstructedPorts`; targeting uncertainty no longer clears page identity; page-identity errors demand a fresh inspect before retry. Runtime guidance grounds claims to the latest graph only (Beeble cutout→Compositor FG, Stallion/house→BG, then Compositor→SwitchX).
 
 - 2026-10-20: Unlabeled Beeble Compositor ports match by `role`/`slot` (top/middle/bottom) and inferred handle direction/position, not guessed port ids. Inspect prefers ports, adds `nodeLabel`/`slotName`, auto-focuses relevant nodes during `browser_connect_ports`, and returns `availablePorts` on mismatch. Beeble guidance covers disconnecting house-from-Matte and wiring cutout→Compositor foreground plus house→background.
