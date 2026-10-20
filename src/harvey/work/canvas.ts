@@ -19,12 +19,61 @@ export function inspectTargetsInPage(nodeIds:string[]=[]) {
 }
 
 export type CanvasTarget = ReturnType<typeof inspectTargetsInPage>["targets"][number];
+export type CanvasEdge = ReturnType<typeof inspectTargetsInPage>["edges"][number];
+export type CanvasPortQuery = {nodeId?:string;port?:string;label?:string;direction?:string;kind?:string};
 export function inspectCode(nodeIds:string[]=[]) { return `(${inspectTargetsInPage.toString()})(${JSON.stringify(nodeIds)})`; }
 export function parseBrowserJson(result:any) {
   const raw=(result.content||[]).filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n");
   const block=raw.match(/### Result\s*\n([\s\S]*?)(?=\n### |$)/)?.[1]?.trim();
   if(!block)throw new Error("Browser did not return structured geometry");
   return JSON.parse(block.replace(/^```(?:json)?\s*\n|\n```$/g,""));
+}
+
+/** Rematch a prior target by stable node/port identity (or label+direction) against a fresh inspect. */
+export function rematchCanvasTarget(targets:CanvasTarget[], prior:Pick<CanvasTarget,"nodeId"|"port"|"label"|"direction"|"kind">):CanvasTarget|undefined {
+  const byIdentity=targets.filter(t=>
+    (prior.nodeId==null||t.nodeId===prior.nodeId)&&
+    (prior.port==null||t.port===prior.port)&&
+    (prior.kind==null||t.kind===prior.kind)&&
+    (prior.direction==null||t.direction===prior.direction));
+  if(byIdentity.length===1)return byIdentity[0];
+  if(prior.nodeId!=null&&prior.port!=null){
+    const ports=byIdentity.filter(t=>t.kind==="port");
+    if(ports.length===1)return ports[0];
+  }
+  const needle=(prior.label||"").trim().toLowerCase();
+  if(!needle)return undefined;
+  const byLabel=targets.filter(t=>
+    (t.label||"").toLowerCase().includes(needle)&&
+    (prior.direction==null||t.direction===prior.direction)&&
+    (prior.kind==null||t.kind===prior.kind||t.kind==="port"));
+  return byLabel.length===1?byLabel[0]:undefined;
+}
+
+export function matchCanvasPort(targets:CanvasTarget[], query:CanvasPortQuery):{target?:CanvasTarget;error?:string} {
+  if(!query||typeof query!=="object"||Array.isArray(query))return {error:"Port query must be an object with nodeId, port, label and/or direction"};
+  const keys=["nodeId","port","label","direction","kind"] as const;
+  for(const key of keys)if(query[key]!==undefined&&(typeof query[key]!=="string"||(query[key] as string).length>200))return {error:"Invalid "+key+" in port query"};
+  if(!keys.some(key=>query[key]))return {error:"Port query needs nodeId, port, label or direction"};
+  let candidates=targets.filter(t=>t.kind==="port"||query.kind==="node"||query.kind===t.kind);
+  if(query.kind)candidates=candidates.filter(t=>t.kind===query.kind);
+  if(query.nodeId)candidates=candidates.filter(t=>t.nodeId===query.nodeId);
+  if(query.port)candidates=candidates.filter(t=>t.port===query.port);
+  if(query.direction)candidates=candidates.filter(t=>t.direction===query.direction);
+  if(query.label){
+    const needle=query.label.trim().toLowerCase();
+    candidates=candidates.filter(t=>(t.label||"").toLowerCase().includes(needle)||(t.nodeId||"").toLowerCase().includes(needle)||(t.port||"").toLowerCase().includes(needle));
+  }
+  if(!candidates.length)return {error:"No visible canvas port matched "+JSON.stringify(query)+". Pan/zoom or uncover nodes, then retry."};
+  if(candidates.length>1)return {error:"Ambiguous canvas port for "+JSON.stringify(query)+"; "+candidates.length+" matches. Narrow with nodeId/port/direction."};
+  return {target:candidates[0]};
+}
+
+export function edgeConnects(edges:CanvasEdge[], start:Pick<CanvasTarget,"nodeId"|"port">, end:Pick<CanvasTarget,"nodeId"|"port">):boolean {
+  return edges.some(e=>
+    e.source===start.nodeId&&e.target===end.nodeId&&
+    (start.port==null||e.sourcePort===start.port||e.sourcePort==null)&&
+    (end.port==null||e.targetPort===end.port||e.targetPort==null));
 }
 
 /** Atomic mouse gesture with intermediate events and unconditional release. Data only enters as JSON. */
