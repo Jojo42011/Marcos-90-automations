@@ -292,7 +292,8 @@ export class TurnVerification {
     if(state.checks.length&&state.limitations.length)return state.limitations.join(' ');
     const rejection=[...this.receipts].reverse().find(r=>r.tool==='report_verification'&&r.outcome==='failed'&&r.diagnostic);
     const failure=[...this.receipts].reverse().find(r=>r.outcome==='failed'&&r.diagnostic&&!['report_verification','task_plan','continuity'].includes(r.tool));
-    const details=[failure?`I couldn’t complete the last step: ${failure.diagnostic!.message}`:rejection?'I couldn’t confirm the result of the last step.':'I haven’t been able to verify the result yet.', 'I’ve kept the saved progress.'];
+    const rejectionDetail=rejection?.diagnostic?.message?.trim();
+    const details=[failure?`I couldn’t complete the last step: ${failure.diagnostic!.message}`:rejection?'I couldn’t confirm the result of the last step.':'I haven’t been able to verify the result yet.', failure&&rejectionDetail&&!failure.diagnostic!.message.includes(rejectionDetail)?rejectionDetail:undefined, 'I’ve kept the saved progress.'];
     return details.filter(Boolean).join(' ');
   }
   historyTransferCoverage(goal:string){

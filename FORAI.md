@@ -22,7 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
-- 2026-10-20: Harvey canvas merges prefer atomic `browser_connect_ports` (inspect + match + drag + edge verification in one call) so Beeble cutout/house composites cannot fail solely because a 30s observation expired between model turns. Time-expired `browser_drag_targets` IDs rematch once by port identity; consumed IDs stay non-replayable. `connectionVerified` requires an observed graph edge. Fixture coverage updated; live Beeble completion still needs a separate authorized check. No production deploy from this change alone.
+- 2026-10-20: Harvey unfinished explanations retain both the latest tool failure and a failed verification rejection when both exist, so recovery text keeps the concrete read-back reason. Canvas merges prefer atomic `browser_connect_ports` (inspect + match + drag + edge verification in one call) so Beeble cutout/house composites cannot fail solely because a 30s observation expired between model turns. Time-expired `browser_drag_targets` IDs rematch once by port identity; consumed IDs stay non-replayable. `connectionVerified` requires an observed graph edge. Fixture coverage updated; live Beeble completion still needs a separate authorized check.
 
 - 2026-10-19: Context/history and capability lookups alone no longer force external task-completion reviews. Prerequisite questions remain conversational; immediate authorized check promises receive a follow-through reminder. Actual work retains verification and recovery, while terminal errors use plain explanations rather than unfinished-task banners. Local provider regressions cover conversation and acted-on checks.
 
