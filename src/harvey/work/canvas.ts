@@ -63,11 +63,112 @@ export type CanvasTarget = ReturnType<typeof inspectTargetsInPage>["targets"][nu
 export type CanvasEdge = ReturnType<typeof inspectTargetsInPage>["edges"][number];
 export type CanvasPortQuery = {nodeId?:string;port?:string;label?:string;direction?:string;kind?:string;slot?:string|number;role?:string};
 export function inspectCode(nodeIds:string[]=[]) { return `(${inspectTargetsInPage.toString()})(${JSON.stringify(nodeIds)})`; }
-/** Bring matched port elements into view once before a drag; does not change application graph state. */
+
+/** Shared DOM helpers injected into uncover/drag evaluates (no model-supplied code). */
+function canvasDomHelpersSource() {
+  return `
+    const harveyRaise=(el)=>{
+      if(!(el instanceof HTMLElement))return;
+      if(!el.dataset.harveyUncover){
+        el.dataset.harveyUncover='1';
+        el.dataset.harveyPrev=JSON.stringify({z:el.style.zIndex,pe:el.style.pointerEvents,w:el.style.width,h:el.style.height,minW:el.style.minWidth,minH:el.style.minHeight});
+      }
+      el.style.zIndex='2147483646';
+      el.style.pointerEvents='auto';
+      const r=el.getBoundingClientRect();
+      if(r.width<20||r.height<20){el.style.minWidth='20px';el.style.minHeight='20px';el.style.width=Math.max(r.width,20)+'px';el.style.height=Math.max(r.height,20)+'px';}
+    };
+    const harveyClearAbove=(el)=>{
+      let cleared=0;
+      const r=el.getBoundingClientRect();
+      const cx=r.x+r.width/2,cy=r.y+r.height/2;
+      for(let i=0;i<12;i++){
+        const hit=document.elementFromPoint(cx,cy);
+        if(!hit||hit===el||el.contains(hit))break;
+        if(!(hit instanceof HTMLElement))break;
+        if(hit===document.body||hit===document.documentElement)break;
+        if(hit.classList.contains('react-flow__pane')||hit.classList.contains('xy-flow__pane')||hit.classList.contains('react-flow__viewport')||hit.classList.contains('xy-flow__viewport'))break;
+        const otherHandle=hit.closest?.('.react-flow__handle,.xy-flow__handle,[data-handleid],[data-port-id]');
+        if(otherHandle&&otherHandle!==el)break;
+        if(!hit.dataset.harveyPe){hit.dataset.harveyPe=hit.style.pointerEvents||'';hit.style.pointerEvents='none';cleared++;}
+      }
+      return cleared;
+    };
+    const harveyRestore=()=>{
+      let n=0;
+      document.querySelectorAll('[data-harvey-uncover]').forEach(el=>{
+        try{
+          const prev=JSON.parse(el.getAttribute('data-harvey-prev')||'{}');
+          el.style.zIndex=prev.z||'';el.style.pointerEvents=prev.pe||'';
+          el.style.width=prev.w||'';el.style.height=prev.h||'';
+          el.style.minWidth=prev.minW||'';el.style.minHeight=prev.minH||'';
+        }catch{}
+        el.removeAttribute('data-harvey-uncover');el.removeAttribute('data-harvey-prev');n++;
+      });
+      document.querySelectorAll('[data-harvey-pe]').forEach(el=>{
+        el.style.pointerEvents=el.getAttribute('data-harvey-pe')||'';
+        el.removeAttribute('data-harvey-pe');n++;
+      });
+      return n;
+    };
+  `;
+}
+
+/** Fit/zoom when available, raise handles, clear overlay pointer-events so elementFromPoint hits the port. */
 export function uncoverPortsCode(selectors:string[]) {
   const safe=selectors.filter(s=>typeof s==="string"&&s.length>0&&s.length<2000).slice(0,4);
-  return `(() => { let moved=0; for(const sel of ${JSON.stringify(safe)}){ const el=document.querySelector(sel); if(!el)continue; el.scrollIntoView({block:"center",inline:"center",behavior:"auto"}); moved++; } return {moved,note:"Ports scrolled into view when possible; re-inspect obstruction before dragging."}; })()`;
+  return `(() => { ${canvasDomHelpersSource()}
+    const sels=${JSON.stringify(safe)};
+    const out={moved:0,raised:0,cleared:0,fitted:false,zoomed:false};
+    const fit=document.querySelector('.react-flow__controls-fitview,.xy-flow__controls-fitview,button[title*="Fit" i],button[aria-label*="Fit" i]');
+    if(fit instanceof HTMLElement){fit.click();out.fitted=true;}
+    const zoom=document.querySelector('.react-flow__controls-zoomin,.xy-flow__controls-zoomin,button[title*="Zoom in" i],button[aria-label*="Zoom in" i]');
+    if(zoom instanceof HTMLElement){zoom.click();out.zoomed=true;}
+    for(const sel of sels){
+      const el=document.querySelector(sel);
+      if(!el)continue;
+      el.scrollIntoView({block:"center",inline:"center",behavior:"auto"});
+      harveyRaise(el);out.raised++;
+      out.cleared+=harveyClearAbove(el);
+      out.moved++;
+    }
+    return out;
+  })()`;
 }
+export function restoreUncoverCode() {
+  return `(() => { ${canvasDomHelpersSource()} return {restored:harveyRestore()}; })()`;
+}
+
+/** Select a source→target edge and delete it (Beeble wrong Matte wiring). */
+export function disconnectEdgeCode(sourceNodeId:string,targetNodeId:string) {
+  if(typeof sourceNodeId!=="string"||!sourceNodeId||sourceNodeId.length>200||typeof targetNodeId!=="string"||!targetNodeId||targetNodeId.length>200)throw new Error("Invalid edge endpoints");
+  return `async (page) => {
+    const source=${JSON.stringify(sourceNodeId)},target=${JSON.stringify(targetNodeId)};
+    const hit=await page.evaluate(({source,target})=>{
+      const edges=Array.from(document.querySelectorAll('.react-flow__edge,.xy-flow__edge,[data-source][data-target]'));
+      const edge=edges.find(e=>e.getAttribute('data-source')===source&&e.getAttribute('data-target')===target);
+      if(!edge)return {error:'No edge found from '+source+' to '+target};
+      const path=edge.querySelector('.react-flow__edge-interaction,path')||edge;
+      const r=path.getBoundingClientRect();
+      if(r.width<=0&&r.height<=0)return {error:'Edge is not visible; pan/zoom then retry'};
+      return {x:r.x+Math.max(r.width/2,1),y:r.y+Math.max(Math.min(r.height/2,8),1)};
+    },{source,target});
+    if(hit.error)return {error:hit.error,notExecuted:true};
+    await page.mouse.click(hit.x,hit.y,{delay:40});
+    await page.waitForTimeout(100);
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(120);
+    let gone=await page.evaluate(({source,target})=>!Array.from(document.querySelectorAll('.react-flow__edge,.xy-flow__edge,[data-source][data-target]')).some(e=>e.getAttribute('data-source')===source&&e.getAttribute('data-target')===target),{source,target});
+    if(!gone){
+      await page.mouse.click(hit.x,hit.y,{delay:40});
+      await page.keyboard.press('Backspace');
+      await page.waitForTimeout(120);
+      gone=await page.evaluate(({source,target})=>!Array.from(document.querySelectorAll('.react-flow__edge,.xy-flow__edge,[data-source][data-target]')).some(e=>e.getAttribute('data-source')===source&&e.getAttribute('data-target')===target),{source,target});
+    }
+    return gone?{disconnected:true,source,target}:{error:'Edge still present after Delete/Backspace; click the noodle and delete manually then retry',source,target,notExecuted:false};
+  }`;
+}
+
 export function parseBrowserJson(result:any) {
   const raw=(result.content||[]).filter((c:any)=>c.type==="text").map((c:any)=>c.text).join("\n");
   const block=raw.match(/### Result\s*\n([\s\S]*?)(?=\n### |$)/)?.[1]?.trim();
@@ -204,18 +305,45 @@ export function focusNodeIds(targets:CanvasTarget[], start:CanvasPortQuery, end:
   return [...ids].slice(0,4);
 }
 
-/** Atomic mouse gesture with intermediate events and unconditional release. Data only enters as JSON. */
+/** Atomic mouse gesture: force handles hittable, drag with live centers, restore overlays. Data only enters as JSON. */
 export function dragCode(start:{x:number;y:number},end:{x:number;y:number},targets?:CanvasTarget[]) {
   for(const p of [start,end])if(!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.y<0)throw new Error("Invalid drag coordinates");
   return `async (page) => {
-    const start=${JSON.stringify(start)},end=${JSON.stringify(end)},targets=${JSON.stringify(targets||[])};
-    const check=await page.evaluate(({start,end,targets})=>{
-      for(const p of [start,end])if(p.x>=innerWidth||p.y>=innerHeight)return 'Coordinates outside current viewport';
-      for(const t of targets){const els=document.querySelectorAll(t.selector);if(els.length!==1)return 'Target no longer unique';const el=els[0],r=el.getBoundingClientRect(),node=el.closest('.react-flow__node,.xy-flow__node,[data-node-id]');if((node?.getAttribute('data-id')||node?.getAttribute('data-node-id')||null)!==t.nodeId||(el.getAttribute('data-handleid')||el.getAttribute('data-port-id')||null)!==t.port)return 'Target identity changed; inspect again';if(['x','y','width','height'].some(k=>Math.abs(r[k]-t.rect[k])>2))return 'Target moved; inspect again';const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);if(!hit||!(hit===el||el.contains(hit)))return 'Target is obscured; uncover it before dragging';}return null;
-    },{start,end,targets});
-    if(check)return {error:check,notExecuted:true};
-    try {await page.mouse.move(start.x,start.y);await page.mouse.down();await page.waitForTimeout(100);await page.mouse.move(end.x,end.y,{steps:24});await page.waitForTimeout(150);}
-    finally {await page.mouse.up();}
+    const targets=${JSON.stringify(targets||[])};
+    const prep=await page.evaluate(({targets})=>{
+      ${canvasDomHelpersSource()}
+      const points=[];
+      for(const t of targets){
+        const els=document.querySelectorAll(t.selector);
+        if(els.length!==1)return {error:'Target no longer unique'};
+        const el=els[0],node=el.closest('.react-flow__node,.xy-flow__node,[data-node-id]');
+        if((node?.getAttribute('data-id')||node?.getAttribute('data-node-id')||null)!==t.nodeId||(el.getAttribute('data-handleid')||el.getAttribute('data-port-id')||null)!==t.port)return {error:'Target identity changed; inspect again'};
+        el.scrollIntoView({block:'center',inline:'center',behavior:'auto'});
+        harveyRaise(el);harveyClearAbove(el);
+        const r=el.getBoundingClientRect();
+        const cx=r.x+r.width/2,cy=r.y+r.height/2;
+        if(cx<0||cy<0||cx>=innerWidth||cy>=innerHeight)return {error:'Coordinates outside current viewport'};
+        const hit=document.elementFromPoint(cx,cy);
+        if(!hit||!(hit===el||el.contains(hit)))return {error:'Target is obscured; uncover it before dragging'};
+        points.push({x:cx,y:cy});
+      }
+      if(points.length!==2)return {error:'Need exactly two port targets'};
+      return {start:points[0],end:points[1]};
+    },{targets});
+    if(prep.error){
+      await page.evaluate(()=>{ ${canvasDomHelpersSource()} harveyRestore(); });
+      return {error:prep.error,notExecuted:true};
+    }
+    try {
+      await page.mouse.move(prep.start.x,prep.start.y);
+      await page.mouse.down();
+      await page.waitForTimeout(100);
+      await page.mouse.move(prep.end.x,prep.end.y,{steps:24});
+      await page.waitForTimeout(150);
+    } finally {
+      await page.mouse.up();
+      await page.evaluate(()=>{ ${canvasDomHelpersSource()} harveyRestore(); });
+    }
     return {gestureCompleted:true,connectionVerified:false,note:'Inspect the destination input and graph; gesture success alone does not prove a connection.'};
   }`;
 }

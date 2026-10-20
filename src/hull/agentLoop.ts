@@ -591,6 +591,14 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       let result:any;
       try{
         if(typeof input.question!=='string'||!input.question.trim()||input.question.length>1500)throw Error('Ask a specific visual question of at most 1500 characters');
+        const canvasAsk=/port|wire|noodle|node|compositor|matte|switchx|stallion|handle|connect|graph\.|beeble|react-?flow|foreground|background/i.test(input.question)
+          ||/beeble|canvas|switchx|matte|composit|stallion/i.test(opts.message||"");
+        if(canvasAsk){
+          result={error:'For canvas/node-graph wiring use computer browser_inspect_targets and browser_connect_ports (or browser_disconnect_edge). inspect_screen cannot verify ports or edges and must not be used for this task.',recovery:{kind:'arguments',actionOutcome:'not_executed',safeToRetry:true,guidance:'Call browser_inspect_targets, then browser_connect_ports with role/slot from graph.nodes. Do not retry inspect_screen.'}};
+          const receipt=verification.record(name,input,result);opts.onEvidence?.(receipt);
+          rememberVerificationProgress();
+          return {...result,_harveyEvidence:receipt};
+        }
         // Always capture the selected computer through its existing authorization path.
         const screenshot=await executeTool('computer',{action:'call',tool:'browser_take_screenshot',arguments:{}});
         const capturedAt=Date.now();
