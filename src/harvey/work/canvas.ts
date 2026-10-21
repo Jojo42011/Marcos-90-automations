@@ -114,12 +114,51 @@ function canvasDomHelpersSource() {
   `;
 }
 
+/** Dismiss Beeble/React promo modals and dialogs that sit on top of ports (SwitchX 2.0, etc.). */
+export function dismissCanvasOverlaysCode() {
+  return `(() => {
+    const out={clicked:0,escaped:false,hidden:0,labels:[]};
+    const clickable=Array.from(document.querySelectorAll('button,[role="button"],a,[aria-label]'));
+    for(const b of clickable){
+      if(!(b instanceof HTMLElement))continue;
+      const label=((b.getAttribute('aria-label')||'')+' '+(b.textContent||'')).replace(/\\s+/g,' ').trim();
+      const inDialog=!!b.closest('[role="dialog"],dialog,[aria-modal="true"],[data-state="open"],[class*="modal" i],[class*="Modal"],[class*="Dialog"],[class*="popover" i]');
+      if(!/^(close|dismiss|got it|ok|okay|continue|skip|not now|×|✕|x)$/i.test(label) && !(/close|dismiss|got it/i.test(b.getAttribute('aria-label')||'')&&inDialog))continue;
+      if(!inDialog && !/got it|dismiss|close/i.test(label))continue;
+      try{b.click();out.clicked++;out.labels.push(label.slice(0,40));}catch{}
+    }
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));
+    document.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape',bubbles:true,cancelable:true}));
+    out.escaped=true;
+    for(const el of document.querySelectorAll('[role="dialog"],dialog,[aria-modal="true"]')){
+      if(!(el instanceof HTMLElement))continue;
+      const r=el.getBoundingClientRect();
+      if(r.width<160||r.height<100)continue;
+      const text=(el.innerText||'').replace(/\\s+/g,' ').trim();
+      if(!/SwitchX|Reframe|What's new|New feature|Got it|Dismiss|Tutorial/i.test(text)&&out.clicked===0)continue;
+      if(!el.dataset.harveyPe){el.dataset.harveyPe=el.style.pointerEvents||'';}
+      el.style.pointerEvents='none';
+      el.setAttribute('aria-hidden','true');
+      out.hidden++;
+      if(text)out.labels.push(text.slice(0,60));
+    }
+    return out;
+  })()`;
+}
+
 /** Fit/zoom when available, raise handles, clear overlay pointer-events so elementFromPoint hits the port. */
 export function uncoverPortsCode(selectors:string[]) {
   const safe=selectors.filter(s=>typeof s==="string"&&s.length>0&&s.length<2000).slice(0,4);
   return `(() => { ${canvasDomHelpersSource()}
     const sels=${JSON.stringify(safe)};
-    const out={moved:0,raised:0,cleared:0,fitted:false,zoomed:false};
+    const out={moved:0,raised:0,cleared:0,fitted:false,zoomed:false,dismissed:0};
+    // Kill promo dialogs before hit-testing ports.
+    for(const el of document.querySelectorAll('[role="dialog"],dialog,[aria-modal="true"]')){
+      if(!(el instanceof HTMLElement))continue;
+      const r=el.getBoundingClientRect();
+      if(r.width<160||r.height<100)continue;
+      if(!el.dataset.harveyPe){el.dataset.harveyPe=el.style.pointerEvents||'';el.style.pointerEvents='none';out.dismissed++;}
+    }
     const fit=document.querySelector('.react-flow__controls-fitview,.xy-flow__controls-fitview,button[title*="Fit" i],button[aria-label*="Fit" i]');
     if(fit instanceof HTMLElement){fit.click();out.fitted=true;}
     const zoom=document.querySelector('.react-flow__controls-zoomin,.xy-flow__controls-zoomin,button[title*="Zoom in" i],button[aria-label*="Zoom in" i]');

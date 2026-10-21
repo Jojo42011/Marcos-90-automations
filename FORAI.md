@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-21: Canvas ops auto-dismiss Beeble promo modals (SwitchX 2.0 / dialogs) before inspect/connect, retry inspect once on MCP timeout, and keep unknown connect outcomes safe-to-retry so a modal+timeout no longer dead-ends a merge.
+
 - 2026-10-20: Canvas force-wire: connect/drag raises handles, clears overlay pointer-events, and re-reads live centers before dragging; `browser_disconnect_edge` removes wrong wires; canvas/wiring `inspect_screen` calls are refused in favor of `browser_inspect_targets`/`browser_connect_ports`. Beeble recipe uses disconnect then FG/BG compositor wires.
 
 - 2026-10-20: Hard UI / canvas recovery: canvas inspect/connect results carry page `url` and `graph.nodes`/`graph.wires`; obstructed ports get one uncover attempt then `obstructedPorts`; targeting uncertainty no longer clears page identity; page-identity errors demand a fresh inspect before retry. Runtime guidance grounds claims to the latest graph only (Beeble cutout→Compositor FG, Stallion/house→BG, then Compositor→SwitchX).

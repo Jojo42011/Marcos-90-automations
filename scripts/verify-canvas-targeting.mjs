@@ -14,7 +14,9 @@ const C=require('../dist/src/harvey/work/canvas.js');
 let connected=0;
 const page=(mode='labeled')=>`<style>
  .node{position:absolute;width:160px;height:180px;background:#ddd;top:130px}.port{position:absolute;width:12px;height:12px;background:blue;top:70px;z-index:10}#source{left:100px}#dest{left:480px}#house{left:280px;top:320px}.source,.react-flow__handle-right{right:-6px}.target,.react-flow__handle-left{left:-6px}#cover{position:absolute;left:470px;top:190px;width:35px;height:35px;background:red;z-index:20;display:none}#state{position:absolute;left:240px;top:40px;margin:0}
- </style><h1>Canvas fixture</h1><button onclick="document.querySelector('#dest').style.left='600px'">Move node</button><button onclick="document.querySelector('#cover').style.display='block'">Cover port</button><p id="state">Not merged</p>
+ #promo{position:fixed;left:200px;top:140px;width:400px;height:300px;background:#222;color:#fff;z-index:50;padding:16px;display:none}
+ </style><h1>Canvas fixture</h1><button onclick="document.querySelector('#dest').style.left='600px'">Move node</button><button onclick="document.querySelector('#cover').style.display='block'">Cover port</button><button onclick="document.querySelector('#promo').style.display='block'">Show promo</button><p id="state">Not merged</p>
+ <div id="promo" role="dialog" aria-modal="true"><h2>SwitchX 2.0 &amp; Reframe</h2><p>What's new in SwitchX</p><button aria-label="Close">Got it</button></div>
  <div id="graph" style="transform:scale(0.5);transform-origin:top left">${mode==='unlabeled'?`
  <div class="node react-flow__node" data-id="matte" id="source">Person cutout<div class="port react-flow__handle react-flow__handle-right"></div></div>
  <div class="node react-flow__node" data-id="house" id="house">House background<div class="port react-flow__handle react-flow__handle-right"></div></div>
@@ -25,6 +27,8 @@ const page=(mode='labeled')=>`<style>
  <div class="node react-flow__node" data-id="compositor" id="dest">Compositor<div class="port react-flow__handle target" data-handleid="foreground" aria-label="Compositor foreground input"></div><div class="port react-flow__handle target" data-handleid="background" aria-label="Compositor background input" style="top:120px"></div></div>
  `}<div id="cover"></div></div>
  <script>
+ document.querySelector('#promo button')?.addEventListener('click',()=>{document.querySelector('#promo').style.display='none';});
+
  const edges=new Set(), unlabeled=${mode==='unlabeled'?'true':'false'};
  let selectedEdgeKey=null;
  function sync(){
@@ -103,6 +107,7 @@ const alphaDrag=r=>({observationId:r.observationId,start:r.targets.find(t=>t.por
  assert.match(C.uncoverPortsCode(['html > body']),/scrollIntoView/);
  assert.match(C.uncoverPortsCode(['html > body']),/harveyClearAbove|pointerEvents/);
  assert.match(C.restoreUncoverCode(),/harveyRestore|harvey-uncover/);
+ assert.match(C.dismissCanvasOverlaysCode(),/SwitchX|Escape|Got it/i);
  assert.match(C.disconnectEdgeCode('house','matte'),/Delete/);
  console.log('ok canvas port match/rematch helpers including unlabeled slots');
 }
@@ -178,6 +183,14 @@ try{
  assert(!throughCover.error,JSON.stringify({error:throughCover.error,gesture:throughCover.gesture}));
  assert.equal(throughCover.gesture.connectionVerified,true);assert.equal(connected,1);
  console.log('ok covered ports are force-uncovered and still connect with verification');
+
+ // Beeble-style promo modal: dismiss then connect.
+ await call('browser_navigate',{url});connected=0;
+ await call('browser_click',{target:'button:has-text("Show promo")'});
+ const throughPromo=await call('browser_connect_ports',{start:{label:'Matte alpha',direction:'output'},end:{label:'Compositor foreground',direction:'input'}});
+ assert(!throughPromo.error,JSON.stringify({error:throughPromo.error,gesture:throughPromo.gesture,overlays:throughPromo.overlaysDismissed}));
+ assert.equal(throughPromo.gesture.connectionVerified,true);assert.equal(connected,1);
+ console.log('ok SwitchX-style promo modal is dismissed and connect still verifies');
 
  // Disconnect a wrong matte feed, then wire house→background.
  await call('browser_navigate',{url});connected=0;
