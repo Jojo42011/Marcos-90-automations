@@ -271,8 +271,8 @@ try {
        await accountPage.locator('#taskScrim.on').waitFor({state:'hidden'});
 
        // Classic /tasks board was removed; second assignment uses the same Command Center API.
-       const classicRes=await request('/api/tasks',cookies[user.id],'POST',{title:user.name+' classic assignment',assignedTo:recipient});
-       assert.equal(classicRes.status,200);
+       const classicRes=await request('/api/tasks',cookies[user.id],'POST',{title:user.name+' classic assignment',column:'today',assignedTo:recipient,createdBy:user.id});
+       assert.equal(classicRes.status,200,JSON.stringify(classicRes.data));
        const classic=(await request('/api/tasks',cookies[recipient])).data.tasks.find(t=>t.title===user.name+' classic assignment');
        assert(classic);assert.equal(classic.createdBy,user.id);assert.equal(classic.assignedTo,recipient);
        await accountPage.goto(base+'/shell');await accountPage.locator('[data-key="tasks"]').click();
