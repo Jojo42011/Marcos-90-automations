@@ -11,7 +11,7 @@ import {navigationProblem, browserRead, parseTabs, readTabs, recoveryFor, restor
 
 import { browserArguments } from "./browserArguments.js";
 import { uploadArguments } from "./uploadFiles.js";
-import { inspectCode, uncoverPortsCode, restoreUncoverCode, disconnectEdgeCode, parseBrowserJson, dragCode, CanvasTarget, matchCanvasPort, rematchCanvasTarget, edgeConnects, CanvasPortQuery, focusNodeIds } from "./canvas.js";
+import { inspectCode, uncoverPortsCode, restoreUncoverCode, dismissCanvasOverlaysCode, disconnectEdgeCode, parseBrowserJson, dragCode, CanvasTarget, matchCanvasPort, rematchCanvasTarget, edgeConnects, CanvasPortQuery, focusNodeIds } from "./canvas.js";
 
 const canvasObservations = new Map<string,{id:string;at:number;targets:CanvasTarget[]}>();
 /** Observation TTL for drag_targets. Time-expired IDs rematch once from stored identity; consumed IDs are not replayed. */
@@ -258,13 +258,14 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
     const s=await session(owner,chat),key=owner+":"+chat;
     return observedAction(s,name,async()=>{
       canvasObservations.delete(key);s.visionAt=undefined;s.snapshot=undefined;
+      try{await call(s,"browser_evaluate",{function:dismissCanvasOverlaysCode()},10000,signal);}catch{/* continue */}
       let result:any;
-      try{result=parseBrowserJson(checked(await call(s,"browser_run_code_unsafe",{code:disconnectEdgeCode(source,target)},15000,signal)));}
+      try{result=parseBrowserJson(checked(await call(s,"browser_run_code_unsafe",{code:disconnectEdgeCode(source,target)},20000,signal)));}
       catch{return withPage(s,{error:"Could not disconnect edge; inspect graph.wires and retry",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:true}});}
       if(result.error&&result.notExecuted!==false)return withPage(s,{...result,recovery:{kind:"target",actionOutcome:"not_executed",safeToRetry:true}});
       s.dirty=true;deferCheckpoint(s);
       try{
-        const geometry=parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode()},15000,signal)));
+        const geometry=parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode()},25000,signal)));
         const shot=checked(await call(s,"browser_take_screenshot",{type:"jpeg",fullPage:false},15000,signal));
         const still=edgeConnects(geometry.edges||[],{nodeId:source,port:null},{nodeId:target,port:null});
         return withPage(s,{...normalized(s,shot),...geometry,targets:geometry.targets.map(({selector,...t}:CanvasTarget)=>t),disconnected:!still,sourceNodeId:source,targetNodeId:target,gesture:{gestureCompleted:true,connectionVerified:!still,note:still?"Edge may still be present; inspect graph.wires.":"Observed edge removed."}});
@@ -275,12 +276,30 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
     if(args.nodeIds!==undefined&&(!Array.isArray(args.nodeIds)||args.nodeIds.length>4||args.nodeIds.some((id:any)=>typeof id!=="string"||id.length>200)))return {error:"nodeIds must contain up to four observed node IDs"};
     const s=await session(owner,chat),key=owner+":"+chat;
     return observedAction(s,name,async()=>{
-      const inspectNow=async(nodeIds?:string[])=>parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode(nodeIds||args.nodeIds)},15000,signal)));
+      const dismissOverlays=async()=>{
+        try{
+          const raw=checked(await call(s,"browser_evaluate",{function:dismissCanvasOverlaysCode()},10000,signal));
+          try{return parseBrowserJson(raw);}catch{return {clicked:0,escaped:true};}
+        }catch{return {clicked:0};}
+      };
+      const inspectNow=async(nodeIds?:string[])=>{
+        let last:Error|undefined;
+        for(let attempt=0;attempt<2;attempt++){
+          try{return parseBrowserJson(checked(await call(s,"browser_evaluate",{function:"() => "+inspectCode(nodeIds||args.nodeIds)},25000,signal)));}
+          catch(error){
+            last=error as Error;
+            if(!/timeout|timed out|-32001/i.test(String(last.message||''))||attempt===1)throw last;
+            await dismissOverlays();
+            await new Promise(r=>setTimeout(r,400));
+          }
+        }
+        throw last||new Error("Canvas inspect failed");
+      };
       const stripTargets=(targets:CanvasTarget[])=>targets.map(({selector,...target}:CanvasTarget)=>target);
       const runDrag=async(start:CanvasTarget,end:CanvasTarget)=>{
         canvasObservations.delete(key);s.visionAt=undefined;s.snapshot=undefined;
-        try{return parseBrowserJson(checked(await call(s,"browser_run_code_unsafe",{code:dragCode({x:start.rect.x+start.rect.width/2,y:start.rect.y+start.rect.height/2},{x:end.rect.x+end.rect.width/2,y:end.rect.y+end.rect.height/2},[start,end])},15000,signal)));}
-        catch{try{await call(s,"browser_evaluate",{function:restoreUncoverCode()},5000,signal);}catch{/* ignore */}return withPage(s,{error:"Canvas gesture outcome is unknown; inspect the destination before another attempt",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:false}});}
+        try{return parseBrowserJson(checked(await call(s,"browser_run_code_unsafe",{code:dragCode({x:start.rect.x+start.rect.width/2,y:start.rect.y+start.rect.height/2},{x:end.rect.x+end.rect.width/2,y:end.rect.y+end.rect.height/2},[start,end])},20000,signal)));}
+        catch{try{await call(s,"browser_evaluate",{function:restoreUncoverCode()},5000,signal);}catch{/* ignore */}return withPage(s,{error:"Canvas gesture outcome is unknown; dismiss any Beeble modal, inspect once, then retry browser_connect_ports. Do not claim the wire is done.",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:true}});}
       };
       const finishInspect=async(gesture:any,start?:CanvasTarget,end?:CanvasTarget,extras:Record<string,any>={})=>{
         try{
@@ -293,13 +312,14 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
             verifiedGesture={...gesture,connectionVerified:verified,note:verified?"Observed graph edge matches the requested ports.":gesture.note||"Inspect the destination input and graph; gesture success alone does not prove a connection."};
           }
           return withPage(s,{...normalized(s,shot),...geometry,targets:stripTargets(geometry.targets),observationId:id,...(verifiedGesture?{gesture:verifiedGesture}:{}),coordinateSpace:"CSS viewport pixels; do not use the scaled Computer preview coordinates",...extras});
-        }catch(error){return withPage(s,{error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),...(gesture?{gesture}:{}),recovery:{kind:"targeting",actionOutcome:gesture&&!gesture.error?"unknown":"not_executed",safeToRetry:!(gesture&&!gesture.error),guidance:"Use browser_inspect_targets, not inspect_screen. This is an observation/targeting failure, not proof the app cannot complete the workflow."},...extras});}
+        }catch(error){return withPage(s,{error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000)+". If a Beeble modal is open, dismiss it and retry once.",...(gesture?{gesture}:{}),recovery:{kind:"targeting",actionOutcome:gesture&&!gesture.error?"unknown":"not_executed",safeToRetry:true,guidance:"Dismiss SwitchX/promo dialogs, then browser_inspect_targets. Do not use inspect_screen."},...extras});}
       };
       const preparePorts=async(start:CanvasTarget,end:CanvasTarget,focus:string[])=>{
         let readyStart=start,readyEnd=end,uncovered=false;
         // Always force handles hittable before drag — Beeble overlays commonly fail elementFromPoint.
         // dragCode also raises/clears and restores; do not hard-fail on a stale unobstructed flag.
         try{
+          await dismissOverlays();
           await call(s,"browser_evaluate",{function:uncoverPortsCode([start.selector,end.selector])},15000,signal);
           uncovered=true;
           const geometry=await inspectNow(focus.length?focus:args.nodeIds);
@@ -309,11 +329,12 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         return {start:readyStart,end:readyEnd,uncovered};
       };
 
+      const overlaysDismissed=await dismissOverlays();
       if(name==="browser_connect_ports"){
         const startQ=args.start as CanvasPortQuery,endQ=args.end as CanvasPortQuery;
         let geometry:any;
         try{geometry=await inspectNow();}
-        catch(error){return withPage(s,{error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000),recovery:{kind:"targeting",actionOutcome:"not_executed",safeToRetry:true}});}
+        catch(error){return withPage(s,{error:"Could not inspect canvas geometry/pixels: "+String((error as Error).message).slice(0,1000)+". Dismiss any Beeble modal (e.g. SwitchX 2.0) and retry once.",recovery:{kind:"targeting",actionOutcome:"not_executed",safeToRetry:true},overlaysDismissed});}
         const focus=focusNodeIds(geometry.targets||[],startQ,endQ,args.nodeIds);
         if(focus.length&&JSON.stringify(focus)!==JSON.stringify(args.nodeIds||[])){
           try{geometry=await inspectNow(focus);}
@@ -355,8 +376,8 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         const gesture=await runDrag(prepared.start,prepared.end);
         if(gesture.error)return withPage(s,{...gesture,recovery:gesture.recovery||{kind:"target",actionOutcome:"not_executed",safeToRetry:true},targets:stripTargets(geometry.targets),edges:geometry.edges,graph:geometry.graph});
         s.dirty=true;deferCheckpoint(s);
-        const result=await finishInspect(gesture,prepared.start,prepared.end,{connectedPorts:{start:{nodeId:prepared.start.nodeId,port:prepared.start.port,label:prepared.start.label,slot:prepared.start.slot,slotName:prepared.start.slotName},end:{nodeId:prepared.end.nodeId,port:prepared.end.port,label:prepared.end.label,slot:prepared.end.slot,slotName:prepared.end.slotName}},focusedNodeIds:focus,portsUncovered:prepared.uncovered});
-        if(result.gesture&&!result.gesture.connectionVerified)return {...result,error:"Gesture completed but the expected graph edge was not observed. Pan/zoom so both ports are visible, retry browser_connect_ports with role/slot from graph.nodes, and do not claim the wire is done.",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:true}};
+        const result=await finishInspect(gesture,prepared.start,prepared.end,{connectedPorts:{start:{nodeId:prepared.start.nodeId,port:prepared.start.port,label:prepared.start.label,slot:prepared.start.slot,slotName:prepared.start.slotName},end:{nodeId:prepared.end.nodeId,port:prepared.end.port,label:prepared.end.label,slot:prepared.end.slot,slotName:prepared.end.slotName}},focusedNodeIds:focus,portsUncovered:prepared.uncovered,overlaysDismissed});
+        if(result.gesture&&!result.gesture.connectionVerified)return {...result,error:"Gesture completed but the expected graph edge was not observed. Dismiss any Beeble modal, pan/zoom so ports are clear, retry browser_connect_ports with role/slot, and do not claim the wire is done.",recovery:{kind:"targeting",actionOutcome:"unknown",safeToRetry:true}};
         return result;
       }
 
@@ -383,9 +404,9 @@ export async function browserCall(owner:string,chat:string,name:string,args:any,
         gesture=await runDrag(prepared.start,prepared.end);
         if(gesture.error)return withPage(s,{...gesture,recovery:gesture.recovery||{kind:"target",actionOutcome:"not_executed",safeToRetry:true}});
         s.dirty=true;deferCheckpoint(s);
-        return finishInspect(gesture,prepared.start,prepared.end,{...(refreshed?{observationRefreshed:true}:{}),portsUncovered:prepared.uncovered});
+        return finishInspect(gesture,prepared.start,prepared.end,{...(refreshed?{observationRefreshed:true}:{}),portsUncovered:prepared.uncovered,overlaysDismissed});
       }
-      return finishInspect(undefined);
+      return finishInspect(undefined,undefined,undefined,{overlaysDismissed});
     });
   }
   if(name==="browser_recover"){
