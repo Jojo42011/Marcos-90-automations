@@ -9,7 +9,8 @@ assert(html.indexOf('/account-session.js')<html.indexOf('let LEADS='));
 const parsed=ts.createSourceFile('crm.js',code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
 const declarations=new Map();
 for(const node of parsed.statements)if(ts.isVariableStatement(node))for(const d of node.declarationList.declarations)declarations.set(d.name.getText(parsed),d.initializer?.getText(parsed));
-for(const name of ['LEADS','PEOPLE','CONVOS','CAMPAIGNS','DRIPS','NEWSLETTERS'])assert.equal(declarations.get(name),'[]',name+' starts empty');
+// CAMPAIGNS/DRIPS/NEWSLETTERS demo email lists were removed; CRM Email embeds live SMTP email-marketing.
+for(const name of ['LEADS','PEOPLE','CONVOS'])assert.equal(declarations.get(name),'[]',name+' starts empty');
 const apply=parsed.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='applyLive').getText(parsed);
 const element={textContent:''};
 const context=vm.createContext({window:{},document:{getElementById:()=>element,querySelector:()=>element},
