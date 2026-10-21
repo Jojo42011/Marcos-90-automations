@@ -8,10 +8,10 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #030308;
-      --surface: #0c1018;
-      --surface-2: #121826;
-      --border: rgba(0, 212, 255, 0.15);
+      --bg: #10151d;
+      --surface: #18212c;
+      --surface-2: #1d2734;
+      --border: #2a3646;
       --text: #f1f5f9;
       --muted: #94a3b8;
       --accent: #00d4ff;
@@ -34,9 +34,6 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,255,0.12), transparent),
-        radial-gradient(ellipse 60% 40% at 100% 50%, rgba(56,189,248,0.06), transparent);
     }
     .wrap { max-width: 1240px; margin: 0 auto; padding: 1.5rem; }
     .topbar {
@@ -74,7 +71,7 @@
     .stat.clickable { cursor: pointer; }
     .stat.clickable:hover {
       transform: translateY(-3px);
-      border-color: rgba(0,212,255,0.35);
+      border-color: color-mix(in srgb, var(--accent) 35%, transparent);
       box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     }
     .stat label {
@@ -127,7 +124,7 @@
     }
     .email-row:last-child { border-bottom: none; }
     .email-row:hover {
-      background: rgba(0,212,255,0.06);
+      background: color-mix(in srgb, var(--accent) 6%, transparent);
       transform: translateX(4px);
     }
     .email-row .status-icon { font-size: 0.9rem; width: 1.2rem; flex-shrink: 0; margin-top: 0.1rem; }
@@ -174,10 +171,10 @@
       transition: background 0.15s, border-color 0.15s, transform 0.1s;
     }
     button { cursor: pointer; }
-    button:hover { border-color: rgba(0,212,255,0.4); }
+    button:hover { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
     button:active { transform: scale(0.98); }
-    button.primary { background: rgba(0,212,255,0.22); border-color: rgba(0,212,255,0.5); color: #cffafe; }
-    button.sync-btn { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.4); color: #bae6fd; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.sync-btn { background: var(--surface-2); border-color: var(--border); color: var(--text); }
     textarea { width: 100%; min-height: 100px; resize: vertical; font-weight: 400; }
     .compose-grid { display: grid; gap: 0.75rem; }
     .context-box { font-size: 0.8rem; color: var(--muted); background: #080a10; padding: 0.85rem; border-radius: 10px; line-height: 1.5; }
@@ -241,7 +238,7 @@
       border-radius: 8px;
       transition: background 0.15s;
     }
-    .modal-list .item:hover { background: rgba(0,212,255,0.06); }
+    .modal-list .item:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
     .modal-list .item:last-child { border-bottom: none; }
     .drip-block {
       margin-bottom: 1.25rem;
@@ -289,7 +286,7 @@
 <body>
   <div class="wrap">
     <div class="topbar">
-      <span aria-hidden="true" style="width:20px;height:20px;border-radius:6px;background:linear-gradient(135deg,#00d4ff,#38bdf8);flex:0 0 auto;"></span>
+      <span aria-hidden="true" style="width:20px;height:20px;border-radius:6px;background:var(--accent);flex:0 0 auto;"></span>
       <h1>Email Marketing <span>Harvey sub-agent &middot; Live Gmail</span></h1>
       <span id="conn-badge" class="conn bad">Gmail checking&hellip;</span>
       <button type="button" class="sync-btn" id="sync-gmail-btn" title="Pull from real Gmail inbox">Sync Gmail</button>
@@ -302,7 +299,7 @@
     <div id="gmail-health-banner" style="display:none;align-items:center;gap:12px;margin:0 0 14px;padding:12px 16px;border:1px solid rgba(255,85,102,.45);border-radius:10px;background:rgba(255,85,102,.08);font-size:13px;">
       <span style="font-size:16px;">&#9888;&#65039;</span>
       <span id="gmail-health-text" style="flex:1;color:#ff8896;"></span>
-      <button type="button" id="gmail-reconnect-btn" style="background:linear-gradient(135deg,#00d4ff,#38bdf8);color:#04131c;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;font-size:12px;letter-spacing:.4px;">RECONNECT GMAIL</button>
+      <button type="button" id="gmail-reconnect-btn" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer;font-size:12px;letter-spacing:.4px;">RECONNECT GMAIL</button>
     </div>
 
     <div class="stats" id="stats-row">
