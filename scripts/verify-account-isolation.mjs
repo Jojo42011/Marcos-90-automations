@@ -270,9 +270,9 @@ try {
        await accountPage.locator('#tmSave').click();const created=await response;assert.equal(created.status(),200);assert.equal((await created.json()).task.createdBy,user.id);
        await accountPage.locator('#taskScrim.on').waitFor({state:'hidden'});
 
-       await accountPage.goto(base+'/tasks-classic');
-       await accountPage.locator('#filter-assigned').selectOption(recipient);
-       await accountPage.evaluate(async title=>{await taskIdentityReady;quickInput.value=title;await submitQuickTask();},user.name+' classic assignment');
+       // Classic /tasks board was removed; second assignment uses the same Command Center API.
+       const classicRes=await request('/api/tasks',cookies[user.id],'POST',{title:user.name+' classic assignment',assignedTo:recipient});
+       assert.equal(classicRes.status,200);
        const classic=(await request('/api/tasks',cookies[recipient])).data.tasks.find(t=>t.title===user.name+' classic assignment');
        assert(classic);assert.equal(classic.createdBy,user.id);assert.equal(classic.assignedTo,recipient);
        await accountPage.goto(base+'/shell');await accountPage.locator('[data-key="tasks"]').click();

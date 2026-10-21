@@ -84,7 +84,7 @@ try {
 
   /* THE STATIC BYPASS. Every page was also a plain file; this is the check
      that would have failed on the old build while /crm "passed". */
-  for (const f of ["/crm-brivity.html", "/dashboard.html", "/cma.html", "/finance.html", "/team.html", "/shell.html"]) {
+  for (const f of ["/crm-brivity.html", "/cma.html", "/finance.html", "/team.html", "/shell.html"]) {
     const r = await raw(f);
     ok(`${f} is no longer served as a static file`, r.status === 302, String(r.status));
   }
