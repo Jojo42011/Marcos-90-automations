@@ -203,9 +203,9 @@
     }
     // Standalone (page opened directly, no shell): hard-navigate to the route.
     const routes = {
-      crm: "/dashboard", content: "/social", email: "/email-marketing",
+      crm: "/shell?tab=crm", content: "/shell?tab=analytics", email: "/email-marketing",
       finance: "/finance", reporting: "/reporting", leads: "/lead-nurture",
-      voice: "/voice-clone", tasks: "/tasks", harvey: "/harvey",
+      voice: "/voice-clone", tasks: "/team-tasks", harvey: "/harvey",
     };
     if (routes[tab]) window.location.href = routes[tab];
   }

@@ -867,20 +867,10 @@ app.get("/", (_req, res) => {
   res.redirect("/shell");
 });
 
-// The shell UI is the single entry point. A direct top-level visit to the
-// legacy /dashboard link redirects into the shell and lands on its CRM tab
-// (which is exactly the dashboard's content). The shell itself still embeds
-// this page as its CRM iframe — detected via the explicit embed marker the
-// shell appends, or the browser's Sec-Fetch-Dest header for the iframe load —
-// and is served the file normally so that tab keeps working.
-app.get("/dashboard", requireAuthPage, (req, res) => {
-  const embedded =
-    req.query.embed === "1" || req.get("sec-fetch-dest") === "iframe";
-  if (!embedded) {
-    res.redirect("/shell?tab=crm");
-    return;
-  }
-  res.sendFile(path.join(publicDir, "dashboard.html"));
+// Legacy /dashboard URL — the old command-center page was removed; CRM lives
+// at /crm inside the shell.
+app.get("/dashboard", requireAuthPage, (_req, res) => {
+  res.redirect("/shell?tab=crm");
 });
 
 /** Legacy DM simulator */
@@ -927,12 +917,11 @@ app.get("/memory", requireAuthPage, (_req, res) => {
 });
 
 app.get("/tasks", (_req, res) => {
-  // The team Task Command Center replaced the classic board (kept at /tasks-classic).
   res.redirect("/team-tasks");
 });
 
 app.get("/tasks-classic", requireAuthPage, (_req, res) => {
-  res.sendFile(path.join(publicDir, "tasks.html"));
+  res.redirect("/team-tasks");
 });
 
 app.get("/email-marketing", requireAuthPage, (_req, res) => {
@@ -955,10 +944,9 @@ app.get("/voice-clone", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "voice-clone.html"));
 });
 
-// Guided how-to tour (replaced the Voice Clone sidebar tab; /voice-clone above
-// still works, so the voice-clone functionality is untouched — just untabbed).
+// Old slideshow tour — Knowledge Center replaced it.
 app.get("/how-to", requireAuthPage, (_req, res) => {
-  res.sendFile(path.join(publicDir, "how-to.html"));
+  res.redirect("/knowledge");
 });
 
 /* `/hull-chat` was the clean single-column chat and is gone as of 2026-09-19.
@@ -1006,10 +994,6 @@ function enrichVoiceoverRequest(req: import("./core/voiceCloneStore.js").Voiceov
     : undefined;
   return { ...req, audioUrls, exportUrl };
 }
-
-app.get("/crm-followup-tasks.js", (_req, res) => {
-  res.sendFile(path.join(publicDir, "crm-followup-tasks.js"));
-});
 
 /**
  * The per-route check, kept as a second layer behind the site lock.
@@ -6813,14 +6797,9 @@ app.get("/api/ads/summary", async (req, res) => {
   }
 });
 
-// ── Ad Manager: connection status + local campaign planner ─────────────────
-// Real spend/impressions/campaigns come from the existing AD_DASHBOARD_BASE_URL
-// proxy above (GET /api/ads/summary) when that upstream Flask app is reachable.
-// There's no write-capable Meta Marketing API integration in this codebase, so
-// campaign creation here is a genuinely functional local planner (SQLite,
-// survives restarts, fully CRUD) rather than a fake "creates a real Facebook
-// ad" button — status moves Draft → Pending Review → Active as Marco's team
-// actually pushes it live in Ads Manager.
+// Ads spend/summary still proxied above for Harvey. The untabbed Ad Manager
+// planner UI and local adsStore CRUD were removed in the CRM cleanup.
+
 app.get("/api/ads/connection-status", async (_req, res) => {
   if (!AD_DASHBOARD_BASE_URL) {
     res.json({ configured: false, reachable: false });
@@ -6839,108 +6818,6 @@ app.get("/api/ads/connection-status", async (_req, res) => {
   }
 });
 
-app.get("/api/ads/campaigns", async (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  const { getAdCampaigns } = await import("./core/adsStore.js");
-  res.json({ campaigns: getAdCampaigns() });
-});
-
-app.post("/api/ads/campaigns", express.json(), async (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const name = typeof b.name === "string" ? b.name.trim() : "";
-  if (!name) {
-    res.status(400).json({ error: "name is required" });
-    return;
-  }
-  const platform = b.platform === "facebook" || b.platform === "instagram" ? b.platform : "both";
-  const objective =
-    b.objective === "traffic" || b.objective === "awareness" || b.objective === "engagement" || b.objective === "messages"
-      ? b.objective
-      : "leads";
-  const { createAdCampaign } = await import("./core/adsStore.js");
-  const actor = await currentSessionUser(req);
-  const campaign = createAdCampaign({
-    name,
-    platform,
-    objective,
-    dailyBudget: Number(b.dailyBudget) || 0,
-    totalBudget: Number(b.totalBudget) || 0,
-    startDate: typeof b.startDate === "string" ? b.startDate : "",
-    endDate: typeof b.endDate === "string" ? b.endDate : "",
-    audience: typeof b.audience === "string" ? b.audience : "",
-    creativeNotes: typeof b.creativeNotes === "string" ? b.creativeNotes : "",
-    linkedPostId: typeof b.linkedPostId === "string" ? b.linkedPostId : null,
-    linkedPostCaption: typeof b.linkedPostCaption === "string" ? b.linkedPostCaption : null,
-    linkedPostCoverUrl: typeof b.linkedPostCoverUrl === "string" ? b.linkedPostCoverUrl : null,
-    createdBy: actor?.name || null,
-  });
-  const { recordAudit } = await import("./core/authStore.js");
-  recordAudit({ userId: actor?.id, userName: actor?.name, action: "ads.campaign_create", detail: name, req });
-  res.status(201).json({ ok: true, campaign });
-});
-
-app.patch("/api/ads/campaigns/:id", express.json(), async (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  const id = String(req.params.id || "").trim();
-  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const updates: Record<string, unknown> = {};
-  if (typeof b.name === "string") updates.name = b.name;
-  if (b.platform === "facebook" || b.platform === "instagram" || b.platform === "both") updates.platform = b.platform;
-  if (["leads", "traffic", "awareness", "engagement", "messages"].includes(String(b.objective))) updates.objective = b.objective;
-  if (["draft", "pending_review", "active", "paused", "completed"].includes(String(b.status))) updates.status = b.status;
-  if (b.dailyBudget !== undefined) updates.dailyBudget = Number(b.dailyBudget) || 0;
-  if (b.totalBudget !== undefined) updates.totalBudget = Number(b.totalBudget) || 0;
-  if (typeof b.startDate === "string") updates.startDate = b.startDate;
-  if (typeof b.endDate === "string") updates.endDate = b.endDate;
-  if (typeof b.audience === "string") updates.audience = b.audience;
-  if (typeof b.creativeNotes === "string") updates.creativeNotes = b.creativeNotes;
-  const { updateAdCampaign } = await import("./core/adsStore.js");
-  const updated = updateAdCampaign(id, updates as Parameters<typeof updateAdCampaign>[1]);
-  if (!updated) {
-    res.status(404).json({ error: "Campaign not found" });
-    return;
-  }
-  const actor = await currentSessionUser(req);
-  const { recordAudit } = await import("./core/authStore.js");
-  recordAudit({
-    userId: actor?.id,
-    userName: actor?.name,
-    action: "ads.campaign_update",
-    detail: updates.status ? `${updated.name} → ${updates.status}` : updated.name,
-    req,
-  });
-  res.json({ ok: true, campaign: updated });
-});
-
-app.delete("/api/ads/campaigns/:id", async (req, res) => {
-  if (!dashboardTokenOk(req)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  const id = String(req.params.id || "").trim();
-  const { getAdCampaignById, deleteAdCampaign } = await import("./core/adsStore.js");
-  const target = getAdCampaignById(id);
-  const ok = deleteAdCampaign(id);
-  if (!ok) {
-    res.status(404).json({ error: "Campaign not found" });
-    return;
-  }
-  const actor = await currentSessionUser(req);
-  const { recordAudit } = await import("./core/authStore.js");
-  recordAudit({ userId: actor?.id, userName: actor?.name, action: "ads.campaign_delete", detail: target?.name, req });
-  res.json({ ok: true });
-});
-
 app.get("/api/ads/boost-candidates", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized" });
@@ -6956,7 +6833,7 @@ app.get("/api/ads/boost-candidates", async (req, res) => {
 });
 
 app.get("/ads", requireAuthPage, (_req, res) => {
-  res.sendFile(path.join(publicDir, "ads.html"));
+  res.redirect("/shell?tab=analytics");
 });
 
 /** Aethon voice command — Claude brain (not Gemini Live). */
