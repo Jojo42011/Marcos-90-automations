@@ -26,7 +26,7 @@
     --teal:#59c4c4; --teal-strong:#4ca7a7; --teal-soft:#f3fdfd; --teal-pill:var(--teal);
     --ink:#333333; --title:#5c6166; --muted:#62686e; --label:#62686e;
     --line:#edf0f0; --line-2:#f2f4f4; --line-3:#e3e8e8; --bg:#f9fbfb; --card:#fff;
-    --surface-1:#f7f9fa; --surface-2:#f1f4f6;
+    --surface-1:#f7f9fa; --surface-2:#f1f4f6; --canvas:#f0f2f5;
     --text-1:#46515c; --text-2:#5b6570; --text-3:#7d8894; --text-4:#a8b2bb;
     --warn-bg:#fdf8ec; --warn-line:#f0e3c2; --warn-ink:#7a6334;
     --act-off-bg:#d7ecea; --act-off-ink:#8fc9c1;
@@ -171,7 +171,7 @@
   .sug-pop.on{display:block}
   .sg-head{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--text-1);margin-bottom:8px}
   .sg-x{border:none;background:none;color:var(--text-4);cursor:pointer;font-size:13px}
-  .sg-body{font-size:13px;color:var(--text-1);line-height:1.5;background:#f9fbfb;border:1px solid #eef2f2;border-radius:9px;padding:10px 11px;white-space:pre-wrap;max-height:190px;overflow:auto}
+  .sg-body{font-size:13px;color:var(--text-1);line-height:1.5;background:var(--surface-1);border:1px solid #eef2f2;border-radius:9px;padding:10px 11px;white-space:pre-wrap;max-height:190px;overflow:auto}
   .sg-why{font-size:11.5px;color:var(--text-2);margin-top:7px;font-style:italic}
   .sg-based{font-size:10.5px;color:var(--text-4);margin-top:5px}
   .sg-foot{display:flex;justify-content:flex-end;gap:7px;margin-top:10px}
@@ -356,7 +356,7 @@
   .fb-link{color:var(--teal);font-size:12px;font-weight:600;margin-left:4px}
   .sf-list{background:var(--surface-1);border-top:1px solid var(--line-2)}
   .sf-list .sf{padding:8px 18px 8px 30px;color:var(--text-3);font-size:12.5px;white-space:normal;line-height:1.3}
-  .sf-list .sf:hover{background:#f2f6f5;color:var(--teal)}
+  .sf-list .sf:hover{background:var(--teal-soft);color:var(--teal)}
   .sf-list .sf.on{background:var(--teal-soft);color:var(--teal-strong);font-weight:600}
   /* ---- Advanced filter drawer (Brivity "Filter Leads" side panel) ---- */
   .afd-scrim{position:fixed;inset:0;background:rgba(20,28,36,.35);z-index:var(--z-modal);display:none}
@@ -399,7 +399,7 @@
      with the options it is filtering. The inner list scrolls instead. */
   .afdd-m.has-s{max-height:none;overflow:visible}
   .sendline{font-size:11.5px;line-height:1.5;margin:6px 0 0;padding:5px 8px;border-radius:6px}
-  .sendline.sl-ok{background:#f2faf8;border:1px solid #cfeae3;color:#3d7a6c}
+  .sendline.sl-ok{background:var(--teal-soft);border:1px solid #cfeae3;color:#3d7a6c}
   .sendline.sl-warn{background:#fdfaf2;border:1px solid #eadfc4;color:#8a6d2f}
   .sendline.sl-bad{background:#fdf1f1;border:1px solid #f0cdcd;color:#a8442f}
   .afdd-s{width:calc(100% - 12px);margin:6px 6px 4px;border:1px solid var(--line);border-radius:6px;
@@ -407,7 +407,7 @@
   .afdd-s:focus{border-color:var(--teal)}
   .afdd-l{max-height:230px;overflow:auto}
   .afdd-m .afopt{display:block;padding:5px 8px;border-radius:4px;font-size:12.5px}
-  .afdd-m .afopt:hover{background:#f4f9f9}
+  .afdd-m .afopt:hover{background:var(--teal-soft)}
   .afbtns{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
   .afbtns button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;
     font-size:11.5px;font-weight:700;color:var(--text-2);cursor:pointer}
@@ -461,7 +461,7 @@
   .cp-row input:disabled{opacity:.55}
   .cp-grip{cursor:grab;color:var(--text-4);font-size:13px;line-height:1;letter-spacing:-1px;user-select:none;padding:0 2px}
   .cp-grip:active{cursor:grabbing}
-  .cp-row.dragging{opacity:.55;background:#f2f4f6;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+  .cp-row.dragging{opacity:.55;background:var(--surface-1);box-shadow:0 4px 12px rgba(0,0,0,.12)}
   .cp-row.drop-before{box-shadow:inset 0 2px 0 var(--teal)}
   .cp-row.drop-after{box-shadow:inset 0 -2px 0 var(--teal)}
   .cp-nodata{font-size:11px;color:var(--text-4);padding:6px 10px;line-height:1.45;border-top:1px solid #eef1f4}
@@ -481,7 +481,7 @@
   .afd-nav .nv-p.open + .nv-c{display:block}
   .afd-nav .nv-s{display:block;width:100%;padding:5px 14px 5px 30px;border:none;background:none;text-align:left;
     font-size:12px;color:var(--text-2);cursor:pointer;border-left:2px solid transparent}
-  .afd-nav .nv-s:hover{background:#f4f7f7}
+  .afd-nav .nv-s:hover{background:var(--surface-1)}
   .afd-nav .nv-s.on{color:var(--teal-strong);font-weight:700;border-left-color:var(--teal);background:var(--teal-soft)}
   .afd.modal .afd-body{padding:6px 0 20px}
   .afd.modal .afg-c{display:block}
@@ -495,7 +495,7 @@
 
   /* Filters whose source data (website visit tracking) is not connected yet. */
   .sf-list .sf.sf-nodata{color:var(--text-4);cursor:help}
-  .sf-list .sf.sf-nodata:hover{background:#f7f8f9;color:var(--text-4)}
+  .sf-list .sf.sf-nodata:hover{background:var(--surface-1);color:var(--text-4)}
   .sf-search{position:relative;padding:8px 10px 8px 12px;border-bottom:1px solid var(--line-2)}
   .sf-search input{width:100%;height:28px;border:1px solid var(--line);border-radius:5px;background:var(--card);padding:0 26px 0 9px;font-size:12.5px;color:var(--ink);outline:none}
   .sf-search input:focus{border-color:var(--teal)}
@@ -514,7 +514,7 @@
   .cb{width:16px;height:16px;accent-color:var(--teal)}
   .demo-tag{position:fixed;bottom:12px;left:66px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);box-shadow:var(--shadow);z-index:50}
   /* transactions */
-  .txchip{display:inline-flex;align-items:center;gap:8px;background:#f1f3f5;border-radius:16px;padding:5px 12px;font-size:12px;color:var(--text-2);font-weight:600}
+  .txchip{display:inline-flex;align-items:center;gap:8px;background:var(--surface-1);border-radius:16px;padding:5px 12px;font-size:12px;color:var(--text-2);font-weight:600}
   .txchip b{font-weight:700}.txchip .x{color:var(--text-3);cursor:pointer}
   .vtoggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .vtoggle button{width:36px;height:34px;border:none;background:var(--card);color:var(--text-3)}.vtoggle button.on{background:var(--teal-soft);color:var(--teal)}
@@ -737,7 +737,7 @@
   /* The record's canvas is the page grey the spec calls for. `.pad` already
      owns the outer padding, so this cancels it and re-applies it inside the
      grey rather than leaving a white gutter around the columns. */
-  #leadDetail.cr-canvas{background:#F0F2F5;margin:-22px -30px -60px;padding:22px 30px 60px;min-height:calc(100vh - 92px)}
+  #leadDetail.cr-canvas{background:var(--canvas);margin:-22px -30px -60px;padding:22px 30px 60px;min-height:calc(100vh - 92px)}
   .ld-grid.cr3{grid-template-columns:minmax(300px,360px) minmax(550px,1fr) minmax(320px,380px);gap:16px}
   @media(max-width:1320px){.ld-grid.cr3{grid-template-columns:1fr}}
   .cr3 .ld-card,.cr3 .ai-panel{border-radius:4px}
@@ -753,6 +753,9 @@
   .acc-b{padding:0 16px 15px;border-top:1px solid var(--line-2);padding-top:13px}
   .acc:not(.open) .acc-b{display:none}
   /* Header buttons must not toggle the accordion when clicked. */
+  .mini-pill{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px;border:1px solid var(--line-3);border-radius:999px;
+    background:var(--surface-1);color:var(--text-2);font:700 10.5px var(--sans);letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:border-color .12s,color .12s}
+  .mini-pill:hover{border-color:var(--teal);color:var(--ink)}
   .acc-h .mini-pill{flex:0 0 auto}
 
   /* ── contact rows (emails / phones / addresses) ── */
@@ -835,21 +838,121 @@
   .mkt-pill.tx{background:#e8f1fb;color:#2f6fad;border:1px solid #b7d0ea}
   .mkt-pill.fl{background:#fff0e8;color:#c45a2a;border:1px solid #efc4a8}
   .mkt-pill.row{margin-left:6px;position:relative;top:-1px}
+  [data-theme="dark"] .mkt-pill.tx{background:rgba(76,141,255,.14);color:#8fb6f5;border-color:rgba(76,141,255,.35)}
+  [data-theme="dark"] .mkt-pill.fl{background:rgba(224,120,60,.14);color:#f0a77a;border-color:rgba(224,120,60,.35)}
   .opp-tags{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:10px}
   .opp-tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;letter-spacing:.02em;
-    padding:3px 8px;border-radius:4px;background:#eef6f6;color:var(--teal-strong);border:1px solid #c5e0e0}
+    padding:3px 8px;border-radius:4px;background:var(--teal-soft);color:var(--teal-strong);border:1px solid #c5e0e0}
   .opp-tag .x{cursor:pointer;opacity:.7;font-weight:700}
   .opp-tag .x:hover{opacity:1}
   .people-subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 12px;margin:0 0 4px;border-bottom:1px solid var(--line-2)}
   .people-subtabs button{border:1px solid var(--line);background:var(--card);color:var(--text-2);border-radius:6px;padding:6px 12px;
     font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
   .people-subtabs button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
-  .fu-row{display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line-2);cursor:pointer}
-  .fu-row:hover{background:var(--surface-1)}
-  .fu-row .fu-name{font-weight:700;color:var(--text-1);font-size:14px}
-  .fu-row .fu-phone{color:var(--text-2);font-size:13px;min-width:120px}
-  .fu-row .fu-why{color:var(--text-3);font-size:12.5px;flex:1}
-  .fu-row .fu-due{font-size:11px;font-weight:700;color:var(--st-new)}
+  /* Dialer */
+  #view-followup.on{display:flex;flex-direction:column;height:calc(100vh - var(--topbar));overflow:hidden}
+  .dl-top{display:flex;align-items:center;gap:22px;padding:18px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .dl-title h1{margin:0;font-size:26px;font-weight:500;color:var(--title);letter-spacing:-.01em}
+  .dl-sub{display:block;margin-top:2px;font-size:12px;color:var(--text-3)}
+  .dl-queues{display:flex;gap:4px;padding:4px;background:var(--surface-1);border:1px solid var(--line);border-radius:12px}
+  .dl-queues button{border:0;background:none;color:var(--text-2);font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:9px}
+  .dl-queues button:hover{color:var(--ink)}
+  .dl-queues button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.18),inset 0 -2px 0 var(--teal)}
+  .dl-stats{display:flex;gap:6px;margin-left:auto}
+  .dl-stats div{min-width:74px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);text-align:center}
+  .dl-stats b{display:block;font-size:18px;font-weight:700;color:var(--title);font-variant-numeric:tabular-nums}
+  .dl-stats span{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3)}
+  .dl-body{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr) 300px}
+  .dl-queue,.dl-side{display:flex;flex-direction:column;min-height:0;background:var(--card)}
+  .dl-queue{border-right:1px solid var(--line)}
+  .dl-side{border-left:1px solid var(--line);overflow-y:auto}
+  .dl-qhead{display:flex;align-items:center;gap:8px;padding:12px;border-bottom:1px solid var(--line)}
+  .dl-qhead input{flex:1;height:34px;border:1px solid var(--line-3);border-radius:9px;background:var(--surface-1);color:var(--ink);padding:0 12px;font-size:13px;outline:none}
+  .dl-qhead input:focus{border-color:var(--teal)}
+  .dl-qhead span{font-size:11px;color:var(--text-3);white-space:nowrap}
+  .dl-qlist{flex:1;overflow-y:auto;padding:6px}
+  .dl-qi{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;position:relative}
+  .dl-qi:hover{background:var(--surface-1)}
+  .dl-qi.on{background:var(--teal-soft);box-shadow:inset 3px 0 0 var(--teal)}
+  .dl-qi .n{width:22px;font-size:11px;font-weight:700;color:var(--text-4);text-align:right;font-variant-numeric:tabular-nums}
+  .dl-qi .av{width:32px;height:32px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;text-transform:uppercase;color:#fff}
+  .dl-qi .t{flex:1;min-width:0}
+  .dl-qi .t b{display:block;font-size:13px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dl-qi .t span{font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .dl-qi.done{opacity:.55}
+  .dl-qi.dnc .t span{color:#e05a45}
+  .dl-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:var(--text-4)}
+  .dl-dot.talked{background:#2fb171}.dl-dot.vm{background:#4c8dff}.dl-dot.busy{background:#e0a33a}.dl-dot.bad{background:#e05a45}
+  .dl-stage{overflow-y:auto;padding:20px 28px;background:var(--canvas)}
+  .dl-card{max-width:680px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow)}
+  .dl-hero{position:relative;padding:22px 28px 16px;text-align:center;
+    background:radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--teal) 22%,transparent),transparent 70%)}
+  .dl-pos{position:absolute;top:16px;left:18px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-3)}
+  .dl-open{position:absolute;top:12px;right:14px;border:1px solid var(--line-3);background:var(--surface-1);color:var(--text-2);font-size:11.5px;font-weight:600;border-radius:8px;padding:5px 10px}
+  .dl-open:hover{color:var(--ink);border-color:var(--teal)}
+  .dl-ava{position:relative;width:72px;height:72px;margin:4px auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;text-transform:uppercase}
+  .dl-ava::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid color-mix(in srgb,var(--teal) 45%,transparent);opacity:0}
+  .dl-card.live .dl-ava::after{opacity:1;animation:dlRing 1.6s ease-out infinite}
+  @keyframes dlRing{0%{transform:scale(.92);opacity:.9}100%{transform:scale(1.25);opacity:0}}
+  .dl-name{font-size:24px;font-weight:600;color:var(--title);letter-spacing:-.01em}
+  .dl-phone{margin-top:6px;font-size:20px;font-weight:500;color:var(--text-1);letter-spacing:.02em;font-variant-numeric:tabular-nums}
+  .dl-tags{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:12px}
+  .dl-tag{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:var(--surface-2);color:var(--text-2)}
+  .dl-tag.warn{background:rgba(224,90,69,.15);color:#e05a45}
+  .dl-ctrl{display:flex;align-items:center;justify-content:center;gap:18px;padding:4px 0 22px}
+  .dl-round{width:48px;height:48px;border-radius:50%;border:1px solid var(--line-3);background:var(--surface-1);color:var(--text-2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.04em}
+  .dl-round:hover{color:var(--ink);border-color:var(--teal)}
+  .dl-call{width:66px;height:66px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;background:#2fb171;
+    box-shadow:0 10px 24px -8px rgba(47,177,113,.7);transition:transform .12s,filter .12s;text-decoration:none}
+  .dl-call:hover{transform:translateY(-1px);filter:brightness(1.08)}
+  .dl-call.end{background:#e0483a;box-shadow:0 10px 24px -8px rgba(224,72,58,.7)}
+  .dl-call.off{background:var(--surface-2);color:var(--text-4);box-shadow:none;pointer-events:none}
+  .dl-ctrlcap{text-align:center;margin:-12px 0 14px;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .dl-ctrlcap b{color:#2fb171}
+  .dl-facts{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+  .dl-facts div{padding:10px 16px;border-right:1px solid var(--line-2);min-width:0}
+  .dl-facts div:nth-child(3n){border-right:0}
+  .dl-facts div:nth-child(n+4){border-top:1px solid var(--line-2)}
+  .dl-facts span{display:block;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-4);margin-bottom:3px}
+  .dl-facts b{display:block;font-size:13px;font-weight:500;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dl-wrap{padding:18px 22px 22px;border-top:1px solid var(--line);background:var(--surface-1)}
+  .dl-lbl{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+  .dl-outs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .dl-outs button{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line-3);border-radius:10px;background:var(--card);color:var(--text-1);font-size:13px;font-weight:600;text-align:left}
+  .dl-outs button:hover{border-color:var(--text-4)}
+  .dl-outs button.on{border-color:var(--teal);box-shadow:0 0 0 1px var(--teal) inset;background:var(--teal-soft)}
+  .dl-outs kbd{margin-left:auto;font:600 10.5px var(--sans);color:var(--text-4);border:1px solid var(--line-3);border-radius:4px;padding:1px 5px}
+  .dl-notes{width:100%;min-height:56px;resize:vertical;border:1px solid var(--line-3);border-radius:10px;background:var(--card);color:var(--ink);padding:10px 12px;font:13px/1.45 var(--sans);outline:none}
+  .dl-notes:focus{border-color:var(--teal)}
+  .dl-save{display:flex;align-items:center;gap:12px;margin-top:12px}
+  .dl-save .pill-btn{margin-left:auto}
+  .dl-save .pill-btn[disabled]{opacity:.45;cursor:not-allowed}
+  .dl-hint{font-size:11.5px;color:var(--text-3);line-height:1.45}
+  .dl-empty{max-width:440px;margin:60px auto;text-align:center;color:var(--text-2)}
+  .dl-empty b{display:block;font-size:18px;color:var(--title);margin:14px 0 6px}
+  .dl-empty .ic{width:64px;height:64px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--teal-soft);color:var(--teal)}
+  .dl-pad{padding:16px;border-bottom:1px solid var(--line)}
+  .dl-padnum{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+  .dl-padnum input{flex:1;min-width:0;height:44px;border:0;background:none;color:var(--title);font-size:22px;font-weight:500;text-align:center;letter-spacing:.03em;outline:none;font-variant-numeric:tabular-nums}
+  .dl-padnum input::placeholder{font-size:14px;color:var(--text-4);letter-spacing:0}
+  .dl-padnum button{border:0;background:none;color:var(--text-3);font-size:18px;padding:6px}
+  .dl-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dl-keys button{height:52px;border-radius:14px;border:1px solid var(--line);background:var(--surface-1);color:var(--title);font-size:19px;font-weight:500;line-height:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:background .1s}
+  .dl-keys button:hover{background:var(--surface-2)}
+  .dl-keys button:active{background:var(--teal-soft)}
+  .dl-keys small{font-size:8.5px;font-weight:700;letter-spacing:.14em;color:var(--text-4)}
+  .dl-padcall{margin-top:12px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:8px;background:#2fb171;color:#fff;font-weight:700;font-size:13.5px;text-decoration:none}
+  .dl-padcall.off{background:var(--surface-2);color:var(--text-4);pointer-events:none}
+  .dl-log{flex:1;padding:14px 16px}
+  .dl-loghead{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+  .dl-loghead button{border:0;background:none;color:var(--text-3);font-size:11px;text-transform:none;letter-spacing:0}
+  .dl-loghead button:hover{color:var(--ink)}
+  .dl-li{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+  .dl-li b{flex:1;min-width:0;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dl-li span{color:var(--text-3);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .dl-keyhelp{padding:12px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--text-4)}
+  .dl-keyhelp b{color:var(--text-3);margin-right:4px}
+  @media(max-width:1180px){.dl-body{grid-template-columns:260px minmax(0,1fr)}.dl-side{display:none}.dl-stats{margin-left:0}}
   .sf-create{display:block;margin:8px 10px 4px;padding:7px 10px;border:1px dashed var(--teal);border-radius:6px;
     background:var(--card);color:var(--teal-strong);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;width:calc(100% - 20px)}
   .sf-create:hover{background:var(--teal-soft)}
@@ -1004,7 +1107,7 @@
     flex:0 0 auto;font-size:13px;background:var(--surface-2);color:var(--text-3)}
   .tlc .ico.note{background:#eef2ff;color:#5b6fae}
   .tlc .ico.email{background:#e8f4fb;color:#2f7fa8}
-  .tlc .ico.call{background:#eaf6f2;color:#2f7d74}
+  .tlc .ico.call{background:var(--teal-soft);color:#2f7d74}
   .tlc .ico.text{background:#f3f0fd;color:#7b5cf0}
   .tlc .ico.appointment{background:#fdf3e6;color:#b3812f}
   .tlc .ico.task{background:#eef7ee;color:#3f8b52}
@@ -1134,7 +1237,7 @@
   .ap-day{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);
     padding:10px 12px 5px;position:sticky;top:0;background:var(--surface-1)}
   .ap-step{display:flex;gap:8px;padding:8px 12px;cursor:pointer;border-left:3px solid transparent;align-items:flex-start}
-  .ap-step:hover{background:#f2f5f6}
+  .ap-step:hover{background:var(--surface-1)}
   .ap-step.on{background:var(--surface-2);border-left-color:var(--teal)}
   .ap-step .ic{flex:0 0 auto;font-size:12px;line-height:1.4}
   /* .bd/.ti/.tm are spans, so they need an explicit block: without it the
@@ -1220,7 +1323,7 @@
   /* Account appearance. account-settings.js sets --bg/--card/--ink/--line and the
      accent (--teal) for dark mode; everything else derives from these tokens. */
   :root[data-theme="dark"]{
-    --bg:#10151d; --card:#18212c; --surface-1:#1d2734; --surface-2:#222d3b;
+    --bg:#10151d; --card:#18212c; --surface-1:#1d2734; --surface-2:#222d3b; --canvas:var(--bg);
     --line:#2a3646; --line-2:#243040; --line-3:#334153;
     --ink:#e6ebf1; --title:#eef2f7; --label:#b4c0ce; --muted:#97a4b5;
     --text-1:#dfe6ee; --text-2:#b4c0ce; --text-3:#8c99ab; --text-4:#64728a;
@@ -1271,7 +1374,7 @@
 <nav class="rail" id="rail">
   <button class="r on" data-view="dashboard" title="Dashboard"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
   <button class="r" data-view="messages" title="Messages"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg></button>
-  <button class="r" data-view="followup" title="Follow-Up"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v2a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h2a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.48-1.19a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/></svg></button>
+  <button class="r" data-view="followup" title="Dialer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v2a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h2a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.48-1.19a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/></svg></button>
   <!-- Leads live under People (default section). One visible rail button.
        Hidden data-view="leads" keeps deep-links and older verify suites working. -->
   <button class="r" data-view="people" title="People"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3.2 2.7-5.5 6-5.5S15 16.8 15 20"/><path d="M16 5.5a3 3 0 0 1 0 5.6M22 20c0-2.6-1.7-4.6-4-5.2"/></svg></button>
@@ -1480,11 +1583,42 @@
     </div>
   </section>
 
-  <!-- FOLLOW-UP: who to call today (Due Today / crmCallQueue urgent) -->
-  <section class="view" id="view-followup"><div class="pad">
-    <div class="page-head"><h1>Follow-Up <small id="fuCount"></small></h1></div>
-    <div class="card" id="fuList"><div class="empty" style="padding:28px">Loading…</div></div>
-  </div></section>
+  <!-- DIALER (view id kept as "followup" for deep links): power-dial queues; "Due today" is Due Today / crmCallQueue urgent -->
+  <section class="view" id="view-followup">
+    <div class="dl-top">
+      <div class="dl-title"><h1>Dialer</h1><span class="dl-sub">Power dialing through Quo · <span id="fuCount">0</span> in queue</span></div>
+      <div class="dl-queues" id="dlQueues">
+        <button data-dq="due" class="on">Due today</button><button data-dq="new">New leads</button><button data-dq="nurture">Nurture</button><button data-dq="all">Everyone</button>
+      </div>
+      <div class="dl-stats">
+        <div><b id="dlDials">0</b><span>Dials</span></div>
+        <div><b id="dlTalked">0</b><span>Talked</span></div>
+        <div><b id="dlVm">0</b><span>Voicemail</span></div>
+        <div><b id="dlRate">0%</b><span>Connect</span></div>
+        <div><b id="dlTalk">0:00</b><span>Talk time</span></div>
+      </div>
+    </div>
+    <div class="dl-body">
+      <aside class="dl-queue">
+        <div class="dl-qhead"><input id="dlSearch" placeholder="Search queue…" autocomplete="off"><span id="dlQMeta"></span></div>
+        <div class="dl-qlist" id="fuList"></div>
+      </aside>
+      <main class="dl-stage" id="dlStage"></main>
+      <aside class="dl-side">
+        <div class="dl-pad">
+          <div class="dl-padnum"><input id="dlPadNum" placeholder="Enter a number" inputmode="tel" autocomplete="off"><button id="dlPadDel" aria-label="Delete digit">⌫</button></div>
+          <div class="dl-keys" id="dlKeys"></div>
+          <a class="dl-padcall" id="dlPadCall" href="#">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z"/></svg>Call</a>
+        </div>
+        <div class="dl-log">
+          <div class="dl-loghead">This session<button id="dlReset" title="Clear this session's stats">Reset</button></div>
+          <div id="dlLog"></div>
+        </div>
+        <div class="dl-keyhelp"><b>Keys</b> Enter call · E end · 1–6 outcome · N next · S skip</div>
+      </aside>
+    </div>
+  </section>
 
   <!-- Opportunities rail removed: opportunity types are tags on contact profiles
        (Expired, FSBO, Pre-Foreclosure, Off-Market, Withdrawn, Canceled). The
@@ -10782,30 +10916,177 @@ document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>{
   if(btn)btn.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); openCreateSmartFilterModal(); });
   renderCustomSmartList();
 })();
+/* ────────────────────────── DIALER ──────────────────────────
+   Quo exposes no outbound-call API, so a dial hands the number to the device's
+   tel: handler (the Quo app when it is installed) and the outcome is logged
+   here through the same /activity endpoint as the contact record's Call tab. */
+var DIAL_OUTCOMES=[
+  {o:"Talked",c:"talked"},{o:"Left Message",c:"vm"},{o:"No Answer",c:""},
+  {o:"Busy",c:"busy"},{o:"Wrong Number",c:"bad"},{o:"Failed",c:"bad"}];
+var DIAL_KEYS=[["1",""],["2","ABC"],["3","DEF"],["4","GHI"],["5","JKL"],["6","MNO"],["7","PQRS"],["8","TUV"],["9","WXYZ"],["*",""],["0","+"],["#",""]];
+var DIAL={queue:"due",curId:null,search:"",callStart:0,lastDur:0,outcome:null,notes:"",skipped:{},tick:null,bound:false,
+  session:(function(){ try{ var s=JSON.parse(sessionStorage.getItem("dialerSession")||"null"); if(s&&s.day===todayKey())return s; }catch(_){}
+    return {day:todayKey(),log:[],done:{}}; })()};
+function dialSaveSession(){ try{ sessionStorage.setItem("dialerSession",JSON.stringify(DIAL.session)); }catch(_){} }
+function dialTel(n){ return "tel:"+String(n||"").replace(/[^0-9+]/g,""); }
+function dialDur(ms){ var s=Math.max(0,Math.round(ms/1000)); return ((s/60)|0)+":"+String(s%60).padStart(2,"0"); }
+function dialHue(name){ var h=0; String(name||"").split("").forEach(function(ch){ h=(h*31+ch.charCodeAt(0))%360; }); return "hsl("+h+",42%,42%)"; }
+function dialDnc(l){ return leadMetric(l.id,"phoneDnc")===true; }
+function dialQueueRows(){
+  var q=DIAL.queue, rows=(LEADS||[]).filter(function(l){ return l.phone&&String(l.phone).trim(); });
+  if(q==="due") rows=rows.filter(function(l){ return (l.due&&l.due.label==="Due Today")||l.crmCallQueue==="urgent"; });
+  else if(q==="new") rows=rows.filter(function(l){ return l.statusDisp==="new"; });
+  else if(q==="nurture") rows=rows.filter(function(l){ return l.statusDisp==="nurture"; });
+  var t=function(l){ var d=new Date(l.lastActivity||0).getTime(); return isNaN(d)?0:d; };
+  rows=rows.slice().sort(q==="new"?function(a,b){ return new Date(b.createdAt||0)-new Date(a.createdAt||0); }:function(a,b){ return t(a)-t(b); });
+  if(DIAL.search){ var s=DIAL.search.toLowerCase(), digits=s.replace(/\D/g,"");
+    rows=rows.filter(function(l){ return String(l.name).toLowerCase().indexOf(s)>=0||(digits&&String(l.phone).replace(/\D/g,"").indexOf(digits)>=0); }); }
+  return rows;
+}
+function dialPending(rows){ return rows.filter(function(l){ return !DIAL.session.done[l.id]&&!DIAL.skipped[l.id]; }); }
+function dialCurrent(rows){
+  var cur=rows.find(function(l){ return l.id===DIAL.curId; });
+  if(!cur){ cur=dialPending(rows)[0]||null; DIAL.curId=cur?cur.id:null; }
+  return cur;
+}
 function renderFollowUp(){
   var el=document.getElementById("fuList"); if(!el)return;
-  var list=(LEADS||[]).filter(function(l){
-    return (l.due&&l.due.label==="Due Today")||l.crmCallQueue==="urgent";
-  });
-  var count=document.getElementById("fuCount");
-  if(count)count.textContent="("+list.length+")";
-  if(!list.length){
-    el.innerHTML='<div class="empty" style="padding:28px">Nobody is due today. Leads show here when due is “Due Today” or the call queue is urgent.</div>';
+  if(!DIAL.bound) dialBind();
+  if(!LEAD_METRICS.data) ensureLeadMetrics(function(){ renderFollowUp(); });
+  var rows=dialQueueRows(), cur=dialCurrent(rows), pend=dialPending(rows).length;
+  var count=document.getElementById("fuCount"); if(count)count.textContent=pend;
+  var meta=document.getElementById("dlQMeta"); if(meta)meta.textContent=(rows.length-pend)+"/"+rows.length+" done";
+  el.innerHTML=rows.length?rows.map(function(l,i){
+    var done=DIAL.session.done[l.id], oc=done?(DIAL_OUTCOMES.find(function(x){return x.o===done;})||{}).c:"";
+    return '<div class="dl-qi'+(cur&&l.id===cur.id?" on":"")+(done||DIAL.skipped[l.id]?" done":"")+(dialDnc(l)?" dnc":"")+'" data-dlid="'+esc(l.id)+'">'+
+      '<span class="n">'+(i+1)+'</span>'+
+      '<span class="av" style="background:'+dialHue(l.name)+'">'+esc(initials(l.name))+'</span>'+
+      '<span class="t"><b>'+esc(l.name)+'</b><span>'+(dialDnc(l)?"Do not call":esc(fmtPhone(l.phone)))+'</span></span>'+
+      (done?'<span class="dl-dot '+oc+'" title="'+esc(done)+'"></span>':DIAL.skipped[l.id]?'<span class="dl-dot" title="Skipped"></span>':'')+
+    '</div>';
+  }).join(""):'<div class="dl-hint" style="padding:18px 10px;text-align:center">No callable leads in this queue.</div>';
+  dialStats(); dialRenderStage(cur,rows); dialRenderLog();
+}
+function dialStats(){
+  var log=DIAL.session.log, talked=log.filter(function(x){return x.o==="Talked";}).length,
+      vm=log.filter(function(x){return x.o==="Left Message";}).length, talk=log.reduce(function(a,x){return a+(x.d||0);},0);
+  var set=function(id,v){ var n=document.getElementById(id); if(n)n.textContent=v; };
+  set("dlDials",log.length); set("dlTalked",talked); set("dlVm",vm);
+  set("dlRate",log.length?Math.round(talked/log.length*100)+"%":"0%"); set("dlTalk",dialDur(talk));
+}
+function dialRenderLog(){
+  var el=document.getElementById("dlLog"); if(!el)return;
+  var log=DIAL.session.log.slice().reverse();
+  el.innerHTML=log.length?log.slice(0,40).map(function(x){
+    var oc=(DIAL_OUTCOMES.find(function(o){return o.o===x.o;})||{}).c||"";
+    return '<div class="dl-li"><span class="dl-dot '+oc+'"></span><b>'+esc(x.n)+'</b><span>'+esc(x.o)+(x.d?" · "+dialDur(x.d):"")+'</span></div>';
+  }).join(""):'<div class="dl-hint">Calls you log here show up in this list and on each contact\'s activity feed.</div>';
+}
+var DIAL_PHONE_SVG='<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z"/></svg>';
+function dialRenderStage(l,rows){
+  var st=document.getElementById("dlStage"); if(!st)return;
+  if(!l){
+    st.innerHTML='<div class="dl-empty"><div class="ic">'+DIAL_PHONE_SVG+'</div><b>'+(rows.length?"Queue complete":"Nothing to dial")+'</b>'+
+      (rows.length?'Every lead in this queue has been called or skipped. Pick another queue, or <a href="#" id="dlRequeue">bring back skipped leads</a>.'
+        :(DIAL.queue==="due"?'Leads land here when they are due today or flagged urgent. Try the New leads or Everyone queue.':'No leads with a phone number match this queue.'))+'</div>';
+    var rq=document.getElementById("dlRequeue"); if(rq)rq.onclick=function(e){ e.preventDefault(); DIAL.skipped={}; renderFollowUp(); };
     return;
   }
-  el.innerHTML=list.map(function(l){
-    var why=(l.due&&l.due.label==="Due Today")?"Due today":"Urgent call queue";
-    var due=(l.due&&l.due.date)?l.due.date:"";
-    return '<div class="fu-row" data-fulid="'+esc(l.id)+'">'+
-      '<div><div class="fu-name">'+esc(l.name)+' '+marketPill(l,"row")+'</div>'+
-      (l.address?'<div class="addr" style="margin-top:2px">'+esc(l.address)+'</div>':'')+'</div>'+
-      '<div class="fu-phone">'+(l.phone?esc(l.phone):'<span style="color:#c2cad1">No phone</span>')+'</div>'+
-      '<div class="fu-why">'+esc(why)+(l.source?" · "+esc(l.source):"")+'</div>'+
-      (due?'<div class="fu-due">'+esc(due)+'</div>':'')+
-    '</div>';
-  }).join("");
-  el.querySelectorAll("[data-fulid]").forEach(function(row){
-    row.addEventListener("click",function(){ openLead(row.getAttribute("data-fulid")); });
+  var dnc=dialDnc(l), live=!!DIAL.callStart, pos=rows.indexOf(l)+1;
+  var fact=function(k,v){ return '<div><span>'+k+'</span><b title="'+esc(v||"-")+'">'+esc(v||"-")+'</b></div>'; };
+  st.innerHTML='<div class="dl-card'+(live?" live":"")+'">'+
+    '<div class="dl-hero"><span class="dl-pos">'+pos+' OF '+rows.length+'</span><button class="dl-open" id="dlOpen">Open profile</button>'+
+      '<div class="dl-ava" style="background:'+dialHue(l.name)+'">'+esc(initials(l.name))+'</div>'+
+      '<div class="dl-name">'+esc(l.name)+'</div><div class="dl-phone">'+esc(fmtPhone(l.phone))+'</div>'+
+      '<div class="dl-tags">'+(dnc?'<span class="dl-tag warn">Do not call</span>':'')+
+        '<span class="dl-tag">'+esc(l.statusDisp||"lead")+'</span><span class="dl-tag">'+esc(l.stageLabel||"")+'</span>'+
+        (l.source?'<span class="dl-tag">'+esc(l.source)+'</span>':'')+'</div></div>'+
+    '<div class="dl-ctrl"><button class="dl-round" id="dlPrev" title="Previous">PREV</button>'+
+      (live?'<button class="dl-call end" id="dlEnd" title="End call (E)">'+DIAL_PHONE_SVG+'</button>'
+           :'<a class="dl-call'+(dnc?" off":"")+'" id="dlCall" href="'+(dnc?"#":dialTel(l.phone))+'" title="Call (Enter)">'+DIAL_PHONE_SVG+'</a>')+
+      '<button class="dl-round" id="dlSkip" title="Skip (S)">SKIP</button></div>'+
+    '<div class="dl-ctrlcap" id="dlCap">'+(live?'<b>● On call</b> · <span id="dlTimer">'+dialDur(Date.now()-DIAL.callStart)+'</span>'
+      :dnc?'This number is marked Do Not Call':DIAL.lastDur?'Last call '+dialDur(DIAL.lastDur)+' · log the outcome below':'Press Enter or tap to call')+'</div>'+
+    '<div class="dl-facts">'+fact("Last touch",relTime(l.lastActivity))+fact("Intent",l.intent)+fact("Email",l.email)+
+      fact("Address",l.address)+fact("Assigned",l.assignedUserName)+fact("Created",l.createdAt?new Date(l.createdAt).toLocaleDateString():"")+'</div>'+
+    '<div class="dl-wrap"><div class="dl-lbl">Call outcome</div><div class="dl-outs" id="dlOuts">'+
+      DIAL_OUTCOMES.map(function(x,i){ return '<button data-dlo="'+esc(x.o)+'"'+(DIAL.outcome===x.o?' class="on"':'')+'><span class="dl-dot '+x.c+'"></span>'+esc(x.o)+'<kbd>'+(i+1)+'</kbd></button>'; }).join("")+'</div>'+
+      '<textarea class="dl-notes" id="dlNotes" placeholder="Notes from the call…">'+esc(DIAL.notes)+'</textarea>'+
+      '<div class="dl-save"><span class="dl-hint">Saved to '+esc(String(l.name).split(" ")[0])+'\'s activity feed as a call.</span>'+
+      '<button class="pill-btn" id="dlSave"'+(DIAL.outcome?"":" disabled")+'>SAVE &amp; NEXT</button></div></div>'+
+  '</div>';
+  var q=function(id){ return document.getElementById(id); };
+  q("dlOpen").onclick=function(){ openLead(l.id,"call"); };
+  q("dlPrev").onclick=function(){ dialMove(-1); };
+  q("dlSkip").onclick=function(){ dialSkip(); };
+  if(q("dlCall")) q("dlCall").addEventListener("click",function(){ if(!dnc) dialStartCall(); });
+  if(q("dlEnd")) q("dlEnd").onclick=dialEndCall;
+  q("dlNotes").addEventListener("input",function(){ DIAL.notes=this.value; });
+  q("dlOuts").querySelectorAll("button").forEach(function(b){ b.onclick=function(){ dialPick(b.getAttribute("data-dlo")); }; });
+  q("dlSave").onclick=dialSave;
+}
+function dialStartCall(){
+  DIAL.callStart=Date.now(); DIAL.lastDur=0;
+  clearInterval(DIAL.tick);
+  DIAL.tick=setInterval(function(){ var t=document.getElementById("dlTimer"); if(t&&DIAL.callStart)t.textContent=dialDur(Date.now()-DIAL.callStart); },1000);
+  setTimeout(renderFollowUp,0);
+}
+function dialEndCall(){
+  if(!DIAL.callStart)return;
+  DIAL.lastDur=Date.now()-DIAL.callStart; DIAL.callStart=0; clearInterval(DIAL.tick);
+  renderFollowUp();
+}
+function dialPick(o){
+  DIAL.outcome=o;
+  document.querySelectorAll("#dlOuts button").forEach(function(b){ b.classList.toggle("on",b.getAttribute("data-dlo")===o); });
+  var s=document.getElementById("dlSave"); if(s)s.disabled=false;
+}
+function dialReset(){ DIAL.outcome=null; DIAL.notes=""; DIAL.lastDur=0; DIAL.callStart=0; clearInterval(DIAL.tick); }
+function dialMove(step){
+  var rows=dialQueueRows(), i=rows.findIndex(function(l){return l.id===DIAL.curId;});
+  if(!rows.length)return;
+  var next=rows[(i+step+rows.length)%rows.length];
+  dialReset(); DIAL.curId=next.id; renderFollowUp();
+}
+function dialSkip(){ if(DIAL.curId)DIAL.skipped[DIAL.curId]=true; dialReset(); DIAL.curId=null; renderFollowUp(); }
+function dialSave(){
+  var l=LEADS.find(function(x){return x.id===DIAL.curId;}); if(!l||!DIAL.outcome)return;
+  if(DIAL.callStart) DIAL.lastDur=Date.now()-DIAL.callStart;
+  var o=DIAL.outcome, notes=DIAL.notes.trim(), dur=DIAL.lastDur, btn=document.getElementById("dlSave");
+  if(btn){ btn.disabled=true; btn.textContent="SAVING…"; }
+  logComposerActivity(l,{type:"call",description:o+(notes?": "+notes.slice(0,300):""),subType:o,notes:notes||undefined,
+    meta:{Number:l.phone||"",Outcome:o,Duration:dur?dialDur(dur):"",Source:"Dialer"}},function(ok){
+    if(!ok){ if(btn){ btn.disabled=false; btn.textContent="SAVE & NEXT"; } return; }
+    DIAL.session.done[l.id]=o; DIAL.session.log.push({id:l.id,n:l.name,o:o,d:dur,at:Date.now()}); dialSaveSession();
+    dialReset(); DIAL.curId=null; renderFollowUp();
+  });
+}
+function dialBind(){
+  DIAL.bound=true;
+  document.querySelectorAll("#dlQueues [data-dq]").forEach(function(b){ b.onclick=function(){
+    DIAL.queue=b.getAttribute("data-dq"); document.querySelectorAll("#dlQueues [data-dq]").forEach(function(x){ x.classList.toggle("on",x===b); });
+    dialReset(); DIAL.curId=null; DIAL.skipped={}; renderFollowUp(); }; });
+  document.getElementById("dlSearch").addEventListener("input",function(){ DIAL.search=this.value.trim(); renderFollowUp(); });
+  document.getElementById("fuList").addEventListener("click",function(e){
+    var r=e.target.closest("[data-dlid]"); if(!r)return; dialReset(); DIAL.curId=r.getAttribute("data-dlid"); delete DIAL.skipped[DIAL.curId]; renderFollowUp(); });
+  var pad=document.getElementById("dlPadNum"), call=document.getElementById("dlPadCall");
+  var sync=function(){ var d=pad.value.replace(/[^0-9+*#]/g,""); call.href=d?dialTel(d):"#"; call.classList.toggle("off",d.replace(/\D/g,"").length<3); };
+  document.getElementById("dlKeys").innerHTML=DIAL_KEYS.map(function(k){ return '<button data-k="'+k[0]+'">'+k[0]+'<small>'+(k[1]||"&nbsp;")+'</small></button>'; }).join("");
+  document.getElementById("dlKeys").addEventListener("click",function(e){ var b=e.target.closest("[data-k]"); if(!b)return; pad.value+=b.getAttribute("data-k"); sync(); });
+  document.getElementById("dlPadDel").onclick=function(){ pad.value=pad.value.slice(0,-1); sync(); };
+  pad.addEventListener("input",sync); sync();
+  document.getElementById("dlReset").onclick=function(){ DIAL.session={day:todayKey(),log:[],done:{}}; DIAL.skipped={}; dialSaveSession(); renderFollowUp(); };
+  document.addEventListener("keydown",function(e){
+    var v=document.getElementById("view-followup"); if(!v||!v.classList.contains("on"))return;
+    if(e.metaKey||e.ctrlKey||e.altKey||/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||""))return;
+    if(document.querySelector(".crm-modal.on,.oa-modal.on,dialog[open]"))return;
+    var k=e.key.toLowerCase();
+    if(k==="enter"){ var c=document.getElementById("dlCall"); if(c&&!c.classList.contains("off")){ e.preventDefault(); c.click(); } else if(DIAL.outcome){ e.preventDefault(); dialSave(); } }
+    else if(k==="e"){ e.preventDefault(); dialEndCall(); }
+    else if(/^[1-6]$/.test(k)){ e.preventDefault(); dialPick(DIAL_OUTCOMES[+k-1].o); }
+    else if(k==="n"||k==="arrowdown"){ e.preventDefault(); dialMove(1); }
+    else if(k==="arrowup"){ e.preventDefault(); dialMove(-1); }
+    else if(k==="s"){ e.preventDefault(); dialSkip(); }
   });
 }
 const lpEl=document.getElementById("leadPonds");

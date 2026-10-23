@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-10-23: CRM Follow-Up rail is now the Dialer (view id `followup` kept): queues (due today/urgent, new, nurture, everyone), current-lead card, `tel:` dial handoff (Quo has no outbound-call API), call timer, outcome keys 1–6, notes, dial pad and per-tab session stats. Outcomes log through `/api/crm/lead/:id/activity` as `call` with `meta.Source:"Dialer"`; DNC numbers cannot be dialed. Lead profile canvas, `.mini-pill` buttons and market pills follow the theme tokens.
 - 2026-10-21: CRM tab theming: `crm-brivity.html` styles use surface/text/line/warn tokens instead of hardcoded light colors, so dark mode no longer leaves white tables, calendar, KPI cards and banners; `--teal-pill` follows the account accent. `listings.html` (MLS) and `email-marketing.html` use the same dark palette and accent. Light-mode values are unchanged.
 - 2026-10-21: Fat cleanup of unused CRM/UI clutter: removed orphan modules 02/04–07, legacy `dashboard.html` command center, classic `tasks.html`, how-to tour, Ad Manager page/`adsStore` planner, and CRM demo email campaigns UI. CRM Email rail now embeds the live SMTP `email-marketing` page; `/dashboard`, `/tasks-classic`, `/how-to`, and `/ads` redirect. Kept Quo, Mojo, SMTP drips/`emailMarketing`, voice-clone, lead nurture, finance/reporting, and Harvey ads summary proxy. Stopped tracking compiled `dist/` (Docker/CI build it).
 
