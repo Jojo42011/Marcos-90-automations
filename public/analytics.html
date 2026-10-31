@@ -191,6 +191,10 @@ function metricsBody(p){
     return html;
   }
 
+  if (p.accountUsername) {
+    html += '<div class="banner info"><b>@' + esc(p.accountUsername) + '</b> via Zernio</div>';
+  }
+
   html += '<div class="cards">' +
     card("Followers", p.followers) +
     card("Posts", p.posts) +
@@ -198,6 +202,10 @@ function metricsBody(p){
     card("Likes", p.likes) +
     card("Comments", p.comments) +
     card("Shares", p.shares) +
+    card("Saves", p.saves) +
+    card("Reach", p.reach) +
+    card("Profile views", p.profileViews) +
+    card("Follows from posts", p.followsFromPosts) +
     card("Avg views / post", p.avgViews) +
     card("Engagement rate", p.engagementRate, p.engagementRate == null ? null : "of views interacted", "%") +
   '</div>';
@@ -207,6 +215,10 @@ function metricsBody(p){
     '<div class="row"><span class="lbl">Likes</span><span class="val">' + full(p.likes) + '</span></div>' +
     '<div class="row"><span class="lbl">Comments</span><span class="val">' + full(p.comments) + '</span></div>' +
     '<div class="row"><span class="lbl">Shares</span><span class="val">' + full(p.shares) + '</span></div>' +
+    '<div class="row"><span class="lbl">Saves</span><span class="val">' + full(p.saves) + '</span></div>' +
+    '<div class="row"><span class="lbl">Reach</span><span class="val">' + full(p.reach) + '</span></div>' +
+    '<div class="row"><span class="lbl">Profile views</span><span class="val">' + full(p.profileViews) + '</span></div>' +
+    '<div class="row"><span class="lbl">Follows from posts</span><span class="val">' + full(p.followsFromPosts) + '</span></div>' +
     '<div class="row"><span class="lbl">Engagement rate</span><span class="val">' +
       (p.engagementRate == null ? "—" : p.engagementRate + "%") + '</span></div>' +
     '<div class="src">Source: ' + esc(p.source || "unknown") + ' · updated ' + esc(ago(p.lastUpdated)) + '</div>' +
@@ -222,6 +234,18 @@ function metricsBody(p){
   }
 
   html += mixBar(p.mix);
+
+  if (p.recentPosts && p.recentPosts.length) {
+    html += '<div class="panel"><h2>Recent posts</h2>' +
+      p.recentPosts.map(function(post){
+        return '<div class="row"><span class="lbl">' +
+          (post.url
+            ? '<a class="top" target="_blank" rel="noopener" href="' + esc(post.url) + '">' + esc(shortCaption(post.caption || "Post")) + '</a>'
+            : esc(shortCaption(post.caption || "Post"))) +
+          '</span><span class="val">' + full(post.views) + ' views · ' + full(post.likes) + ' likes</span></div>';
+      }).join("") +
+    '</div>';
+  }
   return html;
 }
 
@@ -300,9 +324,11 @@ function render(){
     '<button class="tab' + (CURRENT === "dm" ? " active" : "") + '" data-id="dm">DM Agent</button>';
 
   var live = DATA.platforms.filter(function(p){ return p.status === "live"; }).length;
+  var owner = DATA.zernio && DATA.zernio.owner ? String(DATA.zernio.owner) : "";
   document.getElementById("sub").textContent =
     live + " of " + DATA.platforms.length + " platforms reporting" +
-    (DATA.zernio.configured ? "" : " · Zernio not connected");
+    (owner ? " · " + owner + "'s Zernio" : "") +
+    (DATA.zernio && DATA.zernio.configured ? "" : " · Zernio not connected");
 
   var view = document.getElementById("view");
   if (CURRENT === "dm") {
@@ -314,7 +340,7 @@ function render(){
         'style="width:100%;height:calc(100vh - 190px);min-height:520px;border:1px solid var(--line);' +
         'border-radius:11px;background:#fff;display:block"></iframe>';
     }
-    document.getElementById("sub").textContent = "DM Agent — Instagram, SMS and replies";
+    document.getElementById("sub").textContent = "DM Agent — this account's conversations only";
     return;
   }
   view.innerHTML = CURRENT === "all"

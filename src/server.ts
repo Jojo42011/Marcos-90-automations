@@ -39,7 +39,7 @@ import {
   getRecentAgentPulls,
   getTodaysAgentPulls,
 } from "./core/socialStore.js";
-import { scoreVideos } from "./integrations/apify/index.js";
+import { scoreVideos } from "./core/socialScoring.js";
 import { claudeContent, CONTENT_MODELS } from "./integrations/claude-content.js";
 import { runMorningScan, getLatestMorningScan } from "./agents/morningScan/index.js";
 import { generateCommentReply } from "./agents/commentReply/index.js";
@@ -630,7 +630,7 @@ Example: Marco says "what's my average views" → call get_social_summary → re
 When get_social_summary returns data, cite stats.avgViewsPerVideo, profile.followers, and stats.videosTracked exactly as returned — never round or estimate.
 
 TOOLS AVAILABLE:
-- get_social_summary: LIVE TikTok performance from Apify (avg views, followers, totals, patterns)
+- get_social_summary: LIVE TikTok performance from Zernio (avg views, followers, totals, patterns)
 - get_social_videos: Best/worst/recent videos by tier
 - get_lead_summary: Pipeline and lead counts
 - get_hot_leads: Urgent leads needing follow up
@@ -6341,7 +6341,14 @@ app.post(
 
     const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(String(req.body ?? ""), "utf8");
     const signature = String(req.headers["x-zernio-signature"] ?? "");
-    if (!verifyZernioSignature(raw, signature)) {
+    /* Account workers receive webhooks from the isolation gateway after the
+       parent already verified the HMAC. Trust that only on loopback with a
+       valid account-bridge token — never from the public internet. */
+    const gatewayVerified =
+      Boolean(tenantOwner()) &&
+      String(req.headers["x-zernio-gateway-verified"] || "") === "1" &&
+      Boolean(accountBridgeUser(req));
+    if (!gatewayVerified && !verifyZernioSignature(raw, signature)) {
       marcoLog("inbound_rejected", { reason: "zernio_bad_signature" });
       res.status(401).json({ ok: false, error: "Bad or missing X-Zernio-Signature" });
       return;
@@ -6379,6 +6386,37 @@ app.post(
          something we have correctly decided to ignore. */
       res.status(200).json({ ok: true, ignored: true });
       return;
+    }
+
+    /* On the isolation gateway, deliver into the owner whose Zernio TikTok
+       account id matches the event — Marco and Wesley each keep their own
+       leads/DMs. Workers re-verify the signature with their own secret. */
+    try {
+      const { isTenantGateway } = await import("./core/tenantData.js");
+      const { zernioSecretsForTikTokAccount } = await import("./core/zernioOwnerConfig.js");
+      const { forwardZernioWebhookToOwner } = await import("./core/tenantGateway.js");
+      if (isTenantGateway()) {
+        const ownerSecrets = zernioSecretsForTikTokAccount(evt.accountId);
+        if (ownerSecrets?.ownerUserId) {
+          res.status(200).json({ ok: true, routed: ownerSecrets.ownerSlug });
+          void forwardZernioWebhookToOwner(ownerSecrets.ownerUserId, raw, signature)
+            .then((fwd) => {
+              if (fwd.status >= 400) {
+                console.error(
+                  "[zernio] account worker rejected forwarded webhook:",
+                  fwd.status,
+                  fwd.body.slice(0, 300),
+                );
+              }
+            })
+            .catch((err) =>
+              console.error("[zernio] forward to account worker failed:", err),
+            );
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("[zernio] owner routing failed; processing on this process:", err);
     }
 
     if (isDuplicateHandle(evt.eventId)) {
@@ -6489,8 +6527,11 @@ app.get("/api/zernio/status", async (req, res) => {
   }
   const { isZernioDmConfigured, zernioWebhookSecretConfigured, zernioAccounts, zernioTikTokAccountId } =
     await import("./integrations/zernio/dm.js");
+  const { currentZernioSecrets } = await import("./core/zernioOwnerConfig.js");
   const accounts = await zernioAccounts();
+  const secrets = currentZernioSecrets();
   res.json({
+    owner: secrets.ownerSlug,
     apiKeyConfigured: isZernioDmConfigured(),
     webhookSecretConfigured: zernioWebhookSecretConfigured(),
     tiktokAccountId: zernioTikTokAccountId() || null,
@@ -12124,9 +12165,9 @@ app.get("/knowledge", requireAuthPage, (_req, res) => {
 });
 
 /* ——— 5. Social analytics ———
-   Per-platform metrics plus a combined roll-up. TikTok is live from the
-   existing Apify pull; the other platforms report `not_connected` until
-   ZERNIO_API_KEY is set. Nothing here fabricates a number. */
+   Per-platform metrics plus a combined roll-up. TikTok is live from Zernio
+   for the signed-in account; other platforms report `not_connected` until
+   that Zernio profile has them linked. Nothing here fabricates a number. */
 
 app.get("/api/analytics/social", async (_req, res) => {
   try {

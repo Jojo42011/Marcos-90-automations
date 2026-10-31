@@ -136,15 +136,24 @@ async function staticChecks() {
   check("VA opener carried as marcoPreviousOutbound", mapped.marcoPreviousOutbound === "Hey, saw your comment!");
   check("listingRef is null (TikTok DMs carry no post context)", mapped.listingRef === null);
 
-  // The env-var separation that keeps analytics from self-arming
+  // Analytics and DMs share the account's Zernio key (ZERNIO_DM_API_KEY /
+  // WESLEY_ZERNIO_DM_API_KEY). Both surfaces arm together for that owner.
   const analytics = await import("../dist/src/integrations/zernio/index.js");
+  check(
+    "DM key also arms the analytics client for this account",
+    dm.isZernioDmConfigured() === true && analytics.isZernioConfigured() === true,
+  );
   const savedDm = process.env.ZERNIO_DM_API_KEY;
+  const savedApi = process.env.ZERNIO_API_KEY;
+  delete process.env.ZERNIO_DM_API_KEY;
   delete process.env.ZERNIO_API_KEY;
   check(
-    "DM key does NOT arm the separate analytics client",
-    dm.isZernioDmConfigured() === true && analytics.isZernioConfigured() === false,
+    "clearing the account key disarms both DM and analytics",
+    dm.isZernioDmConfigured() === false && analytics.isZernioConfigured() === false,
   );
   process.env.ZERNIO_DM_API_KEY = savedDm;
+  if (savedApi !== undefined) process.env.ZERNIO_API_KEY = savedApi;
+  else delete process.env.ZERNIO_API_KEY;
 }
 
 // ──────────────────────────── LIVE ────────────────────────────

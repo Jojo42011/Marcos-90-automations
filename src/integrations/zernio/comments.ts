@@ -25,11 +25,12 @@
  * 48-hour window the DM agent replies inside.
  */
 import { randomUUID } from "crypto";
+import { currentZernioSecrets } from "../../core/zernioOwnerConfig.js";
 
 const ZERNIO_API_BASE = "https://zernio.com/api/v1";
 
 function apiKey(): string {
-  return process.env.ZERNIO_DM_API_KEY?.trim() ?? "";
+  return currentZernioSecrets().apiKey;
 }
 
 function str(v: unknown): string | null {

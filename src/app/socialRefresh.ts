@@ -9,9 +9,9 @@ export function getTikTokUsernameFromEnv(): string {
   return getTikTokUsername();
 }
 
-/** Fetch from Apify, score, persist, return dashboard payload. */
+/** Fetch from Zernio, score, persist, return dashboard payload. */
 export async function refreshSocialTikTokData(): Promise<SocialDashboardData> {
-  console.log(`[social] Apify pull starting for @${getTikTokUsername()}`);
+  console.log(`[social] Zernio pull starting for @${getTikTokUsername()}`);
   await runSocialMediaAgent();
   return getLatestSocialDashboardData();
 }

@@ -82,10 +82,9 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # ZERNIO_API_KEY=
 # ZERNIO_BASE_URL=https://api.zernio.com
 
-# TikTok DMs — the Zernio inbox transport that replaced ManyChat on that channel.
-# Deliberately a DIFFERENT variable from ZERNIO_API_KEY above (the value is the
-# same Zernio key) so that turning on TikTok DMs cannot silently arm the unrelated
-# analytics client. Unset = /api/zernio/webhook returns 503 and TikTok DMs are dark.
+# TikTok DMs + analytics — Zernio inbox/analytics for Marco (default ZERNIO_*).
+# Same key value powers DMs and analytics for that owner. Unset =
+# /api/zernio/webhook returns 503 and TikTok DMs/analytics for Marco are dark.
 # ZERNIO_DM_API_KEY=
 # Shared secret for verifying X-Zernio-Signature (HMAC-SHA256 over the raw body).
 # We choose it and register the same value on the Zernio webhook; Zernio never
@@ -93,6 +92,12 @@ TWILIO_WEBHOOK_AUTH_TOKEN=
 # ZERNIO_WEBHOOK_SECRET=
 # Zernio account id for Marco's TikTok (@puga.realtor). Needed on every send.
 # ZERNIO_TIKTOK_ACCOUNT_ID=
+#
+# Wesley's Zernio profile (copied from wesley-dm-ai Fly secrets onto this host).
+# Injected into Wesley's account worker only — never shared with Marco's worker.
+# WESLEY_ZERNIO_DM_API_KEY=
+# WESLEY_ZERNIO_WEBHOOK_SECRET=
+# WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID=
 
 # Public website lead form → CRM. Same pattern as Mojo: refuse when unset,
 # constant-time secret compare, quiet create/enrich, source "Website".

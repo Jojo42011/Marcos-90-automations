@@ -6,25 +6,12 @@ import { messageWithVideoReference } from "../../videoKnowledge/references.js";
  * DM funnel with it. Zernio added TikTok inbox support on 2026-09-10/11 and is
  * the only thing available that can both receive a TikTok DM and reply to one.
  *
- * WHY THIS IS `dm.ts` AND NOT `index.ts`, which is the trap here: `index.ts` in
- * this folder is ALREADY a different Zernio client — a social-analytics stub
- * consumed by `core/socialAnalytics.ts`. Same vendor, unrelated surface. The two
- * must not be merged, and in particular they must not share an env var:
- *
- *   · That analytics client arms itself on `ZERNIO_API_KEY` and then calls
- *     `https://api.zernio.com/v1/analytics/{platform}` — a host and a path shape
- *     that do not match Zernio's real API (`https://zernio.com/api/v1`). It was
- *     written against guessed field names before anyone had a key or the docs,
- *     and says so in its own header.
- *   · So setting `ZERNIO_API_KEY` would flip the Instagram/Facebook/YouTube tiles
- *     on the analytics page from the honest "Waiting on the Zernio connection"
- *     to a red "Zernio request failed", purely as a side effect of turning on
- *     TikTok DMs.
- *
- * Hence `ZERNIO_DM_API_KEY`. The VALUE is the same Zernio key; the separate name
- * is what keeps one feature from silently arming another. Wiring the analytics
- * client up properly is now possible (we have the docs) but it is a separate
- * decision with its own verification, not a side effect of this change.
+ * WHY THIS IS `dm.ts` AND NOT `index.ts`: `index.ts` in this folder is the
+ * Zernio analytics client (TikTok account insights + post roll-ups) used by
+ * `core/socialAnalytics.ts`. Same vendor and the same API key value, but a
+ * different surface — inbox send/receive vs analytics reads. Keep the modules
+ * separate. Account workers receive the owner-scoped key as `ZERNIO_DM_API_KEY`
+ * (Marco from `ZERNIO_*`, Wesley from `WESLEY_ZERNIO_*` via zernioOwnerConfig).
  *
  * THE ONE ARCHITECTURAL DIFFERENCE FROM MANYCHAT, and it is the whole file.
  * ManyChat CALLED US and sent whatever we returned in the HTTP response body —
@@ -71,6 +58,7 @@ import { createHmac, timingSafeEqual, randomUUID } from "crypto";
 import type { IncomingWebhookPayload } from "../../core/types.js";
 
 import { readConversationHistory } from "./history.js";
+import { allZernioOwnerSecrets, currentZernioSecrets } from "../../core/zernioOwnerConfig.js";
 
 const ZERNIO_API_BASE = "https://zernio.com/api/v1";
 
@@ -78,16 +66,16 @@ const ZERNIO_API_BASE = "https://zernio.com/api/v1";
 export const ZERNIO_ACK_BUDGET_MS = 5000;
 
 function apiKey(): string {
-  return process.env.ZERNIO_DM_API_KEY?.trim() ?? "";
+  return currentZernioSecrets().apiKey;
 }
 
 function webhookSecret(): string {
-  return process.env.ZERNIO_WEBHOOK_SECRET?.trim() ?? "";
+  return currentZernioSecrets().webhookSecret || process.env.ZERNIO_WEBHOOK_SECRET?.trim() || "";
 }
 
 /** The Zernio account id for Marco's TikTok, needed on every send and read. */
 export function zernioTikTokAccountId(): string {
-  return process.env.ZERNIO_TIKTOK_ACCOUNT_ID?.trim() ?? "";
+  return currentZernioSecrets().tiktokAccountId;
 }
 
 export function isZernioDmConfigured(): boolean {
@@ -95,7 +83,7 @@ export function isZernioDmConfigured(): boolean {
 }
 
 export function zernioWebhookSecretConfigured(): boolean {
-  return Boolean(webhookSecret());
+  return Boolean(currentZernioSecrets().webhookSecret || process.env.WESLEY_ZERNIO_WEBHOOK_SECRET?.trim());
 }
 
 /**
@@ -108,21 +96,23 @@ export function zernioWebhookSecretConfigured(): boolean {
  * delivery. That is why the route mounts `express.raw` and parses afterwards.
  */
 export function verifyZernioSignature(rawBody: Buffer | string, signature: string): boolean {
-  const secret = webhookSecret();
-  if (!secret) return false;
   const provided = signature?.trim().toLowerCase();
   if (!provided) return false;
-
-  const expected = createHmac("sha256", secret)
-    .update(typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody)
-    .digest("hex");
-
-  const a = Buffer.from(expected, "utf8");
+  const body = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
+  const secrets = new Set(
+    [...allZernioOwnerSecrets(), currentZernioSecrets()]
+      .map((s) => s.webhookSecret)
+      .filter(Boolean),
+  );
+  if (webhookSecret()) secrets.add(webhookSecret());
+  if (!secrets.size) return false;
   const b = Buffer.from(provided, "utf8");
-  /* timingSafeEqual throws on a length mismatch, which would leak the expected
-     length through the error path, so compare lengths first. */
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  for (const secret of secrets) {
+    const expected = createHmac("sha256", secret).update(body).digest("hex");
+    const a = Buffer.from(expected, "utf8");
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+  }
+  return false;
 }
 
 /** The subset of Zernio's `message.received` payload this integration reads. */

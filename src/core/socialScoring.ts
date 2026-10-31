@@ -6,7 +6,7 @@ import type {
   TikTokVideoNormalized,
   VideoScoreBreakdown,
   VideoTier,
-} from "./types.js";
+} from "./socialTypes.js";
 
 const STOPWORDS = new Set([
   "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",

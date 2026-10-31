@@ -28,7 +28,7 @@ Existing owner IDs and Work records remain in place. Startup contains one-time r
 
 The allowlist in src/core/tenantGateway.ts shares model infrastructure, Composio and SimplyRETS configuration. Other parent business credentials are not inherited. Workers use a private internal capability for CRM calls; Carlos's combined bridge goes through the gateway.
 
-The parent owns ManyChat POST/OPTIONS /webhook and signed Zernio POST /api/zernio/webhook independently of dashboard sessions. Shared DM/comment consoles require authorized access. Other legacy webhooks and unscoped machine integrations do not receive a personal account implicitly.
+The parent owns ManyChat POST/OPTIONS /webhook and signed Zernio POST /api/zernio/webhook independently of dashboard sessions. Inbound Zernio DM events are routed to Marco or Wesley's account worker by matching `account.accountId` to `ZERNIO_TIKTOK_ACCOUNT_ID` / `WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID`. DM conversations/stats and social analytics are account-local. Comment-agent and video-knowledge consoles remain shared parent services and require authorized access. Other legacy webhooks and unscoped machine integrations do not receive a personal account implicitly.
 
 Account workers force HARVEY_EXEC_MODE=off. This is application-level separation on a shared host, not independent OS sandboxes.
 

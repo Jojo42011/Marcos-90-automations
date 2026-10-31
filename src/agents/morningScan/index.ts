@@ -5,7 +5,6 @@ import {
   saveMorningScanResult,
   logAgentPull,
 } from "../../core/socialStore.js";
-import { fetchTikTokComments } from "../../integrations/apify/index.js";
 import { generateCommentReply } from "../commentReply/index.js";
 import { saveReportingSnapshot } from "../reporting/index.js";
 
@@ -49,52 +48,13 @@ async function fetchOvernightComments(): Promise<{
   comments: Array<{ text: string; authorUsername: string; postId: string }>;
   fetchError?: string;
 }> {
-  const token =
-    process.env.APIFY_API_TOKEN?.trim() || process.env.APIFY_API_KEY?.trim() || "";
-  if (!token) {
-    console.warn("[MorningScan] No Apify token — skipping comment fetch");
-    return { comments: [] };
-  }
-
+  /* Apify comment scraping was removed. TikTok comments arrive through the
+     Zernio comment.received webhook into the comment agent; this morning scan
+     no longer scrapes. Keep the shape so intent/reporting still run on any
+     in-memory leftovers the caller already has. */
   try {
-    const data = getLatestSocialDashboardData();
-    const username = tikTokUsername();
-    const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
-
-    const recentVideos = (data.videos || []).filter((v) => {
-      const postedAt = new Date(v.postedAt || 0).getTime();
-      return postedAt >= threeDaysAgo;
-    });
-
-    if (recentVideos.length === 0) {
-      console.log("[MorningScan] No recent videos to check comments on");
-      return { comments: [] };
-    }
-
-    const postURLs = recentVideos.map(
-      (v) =>
-        v.url ||
-        `https://www.tiktok.com/@${username}/video/${v.id}`,
-    );
-
-    const sinceTime = Date.now() - 24 * 60 * 60 * 1000;
-    const fetched = await fetchTikTokComments(postURLs, sinceTime);
-
-    const comments = fetched.map((c) => ({
-      text: c.text,
-      authorUsername: c.authorUsername,
-      postId: c.postId,
-    }));
-
-    console.log(
-      "[MorningScan] Fetched",
-      comments.length,
-      "overnight comments from",
-      recentVideos.length,
-      "recent videos",
-    );
-
-    return { comments };
+    console.log("[MorningScan] Comment scrape skipped — Zernio webhook owns TikTok comments");
+    return { comments: [] };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[MorningScan] Comment fetch error:", err);
