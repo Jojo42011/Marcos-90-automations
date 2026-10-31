@@ -27,7 +27,7 @@ Reconciled with master on 2026-10-11. These are source/configuration requirement
 | Brivity contacts | src/integrations/brivity.ts and core/brivityPeople.ts; not a native transaction sync |
 | Transaction imports | CSV import and optional TRANSACTIONS_SHEET_URL |
 | Voice | ElevenLabs STT with Deepgram fallback; TTS routing in src/hull/voice; VoxCPM is a separate service |
-| Social analytics/research | Apify/Zernio clients and their configured accounts |
+| Social analytics/research | Zernio clients and their configured accounts (Marco ZERNIO_*, Wesley WESLEY_ZERNIO_*) |
 | Ads reporting | AD_DASHBOARD_BASE_URL and optional API key; no campaign-write implementation |
 
 ## Account isolation

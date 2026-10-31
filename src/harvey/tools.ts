@@ -270,7 +270,7 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_social_summary",
     description:
-      "Get Marco's TikTok social media performance summary including views, engagement, content patterns, and week-over-week trends. Use when Marco asks about his content, TikTok performance, social media stats, or how his videos are doing.",
+      "Get this account's TikTok social media performance summary (Zernio-backed) including views, engagement, content patterns, and week-over-week trends. Use when the user asks about content, TikTok performance, social media stats, or how videos are doing.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
@@ -816,15 +816,23 @@ export async function executeHarveyTool(
     }
     case "get_social_summary": {
       const summary = getSocialSummaryForHarvey() as Record<string, unknown>;
-      const stats = summary.stats as Record<string, unknown> | undefined;
-      const profile = summary.profile as Record<string, unknown> | undefined;
-      console.log("[Harvey Tools] get_social_summary result:");
-      console.log("  dataAvailable:", summary.dataAvailable);
-      console.log("  avgViews:", stats?.avgViewsPerVideo ?? summary.avg_views);
-      console.log("  followers:", profile?.followers ?? summary.follower_count);
-      console.log("  videosTracked:", stats?.videosTracked ?? summary.total_videos);
-      console.log("  pulledAt:", summary.pulledAt ?? summary.fetchedAt);
-      return summary;
+      try {
+        const { getSocialAnalytics } = await import("../core/socialAnalytics.js");
+        const live = await getSocialAnalytics();
+        const tiktok = live.platforms.find((p) => p.id === "tiktok");
+        return {
+          ...summary,
+          liveAnalytics: live,
+          tiktokLive: tiktok || null,
+          source: "zernio",
+          note: "liveAnalytics is the current Zernio pull for this account; older snapshot fields remain for week-over-week context when present.",
+        };
+      } catch (err) {
+        return {
+          ...summary,
+          liveAnalyticsError: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
     case "get_social_videos":
       return getSocialVideosForHarvey(normalized);

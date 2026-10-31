@@ -7,7 +7,7 @@ import type {
   ScoredTikTokVideo,
   TikTokProfileInfo,
   VideoScoreBreakdown,
-} from "../integrations/apify/types.js";
+} from "./socialTypes.js";
 
 const PLATFORM = "tiktok";
 const SCHEMA_VERSION = 4;

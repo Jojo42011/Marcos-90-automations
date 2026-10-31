@@ -1,6 +1,6 @@
 import { proxyAccount, readAccountJson } from "./accountProxy.js";
 import { accountPreferences, saveAccountPreferences } from "./accountPreferences.js";
-import { accountBridgeUser, issueAccountBridge } from "./accountBridge.js";
+import { accountBridgeUser, accountBridgeToken, issueAccountBridge } from "./accountBridge.js";
 import { getInternalBaseUrl } from "./crmApiSurface.js";
 import { accessibleChats, relayChats } from "../harvey/work/chatRelay.js";
 import { importSharedKnowledge } from "./sharedKnowledge.js";
@@ -18,6 +18,7 @@ import type { Request, Response, NextFunction } from "express";
 import { getUsers } from "./users.js";
 import { dataPath, isTenantGateway, tenantOwner } from "./tenantData.js";
 import type { CRMUser } from "./types.js";
+import { zernioEnvForOwner } from "./zernioOwnerConfig.js";
 
 // Share model infrastructure and the requested team MLS feed; other business credentials remain isolated.
 const SHARED_ENV = /^(PATH|Path|SystemRoot|WINDIR|COMSPEC|PATHEXT|HOME|USERPROFILE|LOCALAPPDATA|TEMP|TMP|LANG|TZ|NODE_ENV|PLAYWRIGHT_BROWSERS_PATH|OPENROUTER_[A-Z_]+|ANTHROPIC_[A-Z_]+|OPENAI_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|ELEVENLABS_API_KEY|DEEPGRAM_API_KEY|COMPOSIO_API_KEY|SIMPLYRETS_[A-Z_]+|HARVEY_(MODEL|PUBLIC_URL|SCHEDULE_MODEL|WORKER_ENABLED|BROWSER_ENABLED|BROWSER_EXECUTABLE|VAULT_KEY|PROMPT_CACHE|REQUEST_TIMEOUT_MS)|AETHON_(MODEL|MAX_TOKENS))$/;
@@ -30,6 +31,7 @@ export function tenantEnvironment(owner: string, parent = process.env): NodeJS.P
   writeFileSync(emptyEnv, "");
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) if (SHARED_ENV.test(key)) env[key] = value;
+  Object.assign(env, zernioEnvForOwner(owner, parent));
   // Identity is shared; business stores and in-memory state are not.
   env.SHARED_OPENROUTER_BUDGET_DB_PATH = parent.SHARED_OPENROUTER_BUDGET_DB_PATH || dataPath("openrouter-budget.db");
   env.SHARED_KNOWLEDGE_DB_PATH = parent.SHARED_KNOWLEDGE_DB_PATH || dataPath("shared-knowledge.db");
@@ -64,6 +66,49 @@ function ensureWorker(owner: string): Promise<number> {
   return ready;
 }
 
+/** Forward a verified Zernio webhook body into one account worker's store. */
+export async function forwardZernioWebhookToOwner(
+  ownerUserId: string,
+  raw: Buffer,
+  signature: string,
+): Promise<{ status: number; body: string }> {
+  const port = await ensureWorker(ownerUserId);
+  /* Reuse the bridge token the worker already learned at boot. Issuing a fresh
+     token here only updates the parent Map — the child never sees it, so the
+     forward would arrive unauthenticated for any non-public route. */
+  const bridge = accountBridgeToken(ownerUserId) || issueAccountBridge(ownerUserId);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: "127.0.0.1",
+        port,
+        path: "/api/zernio/webhook",
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": String(raw.length),
+          "x-zernio-signature": signature,
+          "x-account-bridge": bridge,
+          /* Parent already verified the HMAC. The child trusts this only when
+             paired with a valid loopback account-bridge token (see dm webhook). */
+          "x-zernio-gateway-verified": "1",
+        },
+      },
+      (incoming) => {
+        const chunks: Buffer[] = [];
+        incoming.on("data", (c) => chunks.push(c));
+        incoming.on("end", () =>
+          resolve({ status: incoming.statusCode || 500, body: Buffer.concat(chunks).toString("utf8") }),
+        );
+        incoming.on("error", reject);
+      },
+    );
+    req.setTimeout(20000, () => req.destroy(new Error("Account webhook forward timed out")));
+    req.on("error", reject);
+    req.end(raw);
+  });
+}
+
 export function startTenantWorkers(): void {
   if (!isTenantGateway()) return;
   process.env.SHARED_OPENROUTER_BUDGET_DB_PATH ||= dataPath("openrouter-budget.db");
@@ -89,7 +134,10 @@ export function isSharedInbound(method: string, path: string): boolean {
     || method === "OPTIONS" && path === "/webhook";
 }
 export function isSharedAutomationConsole(path: string): boolean {
-  return /^\/api\/(?:dm\/(?:inbound-report|conversations|stats|conversation\/[^/]+)|comment-agent\/(?:status|dry-run|follow-ups)|zernio\/status|video-knowledge|llm\/health)$/.test(path);
+  /* DM conversations/stats are account-local (Marco vs Wesley each have their
+     own Zernio TikTok + lead store). Comment agent / video-knowledge remain a
+     shared parent console until those pipelines are owner-routed the same way. */
+  return /^\/api\/(?:comment-agent\/(?:status|dry-run|follow-ups)|video-knowledge|llm\/health)$/.test(path);
 }
 
 const identityPath = (p: string) => /^\/api\/auth\/(?:login|logout|me|change-password|login-history|audit-log|team(?:\/[^/]+(?:\/reset-password)?)?)$/.test(p)

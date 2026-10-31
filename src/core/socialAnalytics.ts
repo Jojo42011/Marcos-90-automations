@@ -1,23 +1,12 @@
 /**
- * 5 — Social analytics.
+ * Social analytics payload for /analytics and Harvey.
  *
- * One normalised shape per platform, plus a combined roll-up, so the UI can
- * render a tab per platform and an "All platforms" tab off the same data
- * without knowing where any of it came from.
- *
- * THE RULE THIS FILE EXISTS TO ENFORCE: a platform with no data source must
- * never be indistinguishable from a platform with genuinely zero engagement.
- * Every metric is `number | null` — null means "we don't know", 0 means "we
- * asked and the answer is zero" — and every platform carries a `status` and a
- * `source` saying where its numbers came from. The combined tab sums only
- * platforms that actually reported, and names the ones it left out, because a
- * total that silently omits Instagram is a lie by rounding.
- *
- * Today TikTok is real (Apify, via socialStore). The rest arrive when Zernio
- * is connected; until then they report `not_connected`.
+ * TikTok (and any other platform connected on the current account's Zernio
+ * profile) comes from Zernio. Platforms with no connected account stay
+ * `not_connected` — never fabricated zeros.
  */
-import { getLatestSocialDashboardData, getRecentAgentPulls } from "./socialStore.js";
-import { isZernioConfigured, fetchZernioPlatform } from "../integrations/zernio/index.js";
+import { isZernioConfigured, fetchZernioPlatform, type ZernioPlatformStats } from "../integrations/zernio/index.js";
+import { currentZernioSecrets } from "./zernioOwnerConfig.js";
 
 export type PlatformStatus = "live" | "not_connected" | "error" | "unreadable";
 
@@ -25,67 +14,65 @@ export interface PlatformMetrics {
   id: string;
   label: string;
   status: PlatformStatus;
-  /** Where the numbers came from, named for the operator, not the developer. */
   source: string | null;
   lastUpdated: string | null;
-  /** Data older than STALE_AFTER_HOURS — shown, but flagged. */
   stale: boolean;
   note: string | null;
+  accountUsername: string | null;
   followers: number | null;
   posts: number | null;
   views: number | null;
   likes: number | null;
   comments: number | null;
   shares: number | null;
+  saves: number | null;
+  reach: number | null;
+  profileViews: number | null;
+  followsFromPosts: number | null;
   avgViews: number | null;
-  /** (likes + comments + shares) / views, as a percentage. */
   engagementRate: number | null;
   topPost: { url: string | null; caption: string | null; views: number | null } | null;
-  /** Performance mix, where the source scores individual posts. */
   mix: { viral: number; hot: number; average: number; cold: number } | null;
-  /** The scheduled refresh ran and errored — the numbers are frozen, and
-   *  pressing Refresh will fail the same way. */
-  refreshFailing?: boolean;
-  lastAttempt?: { at: string; ok: boolean; detail: string } | null;
+  recentPosts: Array<{
+    id: string;
+    url: string | null;
+    caption: string | null;
+    publishedAt: string | null;
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    saves: number;
+  }>;
 }
 
-export interface CombinedMetrics extends Omit<PlatformMetrics, "id" | "label" | "topPost" | "mix"> {
+export interface CombinedMetrics extends Omit<PlatformMetrics, "id" | "label" | "topPost" | "mix" | "recentPosts" | "accountUsername"> {
   id: "all";
   label: "All platforms";
-  /** Platforms whose numbers are in these totals. */
   included: string[];
-  /** Platforms deliberately excluded, and why — surfaced in the UI. */
   excluded: { label: string; reason: string }[];
   topPost: { url: string | null; caption: string | null; views: number | null; platform: string } | null;
+  recentPosts: PlatformMetrics["recentPosts"];
+  accountUsername: null;
 }
 
 export interface AnalyticsPayload {
   platforms: PlatformMetrics[];
   combined: CombinedMetrics;
-  zernio: { configured: boolean };
+  zernio: { configured: boolean; owner: string; tiktokAccountId: string | null };
   generatedAt: string;
 }
 
-const STALE_AFTER_HOURS = 48;
-
-/** Platforms the app claims to cover. TikTok is wired; the rest await Zernio. */
-const ZERNIO_PLATFORMS: { id: string; label: string }[] = [
+const PLATFORMS: { id: string; label: string }[] = [
+  { id: "tiktok", label: "TikTok" },
   { id: "instagram", label: "Instagram" },
   { id: "facebook", label: "Facebook" },
   { id: "youtube", label: "YouTube" },
 ];
 
-function hoursSince(iso: string | null): number | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return null;
-  return (Date.now() - t) / 3_600_000;
-}
-
 function engagement(likes: number | null, comments: number | null, shares: number | null, views: number | null): number | null {
   if (views == null || views <= 0) return null;
-  const interactions = (likes || 0) + (comments || 0) + (shares || 0);
-  return Math.round((interactions / views) * 10000) / 100;
+  return Math.round((((likes || 0) + (comments || 0) + (shares || 0)) / views) * 10000) / 100;
 }
 
 function emptyPlatform(id: string, label: string, note: string): PlatformMetrics {
@@ -96,124 +83,45 @@ function emptyPlatform(id: string, label: string, note: string): PlatformMetrics
     lastUpdated: null,
     stale: false,
     note,
+    accountUsername: null,
     followers: null, posts: null, views: null, likes: null, comments: null, shares: null,
-    avgViews: null, engagementRate: null, topPost: null, mix: null,
+    saves: null, reach: null, profileViews: null, followsFromPosts: null,
+    avgViews: null, engagementRate: null, topPost: null, mix: null, recentPosts: [],
   };
 }
 
-/**
- * The most recent attempt to refresh TikTok, successful or not.
- *
- * Exists because "stale" on its own is a dead end. The nightly pull IS
- * scheduled and IS running — it had been failing every night for thirteen days
- * with Apify's "Monthly usage hard limit exceeded", and nothing anywhere said
- * so. The page told the operator to hit Refresh in Content Manager, which
- * could only ever fail the same way. A stale figure whose cause is invisible
- * sends someone to press a button that cannot work.
- */
-function lastRefreshAttempt(): { at: string; ok: boolean; detail: string } | null {
-  let pulls;
-  try {
-    pulls = getRecentAgentPulls(40);
-  } catch {
-    return null;
+function mixFromPosts(posts: ZernioPlatformStats["postsDetail"]): PlatformMetrics["mix"] {
+  if (!posts.length) return null;
+  const avg = posts.reduce((s, p) => s + p.views, 0) / posts.length;
+  let viral = 0, hot = 0, average = 0, cold = 0;
+  for (const p of posts) {
+    if (p.views >= avg * 3) viral++;
+    else if (p.views >= avg * 1.5) hot++;
+    else if (p.views >= avg * 0.5) average++;
+    else cold++;
   }
-  const last = (pulls || []).find((p) => p.pullType === "social_refresh");
-  if (!last) return null;
-  return {
-    at: last.pulledAt,
-    ok: last.status === "success",
-    detail: String(last.summary || "").replace(/^Failed:\s*/i, "").trim(),
-  };
+  return { viral, hot, average, cold };
 }
 
-/** TikTok, from the existing Apify pull. This is the one live source today. */
-export function tiktokMetrics(): PlatformMetrics {
-  let data;
-  try {
-    data = getLatestSocialDashboardData();
-  } catch (err) {
-    return {
-      ...emptyPlatform("tiktok", "TikTok", `Couldn't read the TikTok store: ${err instanceof Error ? err.message : String(err)}`),
-      status: "error",
-    };
-  }
-
-  const s = data.summary;
-  const hasAny = Boolean(data.lastUpdated) && (s.totalVideos > 0 || s.totalViews > 0);
-  if (!hasAny) {
-    return emptyPlatform(
-      "tiktok", "TikTok",
-      "No TikTok pull has landed yet. Run a refresh from Content Manager to populate this.",
-    );
-  }
-
-  const age = hoursSince(data.lastUpdated);
-  const top = data.videos && data.videos.length
-    ? data.videos.reduce((a, b) => (b.views > a.views ? b : a))
-    : null;
-
-  /* A failing refresh outranks a plain "it's old" note: the age is the
-     symptom, the failure is the thing someone can act on. */
-  const attempt = lastRefreshAttempt();
-  const attemptNewerThanData =
-    attempt && (!data.lastUpdated || Date.parse(attempt.at) > Date.parse(data.lastUpdated));
-  const stale = age != null && age > STALE_AFTER_HOURS;
-  let note: string | null = null;
-  if (attempt && !attempt.ok && attemptNewerThanData) {
-    note =
-      `The automatic refresh is running but FAILING — last tried ${attempt.at.slice(0, 16).replace("T", " ")} UTC: ` +
-      `"${attempt.detail}". These numbers are frozen until that is fixed; pressing Refresh will hit the same error.`;
-  } else if (stale) {
-    note = `Last pulled ${Math.round((age as number) / 24)} day(s) ago — refresh in Content Manager for current numbers.`;
-  }
-
-  return {
-    id: "tiktok",
-    label: "TikTok",
-    status: "live",
-    source: "Apify pull (Content Manager)",
-    lastUpdated: data.lastUpdated,
-    stale: stale || Boolean(attempt && !attempt.ok && attemptNewerThanData),
-    note,
-    refreshFailing: Boolean(attempt && !attempt.ok && attemptNewerThanData),
-    lastAttempt: attempt,
-    followers: data.snapshot?.followerCount ?? null,
-    posts: s.totalVideos,
-    views: s.totalViews,
-    likes: s.totalLikes,
-    comments: s.totalComments,
-    shares: s.totalShares,
-    avgViews: s.avgViews,
-    engagementRate: engagement(s.totalLikes, s.totalComments, s.totalShares, s.totalViews),
-    topPost: top
-      ? { url: top.url || null, caption: top.caption || null, views: top.views ?? null }
-      : data.snapshot?.topVideoUrl
-        ? { url: data.snapshot.topVideoUrl, caption: data.snapshot.topVideoCaption, views: data.snapshot.topVideoViews }
-        : null,
-    mix: {
-      viral: s.viralCount || 0,
-      hot: s.hotCount || 0,
-      average: s.averageCount || 0,
-      cold: s.coldCount || 0,
-    },
-  };
-}
-
-/** One Zernio-backed platform. Never throws; a dead provider is a status. */
-async function zernioMetrics(id: string, label: string): Promise<PlatformMetrics> {
+async function platformMetrics(id: string, label: string): Promise<PlatformMetrics> {
   if (!isZernioConfigured()) {
-    return emptyPlatform(id, label, "Waiting on the Zernio connection — no data source for this platform yet.");
+    return emptyPlatform(id, label, "Waiting on the Zernio connection — set this account's Zernio API key to load analytics.");
   }
   const r = await fetchZernioPlatform(id);
   if (!r.ok) {
-    return { ...emptyPlatform(id, label, r.error || "Zernio request failed."), status: "error", source: "Zernio" };
+    const missingAccount = /no .+ account is connected/i.test(r.error || "");
+    return {
+      ...emptyPlatform(id, label, r.error || "Zernio request failed."),
+      status: missingAccount ? "not_connected" : "error",
+      source: "Zernio",
+    };
   }
   if (r.unmapped) {
     return {
-      ...emptyPlatform(id, label, "Zernio replied but none of its fields were recognised — the response mapping needs updating (see src/integrations/zernio)."),
+      ...emptyPlatform(id, label, "Zernio replied but returned no readable metrics for this platform yet."),
       status: "unreadable",
       source: "Zernio",
+      accountUsername: r.accountUsername || null,
     };
   }
   const st = r.stats!;
@@ -224,27 +132,35 @@ async function zernioMetrics(id: string, label: string): Promise<PlatformMetrics
     lastUpdated: new Date().toISOString(),
     stale: false,
     note: null,
+    accountUsername: r.accountUsername || null,
     followers: st.followers,
     posts: st.posts,
     views: st.views,
     likes: st.likes,
     comments: st.comments,
     shares: st.shares,
-    avgViews: st.views != null && st.posts ? Math.round(st.views / st.posts) : null,
+    saves: st.saves,
+    reach: st.reach,
+    profileViews: st.profileViews,
+    followsFromPosts: st.followsFromPosts,
+    avgViews: st.views != null && st.posts ? Math.round(st.views / Math.max(1, st.posts)) : null,
     engagementRate: engagement(st.likes, st.comments, st.shares, st.views),
-    topPost: null,
-    mix: null,
+    topPost: st.topPost,
+    mix: mixFromPosts(st.postsDetail),
+    recentPosts: st.postsDetail.slice(0, 25).map((p) => ({
+      id: p.id,
+      url: p.url,
+      caption: p.caption,
+      publishedAt: p.publishedAt,
+      views: p.views,
+      likes: p.likes,
+      comments: p.comments,
+      shares: p.shares,
+      saves: p.saves,
+    })),
   };
 }
 
-/**
- * Roll every platform into one view.
- *
- * Only `live` platforms are summed. Everything skipped is listed in
- * `excluded` with its reason so the UI can say plainly what the total does and
- * doesn't cover — "1.2M views across TikTok only" is useful; "1.2M views"
- * implying all channels is not.
- */
 function combine(platforms: PlatformMetrics[]): CombinedMetrics {
   const live = platforms.filter((p) => p.status === "live");
   const excluded = platforms
@@ -286,27 +202,37 @@ function combine(platforms: PlatformMetrics[]): CombinedMetrics {
         ? `Totals cover ${live.map((p) => p.label).join(", ")} only. ${excluded.map((e) => e.label).join(", ")} ${excluded.length === 1 ? "is" : "are"} not included.`
         : null
       : "No platform is reporting yet, so there is nothing to roll up.",
+    accountUsername: null,
     followers: sum((p) => p.followers),
     posts,
     views,
     likes,
     comments,
     shares,
-    avgViews: views != null && posts ? Math.round(views / posts) : null,
+    saves: sum((p) => p.saves),
+    reach: sum((p) => p.reach),
+    profileViews: sum((p) => p.profileViews),
+    followsFromPosts: sum((p) => p.followsFromPosts),
+    avgViews: views != null && posts ? Math.round(views / Math.max(1, posts)) : null,
     engagementRate: engagement(likes, comments, shares, views),
     included: live.map((p) => p.label),
     excluded,
     topPost: top,
+    recentPosts: live.flatMap((p) => p.recentPosts).sort((a, b) => b.views - a.views).slice(0, 25),
   };
 }
 
 export async function getSocialAnalytics(): Promise<AnalyticsPayload> {
-  const others = await Promise.all(ZERNIO_PLATFORMS.map((p) => zernioMetrics(p.id, p.label)));
-  const platforms = [tiktokMetrics(), ...others];
+  const secrets = currentZernioSecrets();
+  const platforms = await Promise.all(PLATFORMS.map((p) => platformMetrics(p.id, p.label)));
   return {
     platforms,
     combined: combine(platforms),
-    zernio: { configured: isZernioConfigured() },
+    zernio: {
+      configured: isZernioConfigured(),
+      owner: secrets.ownerSlug,
+      tiktokAccountId: secrets.tiktokAccountId || null,
+    },
     generatedAt: new Date().toISOString(),
   };
 }

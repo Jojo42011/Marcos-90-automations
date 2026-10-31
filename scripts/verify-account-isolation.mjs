@@ -27,13 +27,20 @@ writeFileSync(join(root,'marco-tasks.json'),JSON.stringify([{id:'legacy-personal
 
 const work = require('../dist/src/harvey/work/store.js');
 const { tenantEnvironment } = require('../dist/src/core/tenantGateway.js');
-const isolatedEnv = tenantEnvironment('marco', { ...process.env, BRIVITY_API_KEY:'must-not-copy', GMAIL_REFRESH_TOKEN:'must-not-copy', DB_JSON_PATH:join(root,'private-legacy.json'), HARVEY_PUBLIC_URL:'https://example.invalid' });
+const isolatedEnv = tenantEnvironment('marco', { ...process.env, BRIVITY_API_KEY:'must-not-copy', GMAIL_REFRESH_TOKEN:'must-not-copy', DB_JSON_PATH:join(root,'private-legacy.json'), HARVEY_PUBLIC_URL:'https://example.invalid', ZERNIO_DM_API_KEY:'marco-zernio-key', ZERNIO_WEBHOOK_SECRET:'marco-hook', ZERNIO_TIKTOK_ACCOUNT_ID:'marco-tt', WESLEY_ZERNIO_DM_API_KEY:'wesley-zernio-key', WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-hook', WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-tt' });
 assert.equal(isolatedEnv.BRIVITY_API_KEY,undefined);assert.equal(isolatedEnv.GMAIL_REFRESH_TOKEN,undefined);assert.equal(isolatedEnv.DB_JSON_PATH,undefined);
 assert.equal(isolatedEnv.HARVEY_PUBLIC_URL,'https://example.invalid');
-const wesleyBudgetEnv=tenantEnvironment('wesley',{...process.env,AI_USAGE_DB_PATH:'/private-must-not-share'});
+assert.equal(isolatedEnv.ZERNIO_DM_API_KEY,'marco-zernio-key');
+assert.equal(isolatedEnv.ZERNIO_TIKTOK_ACCOUNT_ID,'marco-tt');
+assert.equal(isolatedEnv.WESLEY_ZERNIO_DM_API_KEY,'');
+const wesleyBudgetEnv=tenantEnvironment('wesley',{...process.env,AI_USAGE_DB_PATH:'/private-must-not-share', ZERNIO_DM_API_KEY:'marco-zernio-key', ZERNIO_WEBHOOK_SECRET:'marco-hook', ZERNIO_TIKTOK_ACCOUNT_ID:'marco-tt', WESLEY_ZERNIO_DM_API_KEY:'wesley-zernio-key', WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-hook', WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-tt'});
 assert.equal(isolatedEnv.SHARED_OPENROUTER_BUDGET_DB_PATH,join(root,'openrouter-budget.db'));
 assert.equal(isolatedEnv.SHARED_OPENROUTER_BUDGET_DB_PATH,wesleyBudgetEnv.SHARED_OPENROUTER_BUDGET_DB_PATH);
 assert.notEqual(isolatedEnv.TENANT_DATA_ROOT,wesleyBudgetEnv.TENANT_DATA_ROOT);assert.equal(wesleyBudgetEnv.AI_USAGE_DB_PATH,undefined);
+assert.equal(wesleyBudgetEnv.ZERNIO_DM_API_KEY,'wesley-zernio-key');
+assert.equal(wesleyBudgetEnv.ZERNIO_WEBHOOK_SECRET,'wesley-hook');
+assert.equal(wesleyBudgetEnv.ZERNIO_TIKTOK_ACCOUNT_ID,'wesley-tt');
+assert.equal(wesleyBudgetEnv.WESLEY_ZERNIO_DM_API_KEY,'wesley-zernio-key');
 const retainedAccountTeam=JSON.stringify({chats:[{id:'retained-account-message',from:'marco',to:'carlos',text:'Keep account message',at:'2026-09-02T00:00:00Z'}],notifications:[],dueNotified:[]});
 writeFileSync(join(isolatedEnv.TENANT_DATA_ROOT,'team.json'),retainedAccountTeam);
 work.lockChat('unrelated-owner','unrelated-chat');
@@ -53,7 +60,7 @@ if(url.hostname==='zernio.com'&&url.pathname==='/api/v1/inbox/conversations/fixt
 }throw new Error('Unexpected external request blocked by fixture: '+url.hostname);};`);
 let server, logs='';
 function start(){
- server=spawn(process.execPath,['--require',transport,'dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_DM_API_KEY:'fixture-only',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
+ server=spawn(process.execPath,['--require',transport,'dist/src/server.js'],{env:{...env,TENANT_DATA_ROOT:root,PORT:String(port),ACCOUNT_ISOLATION:'true',SITE_LOGIN_ENABLED:'1',ZERNIO_DM_API_KEY:'fixture-only',ZERNIO_WEBHOOK_SECRET:'fixture-hook-secret',ZERNIO_TIKTOK_ACCOUNT_ID:'marco-social',WESLEY_ZERNIO_DM_API_KEY:'wesley-fixture-only',WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-fixture-hook',WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-social',COMMENT_AGENT_ENABLED:'false',HARVEY_WORKER_ENABLED:'false',DOTENV_CONFIG_PATH:join(root,'.missing-env')},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
  server.on('exit',(code,signal)=>{logs+='\nServer exit '+code+' '+signal;});
  server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
 }
@@ -145,11 +152,16 @@ try {
  const accepted=await request('/api/zernio/webhook','','POST',hook,{'x-zernio-signature':signature});assert.equal(accepted.status,200);
  for(let i=0;i<50;i++){const status=await request('/api/comment-agent/status',cookies.marco);if(status.data.recent?.some(r=>r.commentId==='shared-comment'||r.comment_id==='shared-comment'))break;await new Promise(r=>setTimeout(r,50));}
  const sharedStatus=await request('/api/comment-agent/status',cookies.marco);assert.equal(sharedStatus.data.enabled,false);assert.equal(sharedStatus.data.recent.length,1);
- for(const u of users){const status=await request('/api/comment-agent/status',cookies[u.id]);assert.deepEqual(status.data.recent,sharedStatus.data.recent);assert.equal((await request('/api/dm/stats',cookies[u.id])).status,200);}
+ for(const u of users){const status=await request('/api/comment-agent/status',cookies[u.id]);assert.deepEqual(status.data.recent,sharedStatus.data.recent);}
+ // DM console is account-local (Marco vs Wesley). Each signed-in user can read their own stats.
+ for(const u of users){assert.equal((await request('/api/dm/stats',cookies[u.id])).status,200);}
+ const marcoDm=await request('/api/dm/stats',cookies.marco);
+ const wesleyDm=await request('/api/dm/stats',cookies.wesley);
+ assert.equal(marcoDm.status,200);assert.equal(wesleyDm.status,200);
  assert.equal((await request('/api/comment-agent/status')).status,401);
  assert.equal((await request('/api/video-knowledge')).status,401);
  assert.equal((await request('/api/video-knowledge','','POST',{action:'approve'})).status,401);
- for(const u of users){const status=await request('/api/video-knowledge',cookies[u.id]);assert.equal(status.status,200);assert.equal(status.data.enabled,false);assert.equal(status.data.accountConfigured,false);}
+ for(const u of users){const status=await request('/api/video-knowledge',cookies[u.id]);assert.equal(status.status,200);assert.equal(status.data.enabled,false);assert.equal(status.data.accountConfigured,true);}
  check('video review stays on the authenticated shared automation service and remains disabled',()=>assert.ok(true));
  assert.equal((await request('/api/zernio/webhook','','POST',hook,{'x-zernio-signature':signature})).data.duplicate,true);
  check('signed comments reach one shared durable service without login; all team consoles agree; invalid signatures and anonymous console reads remain blocked',()=>assert.ok(true));
@@ -199,13 +211,21 @@ try {
  const dmHeaders={'x-zernio-signature':createHmac('sha256','fixture-hook-secret').update(JSON.stringify(dmHook)).digest('hex')};
  const ackStart=Date.now();assert.equal((await request('/api/zernio/webhook','','POST',dmHook,dmHeaders)).status,200);assert(Date.now()-ackStart<5000);
  let sent=[];for(let i=0;i<200;i++){try{sent=readFileSync(sends,'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);if(sent.length)break;}catch{}await new Promise(r=>setTimeout(r,100));}
- assert.equal(sent.length,1,'DM pipeline must actually send a reply');assert.equal(sent[0].body.accountId,'marco-social');assert(sent[0].body.message.trim());assert.equal(sent[0].headers['Idempotency-Key'],'zernio:fixture-marco-event');
- assert.equal((await request('/api/zernio/webhook','','POST',dmHook,dmHeaders)).data.duplicate,true);
+ assert.equal(sent.length,1,'DM pipeline must actually send a reply');assert.equal(sent[0].body.accountId,'marco-social');assert(sent[0].body.message.trim());
+ const sentHeaders=sent[0].headers||{};
+ const idem=sentHeaders['Idempotency-Key']||sentHeaders['idempotency-key'];
+ assert.equal(idem,'zernio:fixture-marco-event');
+ // Gateway ACKs with routed/duplicate without waiting on the account worker; the
+ // durable guard is that a second delivery must not produce a second outbound send.
+ const dup=await request('/api/zernio/webhook','','POST',dmHook,dmHeaders);
+ assert.equal(dup.status,200);assert(dup.data.duplicate===true||dup.data.routed==='marco');
+ await new Promise(r=>setTimeout(r,500));
+ assert.equal(readFileSync(sends,'utf8').trim().split('\n').filter(Boolean).length,1,'duplicate delivery must not send twice');
  const dmThreads=(await request('/api/dm/conversations',cookies.marco)).data.conversations;
  const dmThread=dmThreads.find(c=>c.userId==='fixture-marco-lead');assert(dmThread);assert(dmThread.agentMessages>=1);assert.equal(dmThread.userMessages,1);
  await stop();start();await ready();
  assert((await request('/api/dm/conversations',cookies.marco)).data.conversations.some(c=>c.id===dmThread.id&&c.agentMessages>=1));
- assert.equal(readFileSync(sends,'utf8').trim().split('\n').length,1);
+ assert.equal(readFileSync(sends,'utf8').trim().split('\n').filter(Boolean).length,1);
  check('Marco DM completes signed intake, fast ACK, real pipeline, correct-account send, duplicate protection and persistent history without dashboard login',()=>assert.ok(true));
  if(process.env.TASK_UI_BROWSER==='true') {
    const {chromium}=await import('playwright');

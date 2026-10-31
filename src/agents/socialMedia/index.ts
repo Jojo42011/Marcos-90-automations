@@ -1,55 +1,62 @@
-import {
-  fetchTikTokVideos,
-  scoreVideos,
-  extractContentPatterns,
-} from "../../integrations/apify/index.js";
+/**
+ * Social media refresh — TikTok via Zernio (replaces Apify).
+ */
+import { fetchZernioTikTokVideos } from "../../integrations/zernio/index.js";
+import { scoreVideos, extractContentPatterns } from "../../core/socialScoring.js";
 import {
   upsertSocialPull,
   upsertVideoScore,
-  getSocialRefreshTime,
   getLatestSocialDashboardData,
+  getSocialRefreshTime,
   logAgentPull,
   type SocialDailySnapshot,
 } from "../../core/socialStore.js";
+import { currentZernioSecrets } from "../../core/zernioOwnerConfig.js";
 
 export function getTikTokUsername(): string {
   return (process.env.TIKTOK_USERNAME?.trim() || "puga.realtor").replace(/^@/, "");
 }
 
-function apifyToken(): string {
-  return (
-    process.env.APIFY_API_TOKEN?.trim() ||
-    process.env.APIFY_API_KEY?.trim() ||
-    ""
-  );
-}
-
-/** Pull TikTok via Apify, score, extract patterns, persist snapshot + videos.
- *  Real data only — if APIFY_API_TOKEN is missing we fail loudly rather than
- *  fabricate mock data (the dashboard shows an honest empty state instead). */
+/** Pull TikTok via Zernio, score, persist snapshot + videos. */
 export async function runSocialMediaAgent(): Promise<SocialDailySnapshot> {
-  const startTime = Date.now();
   try {
-    const token = apifyToken();
-    if (!token) {
+    const secrets = currentZernioSecrets();
+    if (!secrets.apiKey) {
       throw new Error(
-        "APIFY_API_TOKEN not set — cannot pull real TikTok data. Set it in the environment; no mock data is used.",
+        "ZERNIO_DM_API_KEY is not set for this account — cannot pull TikTok analytics.",
       );
     }
 
-    const username = getTikTokUsername();
-    const { profile, videos } = await fetchTikTokVideos(username);
+    const fetched = await fetchZernioTikTokVideos();
+    if (!fetched.ok) {
+      throw new Error(fetched.error || "Zernio TikTok pull failed");
+    }
+
+    const username = (fetched.username || getTikTokUsername()).replace(/^@/, "");
+    const videos = fetched.videos.map((v) => ({
+      id: v.id,
+      url: v.url,
+      caption: v.caption,
+      coverUrl: v.coverUrl,
+      postedAt: v.postedAt,
+      views: v.views,
+      likes: v.likes,
+      comments: v.comments,
+      shares: v.shares,
+      saves: v.saves,
+      accountHandle: username,
+    }));
     const scored = scoreVideos(videos);
     const contentPatterns = extractContentPatterns(scored.videos);
     const pulledAt = new Date().toISOString();
 
-    const profileInfo = profile ?? {
+    const profileInfo = {
       username,
       nickname: username,
-      followers: 0,
+      followers: fetched.followers || 0,
       following: 0,
-      heartCount: 0,
-      videoCount: 0,
+      heartCount: scored.videos.reduce((s, v) => s + v.likes, 0),
+      videoCount: scored.videos.length,
       avatar: "",
     };
 
@@ -66,7 +73,7 @@ export async function runSocialMediaAgent(): Promise<SocialDailySnapshot> {
     }
 
     console.log(
-      `[social-agent] Pull complete — ${snapshot.totalVideos} videos, avg ${snapshot.avgViews} views, ${snapshot.hotCount} hot / ${snapshot.averageCount} warm / ${snapshot.coldCount} cold`,
+      `[social-agent] Zernio pull complete — ${snapshot.totalVideos} videos, avg ${snapshot.avgViews} views`,
     );
 
     const data = getLatestSocialDashboardData();
@@ -74,22 +81,25 @@ export async function runSocialMediaAgent(): Promise<SocialDailySnapshot> {
       pulledAt: new Date().toISOString(),
       pullType: "social_refresh",
       status: "success",
-      summary: `Pulled ${data.videos?.length || 0} videos, ${data.profile?.followers || 0} followers from @${data.profile?.username || "unknown"}`,
+      summary: `Pulled ${data.videos?.length || 0} videos, ${data.profile?.followers || 0} followers from @${data.profile?.username || "unknown"} via Zernio`,
       details: {
         videoCount: data.videos?.length || 0,
         followers: data.profile?.followers || 0,
+        source: "zernio",
+        owner: secrets.ownerSlug,
       },
-      durationMs: Date.now() - startTime,
     });
 
     return snapshot;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[social-agent] Zernio pull failed:", message);
     logAgentPull({
       pulledAt: new Date().toISOString(),
       pullType: "social_refresh",
       status: "error",
-      summary: `Failed: ${err instanceof Error ? err.message : String(err)}`,
-      durationMs: Date.now() - startTime,
+      summary: `Failed: ${message}`,
+      details: { source: "zernio" },
     });
     throw err;
   }
