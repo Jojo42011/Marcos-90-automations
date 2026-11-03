@@ -5,10 +5,12 @@
  * Authorization header: `Authorization: <key>`, with no "Bearer " prefix.
  * Quo's own docs call this out explicitly, and sending Bearer fails with 401.
  *
- * WHAT THE ACCOUNT ACTUALLY LOOKS LIKE (measured against the live workspace
- * before any of this was written, because it changes the design):
- *   - one number, "Primary" +1 737 283 4703 (PNo1mCxawI)
- *   - 286 conversations, and the LARGE majority are calls, not texts
+ * WHAT THE ACCOUNT ACTUALLY LOOKS LIKE (measured against the live workspace):
+ *   - three numbers on one API key:
+ *       "Marco 2" +1 210 672 2794 (PNzqkVXjan)
+ *       "Marco"   +1 726 200 1548 (PNNiB7pkjP)
+ *       "Carlos"  +1 737 283 4703 (PNo1mCxawI)
+ *   - hundreds of conversations, and the LARGE majority are calls, not texts
  * That last point is the important one. `GET /v1/conversations` returns call
  * threads and message threads in one list with nothing on the row to tell them
  * apart, so the only way to know a thread has texts is to ask for its messages
