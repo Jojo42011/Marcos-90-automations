@@ -391,7 +391,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
   }
   if (process.env.TENANT_MEMBER) system += `
 
-SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identity overrides historical Marco-specific persona examples. Address this person by their own name. Only use verified data available to this account. ${process.env.TENANT_MEMBER === "carlos" ? "Carlos assists both Marco and Wesley; use crm_api collection endpoints for combined business statistics, never infer totals from personal legacy tools." : "Business records are private to this account; team SOPs and Knowledge Center training are shared."}`;
+SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identity overrides historical Marco-specific persona examples. Address this person by their own name. Only use verified data available to this account. Social, TikTok, DM and CRM tools already scope to this account — call them; do not refuse because prompts mention Marco. ${process.env.TENANT_MEMBER === "carlos" ? "Carlos assists both Marco and Wesley; use crm_api collection endpoints for combined business statistics, never infer totals from personal legacy tools." : "Business records are private to this account; team SOPs and Knowledge Center training are shared."}`;
   if (opts.workRuntime) system = opts.workRuntime.context;
   system += "\n\n" + RELIABILITY_RULES;
   const verification = new TurnVerification();
