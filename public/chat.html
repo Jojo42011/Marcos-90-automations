@@ -293,9 +293,11 @@
       } catch (_) { /* stats are best-effort; inbox still works */ }
     }
 
-    async function loadConversations() {
+    async function loadConversations(opts) {
       try {
-        const res = await fetch(apiUrl("/api/dm/conversations?limit=500"));
+        threadsEl.innerHTML = '<div class="dm-empty">Loading conversations…</div>';
+        const sync = opts && opts.sync ? "&sync=1" : "";
+        const res = await fetch(apiUrl("/api/dm/conversations?limit=500" + sync));
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         convCache = data.conversations || [];
@@ -310,7 +312,8 @@
       const countEl = document.getElementById("dm-count");
       if (countEl) countEl.textContent = totalCount ? "· " + totalCount : "";
       if (!convCache.length) {
-        threadsEl.innerHTML = '<div class="dm-empty">No DM conversations yet.<br>Tap <b>+ New</b> to start one and preview the agent.</div>';
+        threadsEl.innerHTML = '<div class="dm-empty">No DM conversations yet.<br>' +
+          'If this account is connected to Zernio, open Analytics → DM Agent again to pull the inbox, or tap <b>Refresh</b>.</div>';
         return;
       }
       const q = searchQ.trim().toLowerCase();
