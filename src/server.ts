@@ -8534,6 +8534,25 @@ app.get("/api/dm/conversations", async (req, res) => {
   }
   try {
     const { listAllLeads: allLeads, getConversation: getConv } = await import("./core/db.js");
+    const { isZernioDmConfigured } = await import("./integrations/zernio/dm.js");
+    const { syncZernioDmsToStore } = await import("./core/zernioDmSync.js");
+
+    /* If this account's Zernio inbox is connected but the local DM store is
+       empty (e.g. Wesley after keys were copied but history never imported),
+       pull from Zernio once before listing so the tab is not blank. */
+    let sync: Awaited<ReturnType<typeof syncZernioDmsToStore>> | null = null;
+    const forceSync = String(req.query.sync || "") === "1";
+    const existing = await allLeads();
+    let withMessages = 0;
+    for (const lead of existing) {
+      const conv = await getConv(lead.id);
+      if ((conv.messages || []).length) withMessages++;
+      if (withMessages > 0 && !forceSync) break;
+    }
+    if (isZernioDmConfigured() && (forceSync || withMessages === 0)) {
+      sync = await syncZernioDmsToStore({ maxConversations: forceSync ? 300 : 200 });
+    }
+
     const leads = await allLeads();
     const items: Array<Record<string, unknown>> = [];
     for (const lead of leads) {
@@ -8562,7 +8581,28 @@ app.get("/api/dm/conversations", async (req, res) => {
     // Production has hundreds of live threads; cap the payload (newest first)
     // and let the client ask for more. total reflects the uncapped count.
     const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit || "300"), 10) || 300));
-    res.json({ total: items.length, conversations: items.slice(0, limit) });
+    res.json({
+      total: items.length,
+      conversations: items.slice(0, limit),
+      ...(sync ? { zernioSync: sync } : {}),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post("/api/dm/sync-zernio", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!dashboardTokenOk(req)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const { syncZernioDmsToStore } = await import("./core/zernioDmSync.js");
+    const max = Number((req.body || {}).maxConversations);
+    const result = await syncZernioDmsToStore({
+      maxConversations: Number.isFinite(max) ? max : 300,
+    });
+    res.status(result.ok ? 200 : 502).json(result);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

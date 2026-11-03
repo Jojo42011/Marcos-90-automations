@@ -384,3 +384,119 @@ export async function fetchConversationHistory(input: { conversationId: string; 
   if (!apiKey()) return { messages: [], complete: false };
   return readConversationHistory(input, p => zernioFetch(p, { method: "GET" }));
 }
+
+export interface ZernioInboxConversation {
+  id: string;
+  accountId: string;
+  platform: string;
+  participantId: string;
+  participantName: string | null;
+  participantUsername: string | null;
+  updatedTime: string | null;
+}
+
+export interface ZernioInboxListResult {
+  ok: boolean;
+  conversations: ZernioInboxConversation[];
+  nextCursor: string | null;
+  error?: string;
+}
+
+/** List inbox conversations for the current account's Zernio key (paginated). */
+export async function listZernioInboxConversations(opts: {
+  accountId?: string;
+  limit?: number;
+  cursor?: string | null;
+  sortOrder?: "asc" | "desc";
+} = {}): Promise<ZernioInboxListResult> {
+  if (!apiKey()) return { ok: false, conversations: [], nextCursor: null, error: "ZERNIO_DM_API_KEY is not set" };
+  const qs = new URLSearchParams({
+    limit: String(Math.max(1, Math.min(100, opts.limit ?? 50))),
+    sortOrder: opts.sortOrder === "asc" ? "asc" : "desc",
+  });
+  const accountId = (opts.accountId || zernioTikTokAccountId()).trim();
+  if (accountId) qs.set("accountId", accountId);
+  if (opts.cursor) qs.set("cursor", opts.cursor);
+  try {
+    const r = await zernioFetch(`/inbox/conversations?${qs}`, { method: "GET" });
+    if (!r.ok) return { ok: false, conversations: [], nextCursor: null, error: r.text.slice(0, 300) || `HTTP ${r.status}` };
+    const payload = r.json as {
+      data?: Record<string, unknown>[];
+      conversations?: Record<string, unknown>[];
+      pagination?: { nextCursor?: string | null; hasMore?: boolean };
+    } | null;
+    const list = Array.isArray(payload?.data)
+      ? payload!.data!
+      : Array.isArray(payload?.conversations)
+        ? payload!.conversations!
+        : [];
+    return {
+      ok: true,
+      nextCursor: payload?.pagination?.nextCursor || null,
+      conversations: list.map((c) => ({
+        id: String(c.id ?? c._id ?? ""),
+        accountId: String(c.accountId ?? accountId ?? ""),
+        platform: String(c.platform ?? "").toLowerCase(),
+        participantId: String(c.participantId ?? ""),
+        participantName: str(c.participantName),
+        participantUsername: str(c.participantUsername),
+        updatedTime: str(c.updatedTime) ?? str(c.updatedAt),
+      })).filter((c) => c.id && c.participantId),
+    };
+  } catch (err) {
+    return { ok: false, conversations: [], nextCursor: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function listZernioInboxMessages(
+  conversationId: string,
+  opts: { accountId?: string; limit?: number } = {},
+): Promise<{
+  ok: boolean;
+  messages: Array<{ id: string; role: "user" | "assistant"; text: string; at: string }>;
+  error?: string;
+}> {
+  if (!apiKey()) return { ok: false, messages: [], error: "ZERNIO_DM_API_KEY is not set" };
+  const accountId = (opts.accountId || zernioTikTokAccountId()).trim();
+  if (!accountId) return { ok: false, messages: [], error: "accountId required" };
+  const qs = new URLSearchParams({
+    accountId,
+    sortOrder: "asc",
+    limit: String(Math.max(1, Math.min(100, opts.limit ?? 100))),
+  });
+  try {
+    const r = await zernioFetch(
+      `/inbox/conversations/${encodeURIComponent(conversationId)}/messages?${qs}`,
+      { method: "GET" },
+    );
+    if (!r.ok) return { ok: false, messages: [], error: r.text.slice(0, 300) || `HTTP ${r.status}` };
+    const payload = r.json as { messages?: Record<string, unknown>[]; data?: Record<string, unknown>[] } | null;
+    const list = Array.isArray(payload?.messages)
+      ? payload!.messages!
+      : Array.isArray(payload?.data)
+        ? payload!.data!
+        : [];
+    const messages: Array<{ id: string; role: "user" | "assistant"; text: string; at: string }> = [];
+    for (const row of list) {
+      if (row.isDeleted === true) continue;
+      const direction = str(row.direction);
+      if (direction !== "incoming" && direction !== "outgoing") continue;
+      const text = messageWithVideoReference(row) || messageBodyOf(row) || "";
+      const atRaw = str(row.createdAt) || str(row.sentAt);
+      const id = str(row.platformMessageId) || str(row.id) || str(row._id);
+      if (!text || !atRaw || !id) continue;
+      const atMs = Date.parse(atRaw);
+      if (!Number.isFinite(atMs)) continue;
+      messages.push({
+        id,
+        role: direction === "incoming" ? "user" : "assistant",
+        text,
+        at: new Date(atMs).toISOString(),
+      });
+    }
+    messages.sort((a, b) => a.at.localeCompare(b.at));
+    return { ok: true, messages };
+  } catch (err) {
+    return { ok: false, messages: [], error: err instanceof Error ? err.message : String(err) };
+  }
+}
