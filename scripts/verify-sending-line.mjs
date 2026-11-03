@@ -65,6 +65,17 @@ const f = resolveSendingLine({ ...marco, quoPhoneNumber: undefined }, DEFAULTS);
 ok("an id without a display number still sends on the right line",
   f.id === "pn_marco" && f.reason === "user_assigned", JSON.stringify(f));
 
+const g = resolveSendingLine(marco, {
+  ...DEFAULTS,
+  preferredId: "pn_marco2",
+  preferredNumber: "+12106722794",
+  preferredLabel: "Marco 2",
+});
+ok("a Messages line picker overrides the assigned default",
+  g.id === "pn_marco2" && g.reason === "line_selected", JSON.stringify(g));
+ok("and names the selected line plainly",
+  /Marco 2/.test(g.explain) && /\+12106722794/.test(g.explain), g.explain);
+
 // ---- the API surface, against a running server ------------------------------
 const tmp = mkdtempSync(join(tmpdir(), "sendline-"));
 writeFileSync(join(tmp, "db.json"), JSON.stringify({ idCounter: 1, leadsById: {}, leadKeyToId: {}, conversationsByLeadId: {}, commandTasks: [] }));

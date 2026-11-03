@@ -27,13 +27,16 @@ writeFileSync(join(root,'marco-tasks.json'),JSON.stringify([{id:'legacy-personal
 
 const work = require('../dist/src/harvey/work/store.js');
 const { tenantEnvironment } = require('../dist/src/core/tenantGateway.js');
-const isolatedEnv = tenantEnvironment('marco', { ...process.env, BRIVITY_API_KEY:'must-not-copy', GMAIL_REFRESH_TOKEN:'must-not-copy', DB_JSON_PATH:join(root,'private-legacy.json'), HARVEY_PUBLIC_URL:'https://example.invalid', ZERNIO_DM_API_KEY:'marco-zernio-key', ZERNIO_WEBHOOK_SECRET:'marco-hook', ZERNIO_TIKTOK_ACCOUNT_ID:'marco-tt', WESLEY_ZERNIO_DM_API_KEY:'wesley-zernio-key', WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-hook', WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-tt' });
+const isolatedEnv = tenantEnvironment('marco', { ...process.env, BRIVITY_API_KEY:'must-not-copy', GMAIL_REFRESH_TOKEN:'must-not-copy', DB_JSON_PATH:join(root,'private-legacy.json'), HARVEY_PUBLIC_URL:'https://example.invalid', ZERNIO_DM_API_KEY:'marco-zernio-key', ZERNIO_WEBHOOK_SECRET:'marco-hook', ZERNIO_TIKTOK_ACCOUNT_ID:'marco-tt', WESLEY_ZERNIO_DM_API_KEY:'wesley-zernio-key', WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-hook', WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-tt', QUO_API_KEY:'marco-quo-key', QUO_PHONE_NUMBER_ID:'PN-marco', QUO_PHONE_NUMBER:'+17262001548' });
 assert.equal(isolatedEnv.BRIVITY_API_KEY,undefined);assert.equal(isolatedEnv.GMAIL_REFRESH_TOKEN,undefined);assert.equal(isolatedEnv.DB_JSON_PATH,undefined);
 assert.equal(isolatedEnv.HARVEY_PUBLIC_URL,'https://example.invalid');
 assert.equal(isolatedEnv.ZERNIO_DM_API_KEY,'marco-zernio-key');
 assert.equal(isolatedEnv.ZERNIO_TIKTOK_ACCOUNT_ID,'marco-tt');
 assert.equal(isolatedEnv.WESLEY_ZERNIO_DM_API_KEY,'');
-const wesleyBudgetEnv=tenantEnvironment('wesley',{...process.env,AI_USAGE_DB_PATH:'/private-must-not-share', ZERNIO_DM_API_KEY:'marco-zernio-key', ZERNIO_WEBHOOK_SECRET:'marco-hook', ZERNIO_TIKTOK_ACCOUNT_ID:'marco-tt', WESLEY_ZERNIO_DM_API_KEY:'wesley-zernio-key', WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-hook', WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-tt'});
+assert.equal(isolatedEnv.QUO_API_KEY,'marco-quo-key');
+assert.equal(isolatedEnv.QUO_PHONE_NUMBER_ID,'PN-marco');
+assert.equal(isolatedEnv.QUO_PHONE_NUMBER,'+17262001548');
+const wesleyBudgetEnv=tenantEnvironment('wesley',{...process.env,AI_USAGE_DB_PATH:'/private-must-not-share', ZERNIO_DM_API_KEY:'marco-zernio-key', ZERNIO_WEBHOOK_SECRET:'marco-hook', ZERNIO_TIKTOK_ACCOUNT_ID:'marco-tt', WESLEY_ZERNIO_DM_API_KEY:'wesley-zernio-key', WESLEY_ZERNIO_WEBHOOK_SECRET:'wesley-hook', WESLEY_ZERNIO_TIKTOK_ACCOUNT_ID:'wesley-tt', QUO_API_KEY:'marco-quo-key', QUO_PHONE_NUMBER_ID:'PN-marco', QUO_PHONE_NUMBER:'+17262001548'});
 assert.equal(isolatedEnv.SHARED_OPENROUTER_BUDGET_DB_PATH,join(root,'openrouter-budget.db'));
 assert.equal(isolatedEnv.SHARED_OPENROUTER_BUDGET_DB_PATH,wesleyBudgetEnv.SHARED_OPENROUTER_BUDGET_DB_PATH);
 assert.notEqual(isolatedEnv.TENANT_DATA_ROOT,wesleyBudgetEnv.TENANT_DATA_ROOT);assert.equal(wesleyBudgetEnv.AI_USAGE_DB_PATH,undefined);
@@ -41,6 +44,9 @@ assert.equal(wesleyBudgetEnv.ZERNIO_DM_API_KEY,'wesley-zernio-key');
 assert.equal(wesleyBudgetEnv.ZERNIO_WEBHOOK_SECRET,'wesley-hook');
 assert.equal(wesleyBudgetEnv.ZERNIO_TIKTOK_ACCOUNT_ID,'wesley-tt');
 assert.equal(wesleyBudgetEnv.WESLEY_ZERNIO_DM_API_KEY,'wesley-zernio-key');
+assert.equal(wesleyBudgetEnv.QUO_API_KEY,'');
+assert.equal(wesleyBudgetEnv.QUO_PHONE_NUMBER_ID,'');
+assert.equal(wesleyBudgetEnv.QUO_PHONE_NUMBER,'');
 const retainedAccountTeam=JSON.stringify({chats:[{id:'retained-account-message',from:'marco',to:'carlos',text:'Keep account message',at:'2026-09-02T00:00:00Z'}],notifications:[],dueNotified:[]});
 writeFileSync(join(isolatedEnv.TENANT_DATA_ROOT,'team.json'),retainedAccountTeam);
 work.lockChat('unrelated-owner','unrelated-chat');

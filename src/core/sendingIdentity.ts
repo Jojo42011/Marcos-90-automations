@@ -24,6 +24,8 @@ import type { CRMUser } from "./types.js";
 export type SendingLineReason =
   /** The signed-in user has their own line assigned. */
   | "user_assigned"
+  /** Operator picked a Quo inbox line for this send (Messages / Text picker). */
+  | "line_selected"
   /** No line assigned to this user; using the account-wide default. */
   | "account_default"
   /** Nobody is signed in (a scheduled job, an automation); account default. */
@@ -48,6 +50,13 @@ export interface SendingLineDeps {
   defaultId: string | null;
   /** The account-wide default as E.164, i.e. QUO_PHONE_NUMBER. */
   defaultNumber: string | null;
+  /**
+   * Optional per-send override (Messages / Text tab line picker). Must be one of
+   * the Quo numbers on this API key — verified by the caller before passing.
+   */
+  preferredId?: string | null;
+  preferredNumber?: string | null;
+  preferredLabel?: string | null;
 }
 
 /**
@@ -58,6 +67,19 @@ export interface SendingLineDeps {
  * name is on a message to a real client, and it should be provable.
  */
 export function resolveSendingLine(user: CRMUser | null, deps: SendingLineDeps): SendingLine {
+  const preferredId = deps.preferredId?.trim() || "";
+  if (preferredId) {
+    const num = deps.preferredNumber?.trim() || null;
+    const label = deps.preferredLabel?.trim();
+    return {
+      id: preferredId,
+      number: num,
+      reason: "line_selected",
+      userName: user?.name || null,
+      explain: `Sending from ${label ? label + " " : ""}${num || "the selected Quo line"}.`,
+    };
+  }
+
   const assignedId = user?.quoPhoneNumberId?.trim() || "";
   const assignedNumber = user?.quoPhoneNumber?.trim() || "";
 

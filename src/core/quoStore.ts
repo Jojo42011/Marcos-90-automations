@@ -38,6 +38,8 @@ export interface QuoStoredMessage {
 export interface QuoThreadSummary {
   peer: string;
   peerKey: string;
+  /** Quo line this thread belongs to (Marco 2 / Marco / Carlos, etc.). */
+  phoneNumberId: string;
   conversationId: string;
   lastText: string;
   lastAt: string;
@@ -77,6 +79,7 @@ export function getQuoDb(): Database.Database {
       )
     `);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_quo_peer ON quo_messages(peer_key)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_quo_line_peer ON quo_messages(phone_number_id, peer_key)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_quo_created ON quo_messages(created_at)`);
     db.exec(`
       CREATE TABLE IF NOT EXISTS quo_meta (
@@ -128,20 +131,32 @@ function rowToMessage(r: Record<string, unknown>): QuoStoredMessage {
   };
 }
 
-/** Newest-first thread list, one row per counterparty. */
-export function listQuoThreads(limit = 200): QuoThreadSummary[] {
-  const rows = getQuoDb()
-    .prepare(
-      `SELECT peer_key, peer, conversation_id, text, created_at, direction, cnt FROM (
-         SELECT m.*, ROW_NUMBER() OVER (PARTITION BY peer_key ORDER BY created_at DESC) rn,
-                COUNT(*) OVER (PARTITION BY peer_key) cnt
-         FROM quo_messages m
-       ) WHERE rn = 1 ORDER BY created_at DESC LIMIT ?`,
-    )
-    .all(limit) as Record<string, unknown>[];
+/**
+ * Newest-first thread list. One row per (line, counterparty) — the same person
+ * texting Marco and Carlos is two threads, because replies must go out on the
+ * line they wrote to.
+ */
+export function listQuoThreads(limit = 200, phoneNumberId?: string | null): QuoThreadSummary[] {
+  const line = String(phoneNumberId || "").trim();
+  const rows = (line
+    ? getQuoDb().prepare(
+        `SELECT peer_key, peer, phone_number_id, conversation_id, text, created_at, direction, cnt FROM (
+           SELECT m.*, ROW_NUMBER() OVER (PARTITION BY phone_number_id, peer_key ORDER BY created_at DESC) rn,
+                  COUNT(*) OVER (PARTITION BY phone_number_id, peer_key) cnt
+           FROM quo_messages m WHERE phone_number_id = ?
+         ) WHERE rn = 1 ORDER BY created_at DESC LIMIT ?`,
+      ).all(line, limit)
+    : getQuoDb().prepare(
+        `SELECT peer_key, peer, phone_number_id, conversation_id, text, created_at, direction, cnt FROM (
+           SELECT m.*, ROW_NUMBER() OVER (PARTITION BY phone_number_id, peer_key ORDER BY created_at DESC) rn,
+                  COUNT(*) OVER (PARTITION BY phone_number_id, peer_key) cnt
+           FROM quo_messages m
+         ) WHERE rn = 1 ORDER BY created_at DESC LIMIT ?`,
+      ).all(limit)) as Record<string, unknown>[];
   return rows.map((r) => ({
     peer: String(r.peer),
     peerKey: String(r.peer_key),
+    phoneNumberId: String(r.phone_number_id || ""),
     conversationId: String(r.conversation_id),
     lastText: String(r.text ?? ""),
     lastAt: String(r.created_at),
@@ -151,10 +166,15 @@ export function listQuoThreads(limit = 200): QuoThreadSummary[] {
 }
 
 /** Full thread with one counterparty, oldest first (chat order). */
-export function getQuoThread(peerKey: string, limit = 200): QuoStoredMessage[] {
-  const rows = getQuoDb()
-    .prepare(`SELECT * FROM quo_messages WHERE peer_key = ? ORDER BY created_at ASC LIMIT ?`)
-    .all(peerKey, limit) as Record<string, unknown>[];
+export function getQuoThread(peerKey: string, limit = 200, phoneNumberId?: string | null): QuoStoredMessage[] {
+  const line = String(phoneNumberId || "").trim();
+  const rows = (line
+    ? getQuoDb()
+        .prepare(`SELECT * FROM quo_messages WHERE peer_key = ? AND phone_number_id = ? ORDER BY created_at ASC LIMIT ?`)
+        .all(peerKey, line, limit)
+    : getQuoDb()
+        .prepare(`SELECT * FROM quo_messages WHERE peer_key = ? ORDER BY created_at ASC LIMIT ?`)
+        .all(peerKey, limit)) as Record<string, unknown>[];
   return rows.map(rowToMessage);
 }
 

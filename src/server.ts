@@ -1418,7 +1418,8 @@ app.get("/api/quo/threads", async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { listQuoThreads } = await import("./core/quoStore.js");
   const { phoneKey } = await import("./integrations/quo/index.js");
-  const threads = listQuoThreads(Math.min(500, Number(req.query.limit) || 200));
+  const line = typeof req.query.phoneNumberId === "string" ? req.query.phoneNumberId.trim() : "";
+  const threads = listQuoThreads(Math.min(500, Number(req.query.limit) || 200), line || null);
   /* Join to the CRM's own book so a known contact shows their name rather
      than a bare number. Read-only: no lead is created or modified. */
   const snap = await getDashboardSnapshot();
@@ -1429,6 +1430,7 @@ app.get("/api/quo/threads", async (req, res) => {
   }
   res.json({
     ok: true,
+    phoneNumberId: line || null,
     threads: threads.map((t) => {
       const lead = byPhone.get(t.peerKey) || null;
       return { ...t, leadId: lead?.id ?? null, leadName: lead?.name ?? null };
@@ -1442,7 +1444,8 @@ app.get("/api/quo/threads/:peer", async (req, res) => {
   const { phoneKey } = await import("./integrations/quo/index.js");
   const key = phoneKey(String(req.params.peer || ""));
   if (!key) { res.status(400).json({ error: "A phone number is required" }); return; }
-  res.json({ ok: true, peerKey: key, messages: getQuoThread(key, 300) });
+  const line = typeof req.query.phoneNumberId === "string" ? req.query.phoneNumberId.trim() : "";
+  res.json({ ok: true, peerKey: key, phoneNumberId: line || null, messages: getQuoThread(key, 300, line || null) });
 });
 
 /**
@@ -1539,33 +1542,70 @@ app.post("/api/quo/numbers/assign", express.json(), async (req, res) => {
 /** Which line the signed-in user's texts will go out on, and why. */
 app.get("/api/quo/my-line", async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const { getQuoPhoneNumberId, getQuoPhoneNumber } = await import("./integrations/quo/index.js");
+  const { getQuoPhoneNumberId, getQuoPhoneNumber, listPhoneNumbers, isQuoConfigured } =
+    await import("./integrations/quo/index.js");
+  let numbers: Array<{ id: string; number: string; label: string }> = [];
+  if (isQuoConfigured()) {
+    try {
+      numbers = (await listPhoneNumbers()).map((n) => ({
+        id: n.id,
+        number: n.number,
+        label: n.name || n.formattedNumber || n.number,
+      }));
+    } catch { /* status probe still returns the resolved line */ }
+  }
+  const preferredId = typeof req.query.from === "string" ? req.query.from.trim() : "";
+  const preferred = preferredId ? numbers.find((n) => n.id === preferredId) : null;
   res.json({
     ok: true,
+    numbers,
     line: resolveSendingLine(sessionUserSync(req), {
       defaultId: getQuoPhoneNumberId(),
       defaultNumber: getQuoPhoneNumber(),
+      preferredId: preferred?.id || null,
+      preferredNumber: preferred?.number || null,
+      preferredLabel: preferred?.label || null,
     }),
   });
 });
 
-/** Send an SMS from Marco's Quo line. */
+/** Send an SMS from a Quo line on this account. */
 app.post("/api/quo/send", express.json({ limit: "64kb" }), async (req, res) => {
   if (!dashboardTokenOk(req)) { res.status(401).json({ error: "Unauthorized" }); return; }
   const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-  const { sendText, toE164, phoneKey, isQuoConfigured } = await import("./integrations/quo/index.js");
+  const { sendText, toE164, phoneKey, isQuoConfigured, listPhoneNumbers, getQuoPhoneNumberId, getQuoPhoneNumber } =
+    await import("./integrations/quo/index.js");
   if (!isQuoConfigured()) { res.status(503).json({ error: "Quo is not configured" }); return; }
   const to = toE164(typeof body.to === "string" ? body.to : "");
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!to) { res.status(400).json({ error: "A valid US phone number is required" }); return; }
   if (!text) { res.status(400).json({ error: "Message text is required" }); return; }
-  /* WHOSE LINE. Resolved from the signed-in user, not from a global. See
-     src/core/sendingIdentity.ts — a text that goes out on the wrong number
-     sends the client's reply to the wrong person. */
-  const { getQuoPhoneNumberId, getQuoPhoneNumber } = await import("./integrations/quo/index.js");
+  /* WHOSE LINE. Operator may pick any Quo number on this API key (Messages /
+     Text line switcher). Otherwise fall back to the user's assigned line /
+     account default. See src/core/sendingIdentity.ts. */
+  let preferred: { id: string; number: string; label: string } | null = null;
+  const fromRaw = typeof body.from === "string" ? body.from.trim()
+    : typeof body.phoneNumberId === "string" ? body.phoneNumberId.trim() : "";
+  if (fromRaw) {
+    try {
+      const numbers = await listPhoneNumbers();
+      const match = numbers.find((n) => n.id === fromRaw || n.number === fromRaw);
+      if (!match) {
+        res.status(400).json({ error: `Quo has no phone number matching "${fromRaw}". Pick one of the account lines.` });
+        return;
+      }
+      preferred = { id: match.id, number: match.number, label: match.name || match.formattedNumber || match.number };
+    } catch (err) {
+      res.status(502).json({ error: `Could not verify Quo lines: ${(err as Error).message}` });
+      return;
+    }
+  }
   const line = resolveSendingLine(sessionUserSync(req), {
     defaultId: getQuoPhoneNumberId(),
     defaultNumber: getQuoPhoneNumber(),
+    preferredId: preferred?.id || null,
+    preferredNumber: preferred?.number || null,
+    preferredLabel: preferred?.label || null,
   });
   if (!line.id) { res.status(503).json({ error: line.explain }); return; }
   try {
@@ -1645,11 +1685,34 @@ app.post("/api/quo/webhook", express.json({ limit: "256kb" }), async (req, res) 
   try {
     const { quoWebhookSecret } = await import("./integrations/quo/index.js");
     const secret = quoWebhookSecret();
+    const { isTenantGateway } = await import("./core/tenantData.js");
+    const { accountBridgeUser } = await import("./core/accountBridge.js");
+    /* Worker receives forwards after the parent checked `?key=`. Trust only on
+       loopback with a valid account-bridge token. */
+    const gatewayVerified =
+      Boolean(tenantOwner()) &&
+      String(req.headers["x-quo-gateway-verified"] || "") === "1" &&
+      Boolean(accountBridgeUser(req));
     /* Quo offers no request signing, so the guard is the `?key=` we put on the
        URL when registering. A wrong or missing key is answered 202 rather than
        401 — a probe learns nothing, and Quo would only retry on an error. */
-    if (!secret || String(req.query.key || "") !== secret) {
+    if (!gatewayVerified && (!secret || String(req.query.key || "") !== secret)) {
       res.status(202).json({ ok: true });
+      return;
+    }
+    /* Isolation gateway: Quo is Marco's business inbox — deliver into his
+       account worker store so Messages → SMS sees the thread. */
+    if (isTenantGateway()) {
+      const { getUsers } = await import("./core/users.js");
+      const { forwardQuoWebhookToOwner } = await import("./core/tenantGateway.js");
+      const marco = getUsers().find((u) => /^marco(?:\s|$)/i.test(u.name.trim()) && u.active !== false);
+      if (!marco) { res.status(202).json({ ok: true, ignored: "no marco account" }); return; }
+      const raw = Buffer.from(JSON.stringify(req.body ?? {}), "utf8");
+      const qs = new URLSearchParams(req.query as Record<string, string>).toString();
+      res.status(200).json({ ok: true, routed: "marco" });
+      void forwardQuoWebhookToOwner(marco.id, raw, qs).then((fwd) => {
+        if (fwd.status >= 400) console.error("[Quo] webhook forward failed:", fwd.status, fwd.body.slice(0, 200));
+      }).catch((err) => console.error("[Quo] webhook forward error:", (err as Error).message));
       return;
     }
     const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;

@@ -262,6 +262,12 @@
   .ch-toggle{display:inline-flex;border:1px solid var(--line);border-radius:16px;overflow:hidden;flex:0 0 auto}
   .ch-toggle button{border:none;background:var(--card);color:var(--text-3);font-size:11px;font-weight:700;padding:6px 12px}
   .ch-toggle button.on{background:var(--teal-soft);color:var(--teal)}
+  .quo-line-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 2px 12px}
+  .quo-line-lbl{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);margin-right:2px}
+  .quo-line-chip{border:1px solid var(--line-3);background:var(--card);color:var(--text-1);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+  .quo-line-chip:hover{border-color:var(--teal);color:var(--ink)}
+  .quo-line-chip.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .qa-line-sel{min-width:220px;max-width:100%}
   .thread-compose .attach{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text-3);display:flex;align-items:center;justify-content:center;flex:0 0 auto;cursor:pointer}
   .thread-compose .attach:hover{background:var(--surface-2);color:var(--teal)}
   .thread-attach-preview{display:none;flex-wrap:wrap;gap:6px;padding:0 18px 10px}
@@ -1441,6 +1447,7 @@
         <button data-mt="group">GROUP</button>
         <button data-mt="scheduled">SCHEDULED <span class="chcount" data-cc="scheduled"></span></button>
       </div>
+      <div class="quo-line-bar" id="quoLineBar" style="display:none" aria-label="Quo sending line"></div>
     </div>
     <div class="msg-wrap">
       <div class="msg-list">
@@ -2260,6 +2267,7 @@ document.getElementById("convNewBtn").addEventListener("click",()=>{
      to. Without one it stays an untyped local note, as before. */
   if(c.phone&&QUO.configured&&phoneKeyOf(c.phone).length===10){
     c.channel="sms"; c.peer=c.phone; c.peerKey=phoneKeyOf(c.phone); c.quo=true; c._full=true; c._local=true;
+    c.phoneNumberId=quoActiveId()||null;
   }
   CONVOS.unshift(c); renderConvos(); openThread(0);
   crmToast(c.quo?("Texting "+fmtPhone(c.phone)):("Conversation started with "+name.trim()));
@@ -2307,16 +2315,32 @@ function emptyChannelMsg(){
   return "No "+m.label+" conversations found.";
 }
 
-/* ==================== Quo — real SMS on (737) 283-4703 ====================
-   The SMS tab used to be permanently dim because nothing ever put a
-   conversation on the "sms" channel, and the composer's send only pushed a
-   bubble into local state — it never sent a text to anybody. Both halves are
-   real now: threads come from Quo through /api/quo/threads, and send goes to
-   /api/quo/send, which resolves only on Quo's own accept.
-
-   The thread LIST carries one line per thread (that is all the summary query
-   returns); the full history loads when a thread is opened. */
-var QUO={loaded:false,configured:false,verified:false,number:null,error:null,sig:""};
+/* ==================== Quo — real SMS on Marco's Quo lines ====================
+   Three inboxes on one API key (Marco 2 / Marco / Carlos). The SMS tab used to
+   stay dim under account isolation because workers did not receive QUO_*.
+   Threads come from /api/quo/threads (optionally filtered by line); send goes
+   to /api/quo/send with the selected `from` line id. */
+var QUO={loaded:false,configured:false,verified:false,number:null,numbers:[],activeId:null,error:null,sig:""};
+var QUO_LINE_KEY="crm_quo_active_line";
+function quoActiveId(){
+  if(QUO.activeId) return QUO.activeId;
+  try{ var s=localStorage.getItem(QUO_LINE_KEY); if(s) return s; }catch(e){}
+  return (QUO.numbers[0]&&QUO.numbers[0].id)||null;
+}
+function setQuoActiveId(id){
+  QUO.activeId=id||null;
+  try{ if(id) localStorage.setItem(QUO_LINE_KEY,id); else localStorage.removeItem(QUO_LINE_KEY); }catch(e){}
+  MY_LINE=null; MY_LINE_P=null;
+}
+function quoLineById(id){
+  return (QUO.numbers||[]).find(function(n){ return n.id===id; })||null;
+}
+function quoLineLabel(n){
+  if(!n) return "Quo line";
+  var name=n.label||n.name||"";
+  var num=fmtPhone(n.number||"");
+  return name?(name+(num?" · "+num:"")):(num||n.id);
+}
 
 function fmtPhone(raw){
   var d=String(raw||"").replace(/\D/g,"");
@@ -2333,9 +2357,10 @@ function phoneKeyOf(raw){
    "nothing here" — an unconfigured line and a quiet one are different. */
 function quoEmptyMsg(){
   if(!QUO.loaded) return "Loading text messages…";
-  if(!QUO.configured) return "SMS is not connected yet. Once the Quo line is connected, every text to and from Marco's business number shows up here.";
+  if(!QUO.configured) return "SMS is not connected yet. Once Quo is connected on this account, texts on Marco's lines show up here.";
   if(!QUO.verified) return "Quo is connected but not responding"+(QUO.error?": "+esc(QUO.error):".");
-  return "No text threads yet on "+esc(fmtPhone(QUO.number)||"the Quo line")+". Incoming texts and anything sent from here will appear within a few minutes.";
+  var line=quoLineById(quoActiveId());
+  return "No text threads yet on "+esc(quoLineLabel(line)||fmtPhone(QUO.number)||"this Quo line")+". Incoming texts and anything sent from here will appear within a few minutes.";
 }
 /* Stable identity for a conversation, so a refresh that reorders the list can
    keep the thread the user is reading open. */
@@ -2356,17 +2381,51 @@ function convCanText(c){
 function loadQuo(){
   return fetch(crmApi("/api/quo/status")).then(function(r){return r.ok?r.json():null;}).then(function(s){
     QUO.loaded=true;
-    if(s){ QUO.configured=!!s.configured; QUO.verified=!!s.verified;
-           QUO.number=s.number||null; QUO.error=s.error||null; }
+    if(s){
+      QUO.configured=!!s.configured; QUO.verified=!!s.verified;
+      QUO.number=s.number||null; QUO.error=s.error||null;
+      QUO.numbers=Array.isArray(s.numbers)?s.numbers.map(function(n){
+        return {id:n.id,number:n.number,label:n.name||n.label||n.number};
+      }):[];
+      var want=quoActiveId();
+      if(want&&!quoLineById(want)) setQuoActiveId(QUO.numbers[0]?QUO.numbers[0].id:null);
+      else if(!want&&QUO.numbers[0]) setQuoActiveId(QUO.numbers[0].id);
+    }
+    paintQuoLineBar();
     if(!QUO.configured){ paintChannelCounts(); if(convGroupMode==="sms") renderConvos(); return; }
     return loadQuoThreads();
   }).catch(function(){ QUO.loaded=true; });
 }
 
 function loadQuoThreads(){
-  return fetch(crmApi("/api/quo/threads")).then(function(r){return r.ok?r.json():null;})
+  var line=quoActiveId();
+  var q=line?("?phoneNumberId="+encodeURIComponent(line)):"";
+  return fetch(crmApi("/api/quo/threads"+q)).then(function(r){return r.ok?r.json():null;})
     .then(function(d){ if(d&&d.threads) mergeQuoConvos(d.threads); })
     .catch(function(){});
+}
+
+function paintQuoLineBar(){
+  var bar=document.getElementById("quoLineBar");
+  if(!bar) return;
+  if(!QUO.configured||!(QUO.numbers&&QUO.numbers.length)||(convGroupMode!=="sms"&&convGroupMode!=="all")){
+    bar.style.display="none"; bar.innerHTML=""; return;
+  }
+  bar.style.display="flex";
+  var active=quoActiveId();
+  bar.innerHTML='<span class="quo-line-lbl">From</span>'+QUO.numbers.map(function(n){
+    var on=n.id===active?" on":"";
+    return '<button type="button" class="quo-line-chip'+on+'" data-qid="'+esc(n.id)+'">'+esc(quoLineLabel(n))+'</button>';
+  }).join("");
+  bar.querySelectorAll("[data-qid]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      setQuoActiveId(btn.getAttribute("data-qid"));
+      QUO.sig="";
+      paintQuoLineBar();
+      loadMyLine().then(function(){ loadQuoThreads(); });
+      if(typeof ldTab!=="undefined"&&ldTab==="text"&&typeof renderLeadTab==="function") renderLeadTab();
+    });
+  });
 }
 
 /* Fold the Quo threads into CONVOS. Quo rows are replaced wholesale on every
@@ -2395,6 +2454,7 @@ function mergeQuoConvos(threads){
     return {
       names:[name,"Marco Puga"], at:t.lastAt, channel:"sms", quo:true,
       peerKey:t.peerKey, peer:t.peer, phone:t.peer,
+      phoneNumberId:t.phoneNumberId||quoActiveId()||null,
       leadId:t.leadId||null, msgCount:t.messageCount,
       /* Keep an already-opened history; otherwise stand in with the one line
          the summary gave us until the thread is opened. */
@@ -2417,7 +2477,9 @@ function loadQuoThread(i){
   var c=CONVOS[i];
   if(!c||!c.quo||c._loading) return;
   c._loading=true;
-  fetch(crmApi("/api/quo/threads/"+encodeURIComponent(c.peerKey)))
+  var line=c.phoneNumberId||quoActiveId();
+  var q=line?("?phoneNumberId="+encodeURIComponent(line)):"";
+  fetch(crmApi("/api/quo/threads/"+encodeURIComponent(c.peerKey)+q))
     .then(function(r){return r.ok?r.json():null;})
     .then(function(d){
       c._loading=false;
@@ -2839,8 +2901,9 @@ function paintThread(i){
     if(pendingAttachments.length) crmToast("Attachments don't send over SMS — sending the message text only");
     const btn=document.getElementById("threadSend");
     btn.disabled=true; btn.classList.add("busy");
+    var from=c.phoneNumberId||quoActiveId()||undefined;
     fetch(crmApi("/api/quo/send"),{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({to:c.peer||c.phone,text:t})})
+      body:JSON.stringify({to:c.peer||c.phone,text:t,from:from})})
       .then(r=>r.json().then(d=>({ok:r.ok,d})))
       .then(({ok,d})=>{
         btn.disabled=false; btn.classList.remove("busy");
@@ -7751,6 +7814,9 @@ function qaTextTab(l,body){
       (phoneOpts?'<select class="qa-sel" id="qaTextNum" style="min-width:210px">'+phoneOpts+'</select>':'<span class="cr-empty">No phone number on file</span>')+
       (dnc?'<span class="cx-dnc">DNC</span>':'')+
       '<div class="qa-spacer"></div><span class="qa-seen">'+esc(lastSeen)+'</span></div>'+
+    (can&&QUO.numbers&&QUO.numbers.length
+      ? '<div class="qa-head" style="padding:0 0 8px"><span class="qa-lbl" style="margin:0">From</span>'+qaFromLineSelect(d.from||quoActiveId())+'</div>'
+      : '')+
     '<div class="qa-chat" id="qaChat">'+chat+'</div>'+
     '<div class="qa-head" style="padding:0 0 6px"><div class="qa-spacer"></div>'+
       '<button class="qa-ai" id="qaAi">✦ AI: HELP ME WRITE</button></div>'+
@@ -7760,9 +7826,7 @@ function qaTextTab(l,body){
       '<span class="qa-seen" id="qaLen"></span>'+
     '</div>'+
     qaFoot(can?"SEND MESSAGE":"SEND MESSAGE","qaSendText",'',!can)+
-    /* The line named here is the one THIS user will actually send on, resolved
-       per signed-in user — not the account-wide number. Sending as somebody
-       else is a warning, not a detail. */
+    /* The line named here is the one THIS send will use (picker or assignment). */
     (can?sendingLineNote()+
          '<div class="qa-note">Sends for real over Quo. '+
           'The bubble appears only once Quo accepts it — a text that failed must never sit in the thread looking delivered.</div>'
@@ -7774,6 +7838,11 @@ function qaTextTab(l,body){
 
   var sel=document.getElementById("qaTextNum");
   if(sel)sel.addEventListener("change",function(){ d.number=sel.value; QA.text=d; renderLeadTab(); });
+  var fromSel=document.getElementById("qaFromLine");
+  if(fromSel)fromSel.addEventListener("change",function(){
+    d.from=fromSel.value; setQuoActiveId(fromSel.value); QA.text=d;
+    MY_LINE=null; loadMyLine().then(function(){ if(ldTab==="text") renderLeadTab(); });
+  });
   var area=document.getElementById("qaTextMsg");
   var len=document.getElementById("qaLen");
   /* Fetch the sending line once, then repaint so the badge appears without
@@ -7800,15 +7869,16 @@ function qaTextTab(l,body){
     var t=area.value.trim(); if(!t||!d.number)return;
     if(dnc&&!confirm("This number is marked Do Not Call. Send the text anyway?"))return;
     var go=document.getElementById("qaSendText"); go.disabled=true; go.textContent="SENDING…";
+    var from=d.from||quoActiveId()||undefined;
     fetch(crmApi("/api/quo/send"),{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({to:d.number,text:t})})
+      body:JSON.stringify({to:d.number,text:t,from:from})})
       .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; },function(){ return {ok:r.ok,j:{}}; }); })
       .then(function(res){
         go.disabled=false; go.textContent="SEND MESSAGE";
         // Quo's own words: an A2P registration problem and a bad number need
         // different things done about them.
         if(!res.ok){ crmToast(res.j.error?("Not sent — "+res.j.error):"Not sent"); return; }
-        crmToast("Text sent");
+        crmToast("Text sent"+(res.j.sentFrom&&res.j.sentFrom.number?(" from "+fmtPhone(res.j.sentFrom.number)): ""));
         QA.text=null; QA_THREAD=null;
         loadQaThread(l.id,function(){ if(ldTab==="text")renderLeadTab(); });
         reloadTimeline();
@@ -7862,23 +7932,37 @@ function ensureVocabulary(then){
  */
 var MY_LINE=null, MY_LINE_P=null;
 function loadMyLine(){
-  if(!MY_LINE_P){
-    MY_LINE_P=fetch(crmApi("/api/quo/my-line"))
-      .then(function(r){ return r.ok?r.json():null; })
-      .then(function(d){ if(d&&d.line)MY_LINE=d.line; return MY_LINE; })
-      .catch(function(){ return null; });
-  }
+  var from=quoActiveId();
+  var q=from?("?from="+encodeURIComponent(from)):"";
+  MY_LINE_P=fetch(crmApi("/api/quo/my-line"+q))
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){
+      if(d&&Array.isArray(d.numbers)&&d.numbers.length){
+        QUO.numbers=d.numbers.map(function(n){ return {id:n.id,number:n.number,label:n.label||n.number}; });
+      }
+      if(d&&d.line)MY_LINE=d.line;
+      return MY_LINE;
+    })
+    .catch(function(){ return null; });
   return MY_LINE_P;
 }
 /** A one-line badge naming the sending number, or the problem with it. */
 function sendingLineNote(){
   if(!MY_LINE) return "";
-  var cls = MY_LINE.reason==="user_assigned" ? "sl-ok"
+  var cls = (MY_LINE.reason==="user_assigned"||MY_LINE.reason==="line_selected") ? "sl-ok"
           : MY_LINE.reason==="unconfigured"  ? "sl-bad" : "sl-warn";
-  var label = MY_LINE.reason==="user_assigned"
+  var label = (MY_LINE.reason==="user_assigned"||MY_LINE.reason==="line_selected")
     ? ("Sending from "+esc(MY_LINE.number||"your line"))
     : esc(MY_LINE.explain);
   return '<div class="sendline '+cls+'">'+label+'</div>';
+}
+function qaFromLineSelect(selectedId){
+  if(!(QUO.numbers&&QUO.numbers.length)) return "";
+  var cur=selectedId||quoActiveId();
+  return '<select class="qa-sel qa-line-sel" id="qaFromLine">'+
+    QUO.numbers.map(function(n){
+      return '<option value="'+esc(n.id)+'"'+(n.id===cur?" selected":"")+'>'+esc(quoLineLabel(n))+'</option>';
+    }).join("")+'</select>';
 }
 
 function loadCrmVocabulary(){
@@ -10889,6 +10973,7 @@ document.getElementById("msgTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-mt]"); if(!b)return;
   document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>x.classList.toggle("on",x===b));
   convGroupMode=b.getAttribute("data-mt");
+  paintQuoLineBar();
   if(convGroupMode==="scheduled") loadScheduled();
   if(convGroupMode==="sms"||convGroupMode==="all"){ if(QUO.configured) loadQuoThreads(); }
   renderConvos();
