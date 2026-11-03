@@ -59,50 +59,79 @@
 
     .dm-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-    /* ── Conversations list (full width) ── */
+    /* ── Conversations list (CRM Messages-style, list section only) ── */
     .dm-list { flex: 1; display: flex; flex-direction: column; min-height: 0;
-      width: 100%; max-width: 960px; margin: 0 auto; }
-    .dm-list-head { padding: 0.7rem 0.85rem; display: flex; align-items: center; gap: 0.5rem;
+      width: 100%; margin: 0; background: var(--surface); }
+    .dm-list-head { padding: 14px 18px 10px; display: flex; align-items: center; gap: 0.6rem;
       border-bottom: 1px solid var(--border-2); }
-    .dm-list-head .t { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.16em;
-      text-transform: uppercase; color: var(--muted); }
-    .dm-new { margin-left: auto; background: transparent; border: 1px solid var(--border);
-      color: var(--accent); font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.05em;
-      padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; }
-    .dm-new:hover { background: rgba(0,212,255,0.08); }
+    .dm-list-head .t { font-size: 0.72rem; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .dm-list-head .t #dm-count { color: var(--accent); font-weight: 700; }
+    .dm-new { margin-left: auto; background: var(--accent); border: none;
+      color: #001018; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+      padding: 0.45rem 0.9rem; border-radius: 999px; cursor: pointer; }
+    .dm-new:hover { filter: brightness(1.06); }
+    .dm-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 12px;
+      border-bottom: 1px solid var(--border-2); }
+    .dm-fchip { border: 1px solid var(--border-2); background: transparent; color: var(--muted);
+      border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-weight: 600;
+      cursor: pointer; line-height: 1.3; }
+    .dm-fchip:hover { border-color: var(--accent); color: var(--text); }
+    .dm-fchip.on { background: rgba(0,212,255,0.12); border-color: var(--accent); color: var(--accent); }
+    .dm-fchip .n { opacity: 0.75; font-weight: 500; margin-left: 2px; }
+    .dm-search-wrap { padding: 12px 18px; border-bottom: 1px solid var(--border-2); }
+    .dm-search-wrap input { width: 100%; height: 36px; padding: 0 14px; border: 1px solid var(--border-2);
+      border-radius: 18px; background: var(--surface-2); color: var(--text); font-size: 13px; }
+    .dm-search-wrap input::placeholder { color: var(--muted); }
+    .dm-search-wrap input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
     .dm-threads { flex: 1; overflow-y: auto; }
-    .dm-thread { padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border-2); cursor: pointer;
-      display: flex; flex-direction: column; gap: 0.2rem; transition: background 0.12s; }
+    .dm-thread { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px;
+      border-bottom: 1px solid var(--border-2); cursor: pointer; transition: background 0.12s; }
     .dm-thread:hover { background: rgba(255,255,255,0.03); }
     .dm-thread.active { background: rgba(0,212,255,0.09); box-shadow: inset 3px 0 0 var(--accent); }
-    .dm-thread-top { display: flex; align-items: center; gap: 0.4rem; }
-    .dm-thread-name { font-weight: 600; font-size: 0.85rem; flex: 1; overflow: hidden;
+    .dm-av { width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
+      background: linear-gradient(135deg, #5b6fae, #7f93c9); border: 2px solid var(--surface); }
+    .dm-av.tiktok { background: linear-gradient(135deg, #25f4ee, #fe2c55); }
+    .dm-av.instagram { background: linear-gradient(135deg, #f09433, #dc2743 50%, #bc1888); }
+    .dm-av.facebook { background: linear-gradient(135deg, #1877f2, #60a5fa); }
+    .dm-av.sms, .dm-av.twilio { background: linear-gradient(135deg, #16a34a, #4ade80); }
+    .dm-thread-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .dm-thread-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .dm-thread-name { font-weight: 700; font-size: 13.5px; color: var(--text); overflow: hidden;
       text-overflow: ellipsis; white-space: nowrap; }
-    .dm-thread-time { font-size: 0.62rem; color: var(--muted); font-family: var(--mono); flex: 0 0 auto; }
-    .dm-thread-preview { font-size: 0.75rem; color: var(--muted); overflow: hidden;
-      text-overflow: ellipsis; white-space: nowrap; }
-    .dm-badge { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.05em; text-transform: uppercase;
-      padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid var(--border-2); color: var(--muted); flex: 0 0 auto; }
-    .dm-badge.instagram { color: #e879f9; border-color: rgba(232,121,249,0.4); }
-    .dm-badge.sms, .dm-badge.twilio { color: #4ade80; border-color: rgba(74,222,128,0.4); }
-    .dm-badge.tiktok { color: #25f4ee; border-color: rgba(37,244,238,0.4); }
-    .dm-badge.facebook { color: #60a5fa; border-color: rgba(96,165,250,0.4); }
-    .dm-empty { padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
-    .dm-search-wrap { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border-2); }
-    .dm-search-wrap input { width: 100%; padding: 0.45rem 0.6rem; border: 1px solid var(--border-2);
-      border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.78rem; }
-    .dm-search-wrap input:focus { outline: none; border-color: var(--accent); }
-    .dm-state { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.04em; text-transform: uppercase;
-      color: var(--accent-2); flex: 0 0 auto; }
-    .dm-phone { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.02em; color: #4ade80;
-      border: 1px solid rgba(74,222,128,0.35); background: rgba(74,222,128,0.08);
-      padding: 0.08rem 0.4rem; border-radius: 4px; flex: 0 0 auto; text-decoration: none; }
-    .dm-phone:hover { background: rgba(74,222,128,0.16); }
-    .dm-phone-none { font-family: var(--mono); font-size: 0.58rem; color: #556; flex: 0 0 auto; }
+    .dm-thread-time { font-size: 11.5px; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
+    .dm-thread-preview { font-size: 13px; color: var(--muted); overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; line-height: 1.35; }
+    .dm-thread-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; }
+    .dm-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border-2);
+      color: var(--muted); background: rgba(255,255,255,0.03); flex: 0 0 auto; }
+    .dm-badge.instagram { color: #c026d3; border-color: rgba(192,38,211,0.35); background: rgba(192,38,211,0.08); }
+    .dm-badge.sms, .dm-badge.twilio { color: #16a34a; border-color: rgba(22,163,74,0.35); background: rgba(22,163,74,0.08); }
+    .dm-badge.tiktok { color: #0d9488; border-color: rgba(13,148,136,0.35); background: rgba(13,148,136,0.08); }
+    .dm-badge.facebook { color: #2563eb; border-color: rgba(37,99,235,0.35); background: rgba(37,99,235,0.08); }
+    .dm-state { font-size: 10px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 999px; flex: 0 0 auto;
+      background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid var(--border-2); }
+    .dm-state.flag_for_call { background: rgba(245,158,11,0.14); color: #d97706; border-color: rgba(245,158,11,0.4); }
+    .dm-state.phone_requested { background: rgba(59,130,246,0.1); color: #2563eb; border-color: rgba(59,130,246,0.35); }
+    .dm-state.criteria_collected,
+    .dm-state.property_sent,
+    .dm-state.opening_offered_details { background: rgba(0,212,255,0.1); color: var(--accent); border-color: rgba(0,212,255,0.3); }
+    .dm-state.closed { background: rgba(74,222,128,0.1); color: #16a34a; border-color: rgba(74,222,128,0.35); }
+    .dm-phone { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; color: #16a34a;
+      border: 1px solid rgba(22,163,74,0.35); background: rgba(22,163,74,0.08);
+      padding: 3px 9px; border-radius: 999px; flex: 0 0 auto; text-decoration: none; }
+    .dm-phone:hover { background: rgba(22,163,74,0.16); }
+    .dm-phone-none { font-size: 10.5px; color: var(--muted); flex: 0 0 auto;
+      padding: 3px 8px; border-radius: 999px; border: 1px dashed var(--border-2); }
     .dm-conv-head .dm-phone { font-size: 0.68rem; }
-
-    .dm-thread-open { margin-left: 0.5rem; color: var(--muted); flex: 0 0 auto; }
-    .dm-thread:hover .dm-thread-open { color: var(--accent); }
+    .dm-empty { padding: 2.2rem 1.2rem; text-align: center; color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+    .dm-thread-open { color: var(--muted); flex: 0 0 auto; font-size: 18px; line-height: 1;
+      align-self: center; opacity: 0.45; transition: opacity 0.12s, color 0.12s; }
+    .dm-thread:hover .dm-thread-open { color: var(--accent); opacity: 1; }
 
     /* ── Conversation popup (modal) ── */
     .dm-modal { position: fixed; inset: 0; z-index: 100; display: none; }
@@ -145,7 +174,7 @@
     <style id="brivity-skin">
       /* Brivity theme - white + teal, matching the CRM/shell. */
       :root{
-        --bg:#f9fbfb; --surface:#ffffff; --surface-2:#ffffff; --border:#edf0f0; --border-2:#edf0f0;
+        --bg:#f9fbfb; --surface:#ffffff; --surface-2:#f7f9fa; --border:#edf0f0; --border-2:#edf0f0;
         --text:#333333; --muted:#5f6b78; --accent:#59c4c4;
         --user:rgba(89,196,196,0.12); --bot:#ffffff;
       }
@@ -153,7 +182,23 @@
       /* KPI stat cards: white surface + dark numbers (they hard-coded #fff) */
       .dm-stat{ background:#ffffff !important; box-shadow:0 1px 3px rgba(16,24,40,.06); }
       .dm-stat .num{ color:#333333 !important; }
-      .dm-thread.active,.dm-new:hover{ background:rgba(89,196,196,0.10) !important; }
+      .dm-list{ background:#fff; border-color:#edf0f0; box-shadow:0 1px 3px rgba(16,24,40,.04); }
+      .dm-thread:hover{ background:#f7f9fa !important; }
+      .dm-thread.active{ background:rgba(89,196,196,0.10) !important; box-shadow:inset 3px 0 0 #59c4c4; }
+      .dm-new{ background:#59c4c4 !important; color:#fff !important; }
+      .dm-new:hover{ filter:brightness(1.05); }
+      .dm-fchip.on{ background:rgba(89,196,196,0.14) !important; border-color:#59c4c4 !important; color:#2a8f8f !important; }
+      .dm-fchip:hover{ border-color:#59c4c4; color:#333; }
+      .dm-search-wrap input{ background:#f7f9fa; border-color:#edf0f0; }
+      .dm-search-wrap input:focus{ background:#fff; border-color:#59c4c4; }
+      .dm-av{ border-color:#fff; }
+      .dm-badge{ background:#f7f9fa; }
+      .dm-badge.tiktok{ color:#0f766e; background:rgba(13,148,136,0.08); }
+      .dm-state{ background:#f1f4f6; color:#5b6570; border-color:#e3e8e8; }
+      .dm-state.flag_for_call{ background:rgba(245,158,11,0.12); color:#b45309; }
+      .dm-state.phone_requested{ background:rgba(59,130,246,0.1); color:#1d4ed8; }
+      .dm-phone{ color:#15803d; }
+      .dm-phone-none{ color:#9aa6b2; border-color:#e3e8e8; }
       *{ scrollbar-color:rgba(89,196,196,.4) transparent; }
     </style>
 </head>
@@ -179,8 +224,14 @@
   <div class="dm-body">
     <div class="dm-list">
       <div class="dm-list-head">
-        <span class="t">Conversations <span id="dm-count" style="color:var(--accent);"></span></span>
+        <span class="t">Conversations <span id="dm-count"></span></span>
         <button type="button" class="dm-new" id="dm-new-btn">+ New</button>
+      </div>
+      <div class="dm-filters" id="dm-filters" role="tablist" aria-label="Filter conversations">
+        <button type="button" class="dm-fchip on" data-filter="all">All <span class="n" id="fc-all"></span></button>
+        <button type="button" class="dm-fchip" data-filter="needs_call">Needs call <span class="n" id="fc-needs"></span></button>
+        <button type="button" class="dm-fchip" data-filter="has_phone">Has phone <span class="n" id="fc-phone"></span></button>
+        <button type="button" class="dm-fchip" data-filter="no_phone">No phone <span class="n" id="fc-nophone"></span></button>
       </div>
       <div class="dm-search-wrap">
         <input type="search" id="dm-search" placeholder="Search name or message…" autocomplete="off" />
@@ -265,7 +316,37 @@
     }
 
     let searchQ = "";
+    let listFilter = "all";
     let totalCount = 0;
+
+    function initialOf(name) {
+      const s = String(name || "?").trim();
+      return (s[0] || "?").toUpperCase();
+    }
+    function stateLabel(state) {
+      return String(state || "").replace(/_/g, " ");
+    }
+    function matchesFilter(c) {
+      const st = String(c.state || "");
+      const hasPhone = !!c.phone;
+      if (listFilter === "needs_call") return st === "flag_for_call";
+      if (listFilter === "has_phone") return hasPhone;
+      if (listFilter === "no_phone") return !hasPhone;
+      return true;
+    }
+    function updateFilterCounts() {
+      const all = convCache.length;
+      let needs = 0, phone = 0, nophone = 0;
+      for (const c of convCache) {
+        if (String(c.state || "") === "flag_for_call") needs++;
+        if (c.phone) phone++; else nophone++;
+      }
+      const setN = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n ? "(" + n + ")" : ""; };
+      setN("fc-all", all);
+      setN("fc-needs", needs);
+      setN("fc-phone", phone);
+      setN("fc-nophone", nophone);
+    }
 
     function fmtNum(n) { return Number(n || 0).toLocaleString(); }
 
@@ -309,6 +390,7 @@
     }
 
     function renderThreads() {
+      updateFilterCounts();
       const countEl = document.getElementById("dm-count");
       if (countEl) countEl.textContent = totalCount ? "· " + totalCount : "";
       if (!convCache.length) {
@@ -317,33 +399,45 @@
         return;
       }
       const q = searchQ.trim().toLowerCase();
-      const shown = q
-        ? convCache.filter((c) =>
-            String(c.name || "").toLowerCase().includes(q) ||
-            String(c.userId || "").toLowerCase().includes(q) ||
-            String(c.lastText || "").toLowerCase().includes(q))
-        : convCache;
+      const shown = convCache.filter((c) => {
+        if (!matchesFilter(c)) return false;
+        if (!q) return true;
+        return String(c.name || "").toLowerCase().includes(q) ||
+          String(c.userId || "").toLowerCase().includes(q) ||
+          String(c.lastText || "").toLowerCase().includes(q);
+      });
       if (!shown.length) {
-        threadsEl.innerHTML = '<div class="dm-empty">No conversations match "' + esc(searchQ) + '".</div>';
+        threadsEl.innerHTML = '<div class="dm-empty">' +
+          (q ? 'No conversations match "' + esc(searchQ) + '".' : "No conversations in this filter.") +
+          '</div>';
         return;
       }
       threadsEl.innerHTML = shown.map((c) => {
         const active = current && current.id === c.id ? " active" : "";
         const pc = platClass(c.platform);
-        const state = c.state ? `<span class="dm-state">${esc(String(c.state).replace(/_/g, " "))}</span>` : "";
+        const st = String(c.state || "");
+        const state = st
+          ? `<span class="dm-state ${esc(st)}">${esc(stateLabel(st))}</span>`
+          : "";
         const phone = c.phone
-          ? `<a class="dm-phone" href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" title="Captured number - tap to call">📞 ${esc(c.phone)}</a>`
-          : `<span class="dm-phone-none">no number yet</span>`;
+          ? `<a class="dm-phone" href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" title="Captured number - tap to call">${esc(c.phone)}</a>`
+          : `<span class="dm-phone-none">No phone</span>`;
+        const preview = (c.lastRole === "assistant" ? "You: " : "") + (c.lastText || "");
         return `<div class="dm-thread${active}" data-id="${esc(c.id)}" data-platform="${esc(c.platform)}" data-userid="${esc(c.userId)}" data-name="${esc(c.name)}" data-phone="${esc(c.phone || "")}" role="button" tabindex="0" title="Open conversation">
-          <div class="dm-thread-top">
-            <span class="dm-badge ${pc}">${esc(c.platform)}</span>
-            <span class="dm-thread-name">${esc(c.name)}</span>
-            ${phone}
-            ${state}
-            <span class="dm-thread-time">${esc(timeAgo(c.lastAt))}</span>
-            <span class="dm-thread-open" aria-hidden="true">›</span>
+          <div class="dm-av ${pc}" aria-hidden="true">${esc(initialOf(c.name))}</div>
+          <div class="dm-thread-body">
+            <div class="dm-thread-top">
+              <span class="dm-thread-name">${esc(c.name)}</span>
+              <span class="dm-thread-time">${esc(timeAgo(c.lastAt))}</span>
+            </div>
+            <div class="dm-thread-preview">${esc(preview)}</div>
+            <div class="dm-thread-meta">
+              <span class="dm-badge ${pc}">${esc(c.platform || "dm")}</span>
+              ${phone}
+              ${state}
+            </div>
           </div>
-          <div class="dm-thread-preview">${c.lastRole === "assistant" ? "↩ " : ""}${esc(c.lastText)}</div>
+          <span class="dm-thread-open" aria-hidden="true">›</span>
         </div>`;
       }).join("");
       threadsEl.querySelectorAll(".dm-thread").forEach((el) => {
@@ -400,6 +494,14 @@
 
     document.getElementById("dm-search").addEventListener("input", (e) => {
       searchQ = e.target.value || "";
+      renderThreads();
+    });
+
+    document.getElementById("dm-filters").addEventListener("click", (e) => {
+      const btn = e.target.closest(".dm-fchip");
+      if (!btn) return;
+      listFilter = btn.dataset.filter || "all";
+      document.querySelectorAll(".dm-fchip").forEach((el) => el.classList.toggle("on", el === btn));
       renderThreads();
     });
 
