@@ -1,17 +1,29 @@
 // A compact map of routes, not a second tool registry or a grant of permission.
+// Keep EXECUTION_LANES short: it is injected into Work context and the operational
+// prompt. Token efficiency depends on lanes staying a decision tree, not a catalog.
+
+/** Shared routing contract for Command Center vs browser vs Composio. */
+export const EXECUTION_LANES = `EXECUTION LANES (pick the first that fits; do not invent a fourth)
+1) COMMAND CENTER — CRM, TikTok/social analytics, DM Agent, tasks, knowledge, digests for THIS account. Use business_tools → business_call (get_social_summary, get_social_analytics, get_social_videos, search_leads, crm_api after crm_api_index, …). Prefer this for anything the product UI already shows.
+2) BROWSER — computer tool for websites without a Command Center/API route. Discover schemas; scroll and re-read before claiming automation cannot. Do not browse for stats that lane 1 already returns.
+3) COMPOSIO / PLUGINS — external apps Command Center does not cover (Sheets, Slack, etc.). SEARCH_TOOLS then execute; OAuth links are real blockers only for that app.
+Order: lane 1 for in-house asks, lane 3 for connected external apps, lane 2 for page work. A missing plugin is never a missing Command Center capability. Cite live tool numbers; do not walk them back.`;
+
 export function capabilityMap(input:{local:boolean;browser:boolean;managed:boolean;connectionError?:string;apps:any[];custom:any[];tools:string[]}) {
   const has=(name:string)=>input.tools.includes(name);
   return {computer:input.local?'connected_local_tab':'hosted_chat_browser',
+    lanes:'command_center|browser|composio',
     routes:[
-      {goal:'Inspect and operate the current website',available:has('computer')&&(input.local||input.browser),tools:['computer'],next:'Discover current schemas. Read snapshot/table; inspect scroll regions and scroll actual content. Empty rows are an observation gap, not proof automation is impossible.'},
-      {goal:'Understand visual controls or unreadable page content',available:has('inspect_screen')&&(input.local||input.browser),tools:['inspect_screen'],next:'Ask a specific visual question. Native vision receives pixels; a vision helper supplies text for text-only main models. Reinspect after actions; visual analysis alone does not verify all records.'},
-      {goal:'Read or write connected apps, including Google Sheets',available:input.managed&&has('COMPOSIO_SEARCH_TOOLS'),state:input.connectionError?'unknown':'checked',apps:input.apps,error:input.connectionError,tools:['plugins','COMPOSIO_SEARCH_TOOLS','COMPOSIO_GET_TOOL_SCHEMAS','COMPOSIO_MANAGE_CONNECTIONS','COMPOSIO_MULTI_EXECUTE_TOOL'],next:'Discover exact action and scope. Connected is not permission to act. If OAuth is required return its actual link; keep independent source collection moving. Refresh plugins after authorization.'},
-      {goal:'Use custom connected services',available:input.custom.length>0,connections:input.custom,tools:['plugin_tools','plugin_call'],next:'Discover the current schema and honor Enable actions.'},
+      {goal:'Inspect and operate the current website',available:has('computer')&&(input.local||input.browser),tools:['computer'],lane:'browser',next:'Discover current schemas. Read snapshot/table; inspect scroll regions and scroll actual content. Empty rows are an observation gap, not proof automation is impossible.'},
+      {goal:'Understand visual controls or unreadable page content',available:has('inspect_screen')&&(input.local||input.browser),tools:['inspect_screen'],lane:'browser',next:'Ask a specific visual question. Native vision receives pixels; a vision helper supplies text for text-only main models. Reinspect after actions; visual analysis alone does not verify all records.'},
+      {goal:'Read or write connected apps, including Google Sheets',available:input.managed&&has('COMPOSIO_SEARCH_TOOLS'),state:input.connectionError?'unknown':'checked',apps:input.apps,error:input.connectionError,tools:['plugins','COMPOSIO_SEARCH_TOOLS','COMPOSIO_GET_TOOL_SCHEMAS','COMPOSIO_MANAGE_CONNECTIONS','COMPOSIO_MULTI_EXECUTE_TOOL'],lane:'composio',next:'Discover exact action and scope. Connected is not permission to act. If OAuth is required return its actual link; keep independent source collection moving. Refresh plugins after authorization. Do not use this lane for Command Center TikTok/CRM/DM data.'},
+      {goal:'Use custom connected services',available:input.custom.length>0,connections:input.custom,tools:['plugin_tools','plugin_call'],lane:'composio',next:'Discover the current schema and honor Enable actions.'},
       {goal:'Retain extracted records and deliver files',available:has('work_records'),tools:['work_records','workspace_files','workspace_sheet','workspace_write','workspace_read'],next:'Read uploaded XLSX sheets/rows/long cells with workspace_sheet; no browser or OAuth is needed. Create authored text/JSON/CSV using workspace_write; read actual content using workspace_read. No browser or connector is needed for local text artifacts. Save source-backed batches by stable ID, separate large sections. Export CSV when requested; Google Sheets delivery still requires the managed app and read-back.'},
       {goal:'Resume a long task without repeating completed work',available:has('task_plan'),tools:['task_plan','continuity','history_search'],next:'Read the saved contract, progress and records. Preserve latest count, exclusions, fields and destination. A blocked delivery step need not block extraction.'},
       {goal:'Reuse a procedure that worked',available:has('workflow'),tools:['workflow'],next:'List/get relevant taught or execution-backed procedures. Check prerequisites against current state; historical success is not current proof.'},
-      {goal:'Use internal CRM/business data',available:has('business_tools'),tools:['business_tools','business_call'],next:'Discover authorized tools. Internal CRM data is not automatically the external Brivity account.'}
-    ],rule:'A missing search result is not a missing capability. Try another relevant route before declaring a limitation. Do not switch accounts/computers or expand authorization.'};
+      {goal:'Use internal CRM/business data',available:has('business_tools'),tools:['business_tools','business_call'],lane:'command_center',next:'Discover authorized tools. Internal CRM data is not automatically the external Brivity account.'},
+      {goal:'TikTok / social analytics, content stats, DM inbox via Command Center',available:has('business_tools'),tools:['business_tools','business_call'],lane:'command_center',next:'Prefer business_call with get_social_summary, get_social_analytics, get_social_videos, get_content_digest, get_morning_scan, or crm_api after crm_api_index (dm/zernio/analytics paths). A missing Composio TikTok plugin is not a missing capability. Never claim social data is unavailable without trying these tools.'}
+    ],rule:'A missing search result is not a missing capability. Try another relevant route before declaring a limitation. Command Center (lane 1) beats managed plugins (lane 3) for CRM, TikTok, social analytics and DMs. Do not switch accounts/computers or expand authorization.'};
 }
 
 export function validateContract(value:any) {
@@ -31,6 +43,7 @@ export function validateContract(value:any) {
 }
 
 // A stop decision must distinguish lack of observations from lack of capability.
+// Includes false denials of Command Center / TikTok / social when Composio looks empty.
 export function unsupportedCapabilityClaim(text:string) {
-  return /(?:cannot|can't|unable to|not able to).{0,50}(?:read|parse|open).{0,35}(?:xlsx|excel|workbook|spreadsheet|attachment)|(?:cannot|can't|unable to|not able to).{0,70}(?:scroll|render|automat|extract|create.{0,15}(?:sheet|spreadsheet))|(?:virtualiz|lazy.load).{0,100}(?:limitation|prevent|impossible)|(?:manually scroll|copy.paste approach)/is.test(text);
+  return /(?:cannot|can't|unable to|not able to).{0,50}(?:read|parse|open).{0,35}(?:xlsx|excel|workbook|spreadsheet|attachment)|(?:cannot|can't|unable to|not able to).{0,70}(?:scroll|render|automat|extract|create.{0,15}(?:sheet|spreadsheet))|(?:virtualiz|lazy.load).{0,100}(?:limitation|prevent|impossible)|(?:manually scroll|copy.paste approach)|(?:cannot|can't|unable to|not able to|don't have|do not have|no (?:access|way|api|integration)).{0,90}(?:tiktok|social (?:media )?analytics|zernio|dm inbox|command center)|(?:need|require|requires).{0,50}(?:tiktok (?:developer|api)|composio).{0,60}tiktok|(?:tiktok|social analytics|dm(?:s)?).{0,80}(?:not (?:available|supported|connected|possible)|unavailable)|(?:plugins?|composio).{0,40}(?:no|missing|without).{0,40}tiktok.{0,80}(?:can't|cannot|unable|unavailable)/is.test(text);
 }

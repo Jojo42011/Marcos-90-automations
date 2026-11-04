@@ -77,6 +77,30 @@ check("prompt: honest-numbers rules present in operational half", () => {
   assert(/ASK WHICH ONE/.test(fp.OPERATIONAL_PROMPT));
 });
 
+check("prompt: execution lanes + no false Composio/TikTok denials", () => {
+  assert(/EXECUTION LANES/.test(fp.OPERATIONAL_PROMPT));
+  assert(/Never walk back a live tool number/.test(fp.OPERATIONAL_PROMPT));
+  assert(/Missing Composio \/ Plugins TikTok is NOT a missing capability/.test(fp.OPERATIONAL_PROMPT));
+  assert(/get_social_analytics/.test(fp.OPERATIONAL_PROMPT));
+  assert(/THIS signed-in account only/.test(fp.OPERATIONAL_PROMPT));
+});
+
+check("work runtime: shared EXECUTION_LANES for Command Center/browser/Composio", () => {
+  const runtime = read("src/harvey/work/runtime.ts");
+  assert(/EXECUTION_LANES/.test(runtime));
+  assert(/get_social_summary/.test(runtime) || /EXECUTION_LANES/.test(runtime));
+  const caps = read("src/harvey/work/capabilities.ts");
+  assert(/export const EXECUTION_LANES/.test(caps));
+  assert(/TikTok \/ social analytics/.test(caps));
+  assert(/missing Composio TikTok plugin is not a missing capability/.test(caps));
+});
+
+check("account identity: tenant block refuses Marco-only social denials", () => {
+  const loop = read("src/hull/agentLoop.ts");
+  assert(/do not refuse because prompts mention Marco/.test(loop));
+  assert(/CAPABILITY RECOVERY:[\s\S]*business_call before plugins/.test(loop));
+});
+
 check("prompt: voice register only in voice mode, with NO YAPPING contract", () => {
   const voice = fp.buildFounderSystemPrompt("", { voiceMode: true });
   const text = fp.buildFounderSystemPrompt("", { voiceMode: false });

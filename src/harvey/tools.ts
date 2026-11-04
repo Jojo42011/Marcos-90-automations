@@ -293,7 +293,7 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_social_videos",
     description:
-      "Get a list of Marco's TikTok videos filtered by performance tier and time period. Use when Marco asks about his best videos, worst videos, recent videos, or wants to see specific video performance.",
+      "Get a list of this account's TikTok videos filtered by performance tier and time period. Use when the signed-in user asks about best videos, worst videos, recent videos, or specific video performance.",
     input_schema: {
       type: "object",
       properties: {
