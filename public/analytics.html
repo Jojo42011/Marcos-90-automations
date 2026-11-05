@@ -60,17 +60,13 @@
   .empty{padding:26px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
   .empty .big{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
   .src{font-size:11px;color:var(--muted);margin-top:12px}
-  .cover{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-  .chip{font-size:11.5px;padding:4px 9px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--muted)}
-  .chip.in{border-color:rgba(15,157,118,.35);color:#0f6f56;background:#f0fbf7}
 :root{--card:#fff}
-  button.refresh,.card,.panel,.chip{background:var(--card)}
+  button.refresh,.card,.panel{background:var(--card)}
   .tab:hover,.tab.active{background:transparent}.tab.active{border-color:transparent;border-bottom:2px solid var(--accent)}
   .row{border-color:var(--line)}.mix{background:var(--line)}
   [data-theme="dark"] .banner.info{color:#a9d6d6}
   [data-theme="dark"] .banner.warn{background:#342b1b;color:#edc98c}
   [data-theme="dark"] .banner.bad{background:#342328;color:#efb0b7}
-  [data-theme="dark"] .chip.in{background:#19342e;color:#8cd8be}
   [data-theme="dark"] a.top{color:#8bd6cf}
 </style>
 </head>
@@ -267,14 +263,8 @@ function combinedBody(c){
     html += '<div class="banner info"><b>No platform is reporting yet.</b> ' + esc(c.note || "") + '</div>';
   }
 
-  html += '<div class="cover">' +
-    (c.included || []).map(function(l){ return '<span class="chip in">' + esc(l) + ' · counted</span>'; }).join("") +
-    (c.excluded || []).map(function(e){ return '<span class="chip">' + esc(e.label) + ' · not counted</span>'; }).join("") +
-  '</div>';
-
   if (!c.included || !c.included.length) return html;
 
-  html += '<div style="height:14px"></div>';
   html += '<div class="cards">' +
     card("Followers", c.followers) +
     card("Posts", c.posts) +
