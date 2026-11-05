@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-05: Analytics tab lists every active Zernio connection for the signed-in owner (Marco’s second TikTok, Instagram, Facebook, YouTube; Wesley’s Instagram, etc.), pulls account insights + follower-stats (not only post roll-ups), and keeps canonical not-connected stubs. Harvey `get_social_analytics` / `get_social_summary` match by platform family or account id.
 - 2026-11-04: Harvey execution lanes (`EXECUTION_LANES`: Command Center → browser → Composio) are shared across chat operational prompt and Work context; false TikTok/social denials re-trigger capability recovery; `scripts/verify-harvey-jobs.mjs` pins routing and the route-with-feature convention. Token-efficient: one compact decision tree, not duplicated catalogs.
 - 2026-11-03: Harvey assistant routing prefers Command Center / Zernio business tools (`get_social_summary`, `get_social_analytics`, `business_call`, `crm_api` for DMs) over Composio for TikTok/social/CRM; prompts ban false “TikTok unavailable” denials when a plugin is missing, keep signed-in account identity (Wesley/Marco/Carlos), and forbid walking back live tool metrics.
 - 2026-11-03: Quo SMS is injected into Marco/Carlos account workers (`QUO_*` via `quoEnvForOwner`). Messages → SMS and lead Text can switch among the three Quo lines (Marco 2 `+12106722794`, Marco `+17262001548`, Carlos `+17372834703`). Sends accept `from`/`phoneNumberId`; Quo webhooks are shared inbound and forwarded into Marco's worker store.

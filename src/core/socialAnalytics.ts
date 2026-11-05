@@ -1,23 +1,29 @@
 /**
  * Social analytics payload for /analytics and Harvey.
  *
- * TikTok (and any other platform connected on the current account's Zernio
- * profile) comes from Zernio. Platforms with no connected account stay
- * `not_connected` — never fabricated zeros.
+ * Every active account on this owner's Zernio profile becomes its own tab
+ * (TikTok × N, Instagram, Facebook, YouTube, …). Platforms with no connected
+ * account stay `not_connected` — never fabricated zeros.
  */
-import { isZernioConfigured, fetchZernioPlatform, type ZernioPlatformStats } from "../integrations/zernio/index.js";
+import {
+  isZernioConfigured,
+  fetchAllZernioAccountAnalytics,
+  type ZernioPlatformStats,
+} from "../integrations/zernio/index.js";
 import { currentZernioSecrets } from "./zernioOwnerConfig.js";
 
 export type PlatformStatus = "live" | "not_connected" | "error" | "unreadable";
 
 export interface PlatformMetrics {
   id: string;
+  platform: string;
   label: string;
   status: PlatformStatus;
   source: string | null;
   lastUpdated: string | null;
   stale: boolean;
   note: string | null;
+  accountId: string | null;
   accountUsername: string | null;
   followers: number | null;
   posts: number | null;
@@ -46,43 +52,65 @@ export interface PlatformMetrics {
   }>;
 }
 
-export interface CombinedMetrics extends Omit<PlatformMetrics, "id" | "label" | "topPost" | "mix" | "recentPosts" | "accountUsername"> {
+export interface CombinedMetrics extends Omit<PlatformMetrics, "id" | "label" | "topPost" | "mix" | "recentPosts" | "accountUsername" | "accountId" | "platform"> {
   id: "all";
   label: "All platforms";
+  platform: "all";
   included: string[];
   excluded: { label: string; reason: string }[];
   topPost: { url: string | null; caption: string | null; views: number | null; platform: string } | null;
   recentPosts: PlatformMetrics["recentPosts"];
   accountUsername: null;
+  accountId: null;
 }
 
 export interface AnalyticsPayload {
   platforms: PlatformMetrics[];
   combined: CombinedMetrics;
-  zernio: { configured: boolean; owner: string; tiktokAccountId: string | null };
+  zernio: {
+    configured: boolean;
+    owner: string;
+    tiktokAccountId: string | null;
+    connectedAccounts: { id: string; platform: string; username: string | null }[];
+  };
   generatedAt: string;
 }
 
-const PLATFORMS: { id: string; label: string }[] = [
+const CANONICAL_PLATFORMS: { id: string; label: string }[] = [
   { id: "tiktok", label: "TikTok" },
   { id: "instagram", label: "Instagram" },
   { id: "facebook", label: "Facebook" },
   { id: "youtube", label: "YouTube" },
 ];
 
+const PLATFORM_LABEL: Record<string, string> = Object.fromEntries(
+  CANONICAL_PLATFORMS.map((p) => [p.id, p.label]),
+);
+
+function platformLabel(platform: string): string {
+  return PLATFORM_LABEL[platform] || platform.replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function accountLabel(platform: string, username: string | null): string {
+  const base = platformLabel(platform);
+  if (!username) return base;
+  return username.includes(" ") ? `${base} · ${username}` : `${base} · @${username}`;
+}
+
 function engagement(likes: number | null, comments: number | null, shares: number | null, views: number | null): number | null {
   if (views == null || views <= 0) return null;
   return Math.round((((likes || 0) + (comments || 0) + (shares || 0)) / views) * 10000) / 100;
 }
 
-function emptyPlatform(id: string, label: string, note: string): PlatformMetrics {
+function emptyPlatform(id: string, platform: string, label: string, note: string): PlatformMetrics {
   return {
-    id, label,
+    id, platform, label,
     status: "not_connected",
     source: null,
     lastUpdated: null,
     stale: false,
     note,
+    accountId: null,
     accountUsername: null,
     followers: null, posts: null, views: null, likes: null, comments: null, shares: null,
     saves: null, reach: null, profileViews: null, followsFromPosts: null,
@@ -103,36 +131,42 @@ function mixFromPosts(posts: ZernioPlatformStats["postsDetail"]): PlatformMetric
   return { viral, hot, average, cold };
 }
 
-async function platformMetrics(id: string, label: string): Promise<PlatformMetrics> {
-  if (!isZernioConfigured()) {
-    return emptyPlatform(id, label, "Waiting on the Zernio connection — set this account's Zernio API key to load analytics.");
-  }
-  const r = await fetchZernioPlatform(id);
-  if (!r.ok) {
-    const missingAccount = /no .+ account is connected/i.test(r.error || "");
+function fromFetch(
+  account: { id: string; platform: string; username: string | null },
+  result: Awaited<ReturnType<typeof fetchAllZernioAccountAnalytics>>["results"][number],
+): PlatformMetrics {
+  const label = accountLabel(account.platform, account.username);
+  if (!result.ok) {
+    const missingAccount = /no .+ account is connected/i.test(result.error || "");
     return {
-      ...emptyPlatform(id, label, r.error || "Zernio request failed."),
+      ...emptyPlatform(account.id, account.platform, label, result.error || "Zernio request failed."),
       status: missingAccount ? "not_connected" : "error",
       source: "Zernio",
+      accountId: account.id,
+      accountUsername: account.username,
     };
   }
-  if (r.unmapped) {
+  if (result.unmapped || !result.stats) {
     return {
-      ...emptyPlatform(id, label, "Zernio replied but returned no readable metrics for this platform yet."),
+      ...emptyPlatform(account.id, account.platform, label, "Zernio replied but returned no readable metrics for this account yet."),
       status: "unreadable",
       source: "Zernio",
-      accountUsername: r.accountUsername || null,
+      accountId: account.id,
+      accountUsername: result.accountUsername || account.username,
     };
   }
-  const st = r.stats!;
+  const st = result.stats;
   return {
-    id, label,
+    id: account.id,
+    platform: account.platform,
+    label,
     status: "live",
     source: "Zernio",
     lastUpdated: new Date().toISOString(),
     stale: false,
     note: null,
-    accountUsername: r.accountUsername || null,
+    accountId: account.id,
+    accountUsername: result.accountUsername || account.username,
     followers: st.followers,
     posts: st.posts,
     views: st.views,
@@ -193,6 +227,7 @@ function combine(platforms: PlatformMetrics[]): CombinedMetrics {
   return {
     id: "all",
     label: "All platforms",
+    platform: "all",
     status: live.length ? "live" : "not_connected",
     source: live.length ? live.map((p) => p.label).join(" + ") : null,
     lastUpdated: oldest,
@@ -203,6 +238,7 @@ function combine(platforms: PlatformMetrics[]): CombinedMetrics {
         : null
       : "No platform is reporting yet, so there is nothing to roll up.",
     accountUsername: null,
+    accountId: null,
     followers: sum((p) => p.followers),
     posts,
     views,
@@ -224,14 +260,47 @@ function combine(platforms: PlatformMetrics[]): CombinedMetrics {
 
 export async function getSocialAnalytics(): Promise<AnalyticsPayload> {
   const secrets = currentZernioSecrets();
-  const platforms = await Promise.all(PLATFORMS.map((p) => platformMetrics(p.id, p.label)));
+  if (!isZernioConfigured()) {
+    const platforms = CANONICAL_PLATFORMS.map((p) =>
+      emptyPlatform(p.id, p.id, p.label, "Waiting on the Zernio connection — set this account's Zernio API key to load analytics."),
+    );
+    return {
+      platforms,
+      combined: combine(platforms),
+      zernio: { configured: false, owner: secrets.ownerSlug, tiktokAccountId: secrets.tiktokAccountId || null, connectedAccounts: [] },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  const batch = await fetchAllZernioAccountAnalytics();
+  const platforms: PlatformMetrics[] = [];
+
+  if (!batch.ok) {
+    for (const p of CANONICAL_PLATFORMS) {
+      platforms.push(emptyPlatform(p.id, p.id, p.label, batch.error || "Could not list Zernio accounts."));
+      platforms[platforms.length - 1].status = "error";
+      platforms[platforms.length - 1].source = "Zernio";
+    }
+  } else {
+    for (let i = 0; i < batch.accounts.length; i++) {
+      platforms.push(fromFetch(batch.accounts[i], batch.results[i]));
+    }
+    // Keep a clear "not connected" chip for canonical platforms with no active account.
+    for (const p of CANONICAL_PLATFORMS) {
+      if (!batch.accounts.some((a) => a.platform === p.id)) {
+        platforms.push(emptyPlatform(p.id, p.id, p.label, `No ${p.label} account is connected on this Zernio profile.`));
+      }
+    }
+  }
+
   return {
     platforms,
     combined: combine(platforms),
     zernio: {
-      configured: isZernioConfigured(),
+      configured: true,
       owner: secrets.ownerSlug,
       tiktokAccountId: secrets.tiktokAccountId || null,
+      connectedAccounts: batch.accounts.map((a) => ({ id: a.id, platform: a.platform, username: a.username })),
     },
     generatedAt: new Date().toISOString(),
   };

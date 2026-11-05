@@ -819,13 +819,19 @@ export async function executeHarveyTool(
       try {
         const { getSocialAnalytics } = await import("../core/socialAnalytics.js");
         const live = await getSocialAnalytics();
-        const tiktok = live.platforms.find((p) => p.id === "tiktok");
+        const tiktokAccounts = live.platforms.filter((p) => p.platform === "tiktok" && p.status === "live");
+        const preferredId = live.zernio?.tiktokAccountId || null;
+        const tiktok =
+          tiktokAccounts.find((p) => p.accountId === preferredId || p.id === preferredId) ||
+          tiktokAccounts[0] ||
+          null;
         return {
           ...summary,
           liveAnalytics: live,
-          tiktokLive: tiktok || null,
+          tiktokLive: tiktok,
+          tiktokAccounts,
           source: "zernio",
-          note: "liveAnalytics is the current Zernio pull for this account; older snapshot fields remain for week-over-week context when present.",
+          note: "liveAnalytics lists every connected Zernio account for this user; tiktokLive is the preferred TikTok account when set.",
         };
       } catch (err) {
         return {

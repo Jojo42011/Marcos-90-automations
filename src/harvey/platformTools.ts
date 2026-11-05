@@ -441,7 +441,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
       properties: {
         platform: {
           type: "string",
-          description: "'all' for the combined roll-up (default), or one platform: tiktok, instagram, facebook, youtube.",
+          description: "'all' for the combined roll-up (default), a platform family (tiktok, instagram, facebook, youtube), or a specific Zernio account id. Multiple accounts on one platform are returned separately.",
         },
       },
       required: [],
@@ -1009,24 +1009,39 @@ export async function executePlatformTool(
       const payload = await getSocialAnalytics();
 
       if (wanted !== "all") {
-        const p = payload.platforms.find((x) => x.id === wanted);
-        if (!p) {
+        // Match by platform family (tiktok/instagram/…) or exact account id / label slug.
+        const matches = payload.platforms.filter(
+          (x) =>
+            x.platform === wanted ||
+            x.id === wanted ||
+            x.id.toLowerCase() === wanted ||
+            x.label.toLowerCase().includes(wanted),
+        );
+        if (!matches.length) {
           return {
             error: `No such platform "${wanted}".`,
-            available: ["all", ...payload.platforms.map((x) => x.id)],
+            available: ["all", ...new Set(payload.platforms.map((x) => x.platform)), ...payload.platforms.map((x) => x.id)],
           };
         }
-        if (p.status !== "live") {
-          // Spelled out so it can't be paraphrased into "they have no views".
+        const live = matches.filter((p) => p.status === "live");
+        if (!live.length) {
+          const p = matches[0];
           return {
             platform: p.label,
             status: p.status,
             hasData: false,
             reason: p.note,
+            accounts: matches,
             say: `There is no data source for ${p.label} yet — say that plainly. Do NOT report zeros or imply the account is underperforming.`,
           };
         }
-        return { platform: p.label, hasData: true, ...p };
+        if (live.length === 1) return { platform: live[0].label, hasData: true, ...live[0] };
+        return {
+          platform: wanted,
+          hasData: true,
+          accounts: live,
+          say: `Multiple ${wanted} accounts are connected. Report each (@username) separately; do not blend them into one number unless asked for a combined total.`,
+        };
       }
 
       const c = payload.combined;

@@ -324,10 +324,11 @@ function render(){
     '<button class="tab' + (CURRENT === "dm" ? " active" : "") + '" data-id="dm">DM Agent</button>';
 
   var live = DATA.platforms.filter(function(p){ return p.status === "live"; }).length;
+  var connected = DATA.zernio && DATA.zernio.connectedAccounts ? DATA.zernio.connectedAccounts.length : live;
   var owner = DATA.zernio && DATA.zernio.owner ? String(DATA.zernio.owner) : "";
   document.getElementById("sub").textContent =
-    live + " of " + DATA.platforms.length + " platforms reporting" +
-    (owner ? " · " + owner + "'s Zernio" : "") +
+    live + " live · " + connected + " connected on Zernio" +
+    (owner ? " · " + owner + "'s profile" : "") +
     (DATA.zernio && DATA.zernio.configured ? "" : " · Zernio not connected");
 
   var view = document.getElementById("view");
