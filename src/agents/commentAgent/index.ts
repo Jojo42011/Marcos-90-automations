@@ -294,6 +294,18 @@ export async function handleInboundComment(
     return record(evt, "skipped_disabled", "COMMENT_AGENT_ENABLED is false");
   }
 
+  /* Public auto-replies are TikTok-only. Instagram (and other) comments still
+     arrive on the shared Zernio webhook once those accounts are connected —
+     never post under them. DMs are unchanged. */
+  const platform = String(evt.platform || "").trim().toLowerCase();
+  if (platform && platform !== "tiktok") {
+    return record(
+      evt,
+      "skipped_platform",
+      `comment auto-replies are TikTok-only; ignoring ${platform}`,
+    );
+  }
+
   /* 3. Age. Sweeping a backlog is what a bot looks like. */
   if (evt.createdAt) {
     const ageH = (Date.now() - new Date(evt.createdAt).getTime()) / 3600_000;

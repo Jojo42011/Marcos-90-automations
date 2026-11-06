@@ -62,7 +62,7 @@ function evt(over = {}) {
     commentId: over.commentId ?? `c_${n}`,
     platformPostId: over.platformPostId ?? "vid_1",
     postId: "zpost_1",
-    platform: "tiktok",
+    platform: over.platform ?? "tiktok",
     text: "text" in over ? over.text : "How much is this one?",
     authorId: over.authorId ?? `author_${n}`,
     authorUsername: over.authorUsername ?? "janeb",
@@ -222,6 +222,15 @@ process.env.COMMENT_AGENT_ENABLED = "false";
 o = await run(evt({ commentId: "c_killed" }), ACCT);
 check("KILL SWITCH stops posting immediately", o.decision === "skipped_disabled");
 process.env.COMMENT_AGENT_ENABLED = "true";
+
+const postedBeforeIg = posted.length;
+o = await run(evt({ commentId: "c_ig", platform: "instagram", text: "How much?" }), ACCT, {
+  classify: async () => { throw new Error("Instagram must not reach the classifier"); },
+});
+check("Instagram comments are not auto-replied", o.decision === "skipped_platform");
+check("Instagram skip posts nothing", posted.length === postedBeforeIg);
+o = await run(evt({ commentId: "c_tt_ok", platform: "tiktok", text: "Price?" }), ACCT);
+check("TikTok reply path is not blocked by platform guard", o.decision !== "skipped_platform");
 
 console.log("\nATTRIBUTION & THE VA QUEUE");
 const q0 = store.getFollowUpQueue(0, 100);

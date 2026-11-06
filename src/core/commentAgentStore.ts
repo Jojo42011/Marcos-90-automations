@@ -95,6 +95,7 @@ export type CommentDecision =
   | "skipped_cannot_reply"
   | "skipped_rate_limit"
   | "skipped_disabled"
+  | "skipped_platform"
   | "failed";
 
 export interface CommentActionRow {
