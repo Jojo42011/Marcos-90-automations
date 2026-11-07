@@ -11499,6 +11499,18 @@ app.get("/api/tracker/counts", (_req, res) => {
   res.json({ ok: true, counts: trackerCounts() });
 });
 
+/** CRM Overview — buyers Views→Close + sellers Call→Close (same payload Harvey reads). */
+app.get("/api/crm/pipeline-overview", async (req, res) => {
+  try {
+    const { buildPipelineOverview } = await import("./core/pipelineOverview.js");
+    const agent = typeof req.query.agent === "string" ? req.query.agent : null;
+    res.json(await buildPipelineOverview({ agent }));
+  } catch (err) {
+    console.warn("[pipeline-overview]", err);
+    res.status(500).json({ ok: false, error: "pipeline overview unavailable" });
+  }
+});
+
 app.get("/api/tracker/records/:id", (req, res) => {
   const raw = getTrackerRecord(String(req.params.id));
   if (!raw) { res.status(404).json({ ok: false, error: "Not found" }); return; }
