@@ -648,7 +648,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_pipeline_overview",
     description:
-      "CRM Overview funnels from the Tracker board (not the full CRM lead list): buyers Views→Close and sellers Call→Close. Optional agent filter (Marco / Wesley / Carlos). Returns collapsed pipeline step counts, conversion rates, unstaged counts, social views and call activity. Same numbers as the CRM Dashboard Overview tab. When quoting counts, say they are Tracker pipeline counts; CRM new-lead totals are a separate, larger set.",
+      "CRM Overview funnels: buyers Views→Comments→DMs→Number→Appt set→Appt show→Showing→U/C→Closed (no Call) and sellers Call→Close. Optional agent filter (Marco / Wesley / Carlos). Buyer top steps use social + DM/phone counts; people steps combine CRM stages and Tracker. Seller steps are Tracker + call activity. Same numbers as the CRM Dashboard Overview tab.",
     input_schema: {
       type: "object",
       properties: {

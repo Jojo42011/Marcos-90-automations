@@ -3817,8 +3817,9 @@ app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (r
     const lead = await appendLeadActivity(id, [entry], pin);
     if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
     /* Dialer outcomes feed the CRM Overview funnels: Talked → Contacted,
-       Appointment Set → listing_appointment_set / actively_showing. Existing
-       tracker rows only; never invent Closed or create a missing tracker. */
+       Appointment Set → listing_appointment_set / actively_showing. When no
+       tracker row exists yet, Dialer creates one for the lead's intent side so
+       Call→Close can start from the call. Never invents Closed. */
     if (type === "call") {
       try {
         const { bumpTrackerFromDialerActivity } = await import("./core/trackerDialerBump.js");
@@ -3832,6 +3833,11 @@ app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (r
           outcome: String(outcome || ""),
           source,
           leadIntent: lead.crmIntent,
+          leadName: lead.name,
+          leadPhone: lead.phone,
+          leadEmail: lead.email,
+          leadSource: lead.source,
+          leadAssignedTo: lead.assignedUserName,
         });
       } catch (bumpErr) {
         console.error("[trackerDialerBump] failed:", bumpErr);
@@ -6896,9 +6902,22 @@ app.post("/api/crm/lead", express.json(), async (req, res) => {
     company ? `Company: ${company}` : "",
     street ? `Address: ${[street, ...areaParts].filter(Boolean).join(", ")}` : areaParts.length ? `Area: ${areaParts.join(", ")}` : "",
   ].filter(Boolean);
+  const rawTags = Array.isArray(body.tags) ? body.tags : [];
+  const tags = rawTags
+    .filter((t): t is string => typeof t === "string" && !!t.trim())
+    .map((t) => t.trim())
+    .slice(0, 40);
+  const track = body.track === true || body.createTracker === true;
+  const trackSideRaw = typeof body.trackSide === "string" ? body.trackSide.trim().toLowerCase() : "";
+  const trackSides =
+    trackSideRaw === "buyer"
+      ? (["buyer"] as const)
+      : trackSideRaw === "both" || trackSideRaw === "buyer_seller"
+        ? (["buyer", "seller"] as const)
+        : (["seller"] as const);
   const userId = `manual-${phone}`;
   try {
-    const lead = await createLead({
+    let lead = await createLead({
       platform: "manual",
       userId,
       username: null,
@@ -6914,11 +6933,38 @@ app.post("/api/crm/lead", express.json(), async (req, res) => {
       crmStage,
       crmPriority: "normal",
       crmIntent: crmIntent as CrmIntent,
-      crmCallQueue: "none",
+      crmCallQueue: typeof body.crmCallQueue === "string" && ["urgent", "routine", "none"].includes(body.crmCallQueue)
+        ? (body.crmCallQueue as "urgent" | "routine" | "none")
+        : "urgent",
       crmNotes: notesParts.length ? notesParts.join("\n") : null,
       adCampaign: null,
+      tags: tags.length ? tags : undefined,
     });
-    res.status(201).json({ ok: true, leadId: lead.id });
+    if (tags.length && !(lead.tags || []).length) {
+      const patched = await updateLeadCrmFields({ leadId: lead.id, tags });
+      if (patched) lead = patched;
+    }
+    let tracker: ReturnType<typeof createTrackerRecord> | null = null;
+    if (track) {
+      tracker = createTrackerRecord({
+        leadId: lead.id,
+        name: lead.name || name || "Unnamed",
+        phone: lead.phone || phone,
+        email: lead.email || email || undefined,
+        source: lead.source || source,
+        sides: [...trackSides],
+        status: "new",
+        assignedTo: lead.assignedUserName || undefined,
+        address: street || undefined,
+      });
+    }
+    res.status(201).json({
+      ok: true,
+      leadId: lead.id,
+      lead,
+      trackerId: tracker?.id || null,
+      tracker,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

@@ -1,17 +1,18 @@
 /**
  * Dialer call outcome → Tracker stage bump.
  *
- * When the Dialer logs a call through /api/crm/lead/:id/activity, move an
- * existing tracker row forward from real contact evidence only:
- *   - Talked / answered → Contacted (never Closed; never invent a row)
+ * When the Dialer logs a call through /api/crm/lead/:id/activity, move a
+ * tracker row forward from real contact evidence only:
+ *   - Talked / answered → Contacted (never Closed)
  *   - Appointment Set   → seller listing_appointment_set / buyer actively_showing
  *
- * Forward-only: a side already further along is left alone. Missing tracker
- * rows are a no-op — the dialer does not create pipeline people.
+ * Forward-only: a side already further along is left alone. When the Dialer
+ * logs Talked/Appointment and no tracker row exists yet, one is created for
+ * the lead's intent side so Call→Close / Views→Close can start from the call.
  */
-import type { BuyerStage, CrmIntent, Lead, SellerStage, TrackerRecord, TrackerSide } from "./types.js";
+import type { CrmIntent, Lead, TrackerRecord, TrackerSide } from "./types.js";
 import { BUYER_STAGES, SELLER_STAGES } from "./types.js";
-import { getTrackerRecordByLead, setTrackerStage } from "./trackerStore.js";
+import { createTrackerRecord, getTrackerRecordByLead, setTrackerStage } from "./trackerStore.js";
 
 const BUYER_ORDER = BUYER_STAGES.map((s) => s.key);
 const SELLER_ORDER = SELLER_STAGES.map((s) => s.key);
@@ -60,7 +61,27 @@ export interface DialerBumpInput {
   source?: string | null;
   /** Lead crmIntent / intent — picks side when tracker has both. */
   leadIntent?: CrmIntent | string | null;
+  /** Used when creating a missing tracker row from a Dialer call. */
+  leadName?: string | null;
+  leadPhone?: string | null;
+  leadEmail?: string | null;
+  leadSource?: string | null;
+  leadAssignedTo?: string | null;
+  /** Default true for Dialer: seed a tracker row when none exists yet. */
+  createIfMissing?: boolean;
   dryRun?: boolean;
+}
+
+function sidesForNewTracker(leadIntent?: CrmIntent | string | null): TrackerSide[] {
+  const intent = String(leadIntent || "")
+    .trim()
+    .toLowerCase();
+  if (intent === "buyer") return ["buyer"];
+  if (intent === "seller") return ["seller"];
+  // Unknown / both — sellers Call→Close is the Mojo expired default; keep buyer
+  // too so a dual-intent contact can still advance on either side later.
+  if (intent === "buyer_seller" || intent === "both") return ["buyer", "seller"];
+  return ["seller"];
 }
 
 export function normalizeDialerOutcome(raw: string | null | undefined): string {
@@ -159,8 +180,8 @@ export function planDialerBump(
 }
 
 /**
- * Apply a Dialer activity outcome to the linked tracker row, if any.
- * No-op when source is not Dialer, outcome is irrelevant, or no tracker exists.
+ * Apply a Dialer activity outcome to the linked tracker row.
+ * Creates a tracker row when Dialer evidence exists and none is linked yet.
  */
 export function bumpTrackerFromDialerActivity(input: DialerBumpInput): DialerBumpResult {
   const empty: DialerBumpResult = { applied: false, reason: "noop", kind: null, changes: [] };
@@ -177,14 +198,47 @@ export function bumpTrackerFromDialerActivity(input: DialerBumpInput): DialerBum
   const leadId = String(input.leadId || "").trim();
   if (!leadId) return { ...empty, reason: "missing_lead", kind };
 
-  const rec = getTrackerRecordByLead(leadId);
+  let rec = getTrackerRecordByLead(leadId);
+  let created = false;
   if (!rec) {
-    return { applied: false, reason: "no_tracker", kind, changes: [] };
+    if (input.createIfMissing === false) {
+      return { applied: false, reason: "no_tracker", kind, changes: [] };
+    }
+    if (input.dryRun) {
+      return {
+        applied: false,
+        reason: "dry_run_create",
+        kind,
+        changes: sidesForNewTracker(input.leadIntent).map((side) => ({
+          side,
+          from: null,
+          to: targetStageForKind(side, kind) || "contacted",
+        })),
+      };
+    }
+    const name = String(input.leadName || "").trim() || "Unnamed";
+    rec = createTrackerRecord({
+      leadId,
+      name,
+      phone: input.leadPhone || undefined,
+      email: input.leadEmail || undefined,
+      source: input.leadSource || undefined,
+      assignedTo: input.leadAssignedTo || undefined,
+      sides: sidesForNewTracker(input.leadIntent),
+      status: "new",
+    });
+    created = true;
   }
 
   const changes = planDialerBump(rec, kind, input.leadIntent);
   if (!changes.length) {
-    return { applied: false, reason: "already_ahead", kind, recordId: rec.id, changes: [] };
+    return {
+      applied: created,
+      reason: created ? "created_already_ahead" : "already_ahead",
+      kind,
+      recordId: rec.id,
+      changes: [],
+    };
   }
 
   if (input.dryRun) {
@@ -194,7 +248,13 @@ export function bumpTrackerFromDialerActivity(input: DialerBumpInput): DialerBum
   for (const c of changes) {
     setTrackerStage(rec.id, c.side, c.to);
   }
-  return { applied: true, reason: "bumped", kind, recordId: rec.id, changes };
+  return {
+    applied: true,
+    reason: created ? "created_and_bumped" : "bumped",
+    kind,
+    recordId: rec.id,
+    changes,
+  };
 }
 
 /** Convenience for callers that already have the lead loaded. */
