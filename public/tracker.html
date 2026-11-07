@@ -1912,13 +1912,52 @@ document.getElementById("addBtn").onclick=function(){
     .catch(function(e){toast("Could not add: "+e.message);});
 };
 
+/* ================= Overview deep-link (?side=&stages=&assigned=&unstaged=) =================
+   CRM Overview clicks reload this iframe with query params so the board opens
+   already filtered to that funnel step / agent. */
+function applyOverviewQuery(){
+  var q=new URLSearchParams(location.search||"");
+  var side=String(q.get("side")||"").toLowerCase();
+  if(side==="buyer"||side==="seller"){
+    SIDE=side;
+    document.querySelectorAll("#sideSwitch button").forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-side")===side);
+    });
+  }
+  FILTER.stage={};
+  if(q.get("unstaged")==="1"){
+    FILTER.stage.__unstaged=true;
+  } else {
+    var stages=String(q.get("stages")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+    stages.forEach(function(k){ FILTER.stage[k]=true; });
+  }
+  var assigned=String(q.get("assigned")||"").trim();
+  if(assigned){
+    FILTER.assigned=assigned.toLowerCase();
+    var sel=document.getElementById("fAssigned");
+    if(sel){
+      /* Prefer an exact option; otherwise keep the filter value so matching still works. */
+      var hit=[].slice.call(sel.options||[]).find(function(o){
+        return String(o.value||"").toLowerCase()===FILTER.assigned;
+      });
+      if(hit) sel.value=hit.value;
+      else {
+        var opt=document.createElement("option");
+        opt.value=assigned; opt.textContent=assigned; sel.appendChild(opt); sel.value=assigned;
+      }
+    }
+  }
+}
+
 /* ================= boot ================= */
 function load(announce){
   return Promise.all([api("/api/tracker/schema"),api("/api/tracker/records")])
     .then(function(res){
       SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
       RECORDS=res[1].records||[];
-      paintStatusChips();paintStageChips();paintContactChip();paintSelectFilters();paintBulkStageOptions();renderBoard();
+      paintSelectFilters();
+      applyOverviewQuery();
+      paintStatusChips();paintStageChips();paintContactChip();paintBulkStageOptions();renderBoard();
       if(announce)toast("Refreshed — "+RECORDS.length+" in tracker");
     })
     .catch(function(e){

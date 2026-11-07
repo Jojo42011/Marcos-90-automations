@@ -44,6 +44,11 @@ export interface PipelineOverview {
   agents: string[];
   buyers: SideFunnel;
   sellers: SideFunnel;
+  /** Stage keys (cumulative) for Overview → Tracker click-through. */
+  deepLinks: {
+    buyer: Record<string, string[]>;
+    seller: Record<string, string[]>;
+  };
   notes: string[];
   generatedAt: string;
 }
@@ -227,6 +232,30 @@ function withRates(
   });
 }
 
+/** Cumulative stage keys for a collapsed Overview bucket (that stage and later). */
+export function deepLinkStages(
+  side: "buyer" | "seller",
+  bucketKey: string,
+): string[] {
+  const order = side === "buyer" ? BUYER_ORDER : SELLER_ORDER;
+  const buckets = side === "buyer" ? BUYER_BUCKETS : SELLER_BUCKETS;
+  const bucket = buckets.find((b) => b.key === bucketKey);
+  if (!bucket) return [];
+  const minIdx = Math.min(
+    ...bucket.stages.map((s) => stageIndex(order, s)).filter((i) => i >= 0),
+  );
+  if (!Number.isFinite(minIdx) || minIdx < 0) return [];
+  return order.slice(minIdx);
+}
+
+function buildDeepLinks(): PipelineOverview["deepLinks"] {
+  const buyer: Record<string, string[]> = { buyers: [] };
+  for (const b of BUYER_BUCKETS) buyer[b.key] = deepLinkStages("buyer", b.key);
+  const seller: Record<string, string[]> = { sellers: [] };
+  for (const b of SELLER_BUCKETS) seller[b.key] = deepLinkStages("seller", b.key);
+  return { buyer, seller };
+}
+
 export async function buildPipelineOverview(opts: {
   agent?: string | null;
 }): Promise<PipelineOverview> {
@@ -292,6 +321,7 @@ export async function buildPipelineOverview(opts: {
       unstaged: seller.unstaged,
       closed: seller.closed,
     },
+    deepLinks: buildDeepLinks(),
     notes,
     generatedAt: new Date().toISOString(),
   };

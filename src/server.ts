@@ -3635,6 +3635,21 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
       res.status(404).json({ error: "Lead not found" });
       return;
     }
+    /* Keep Tracker ownership aligned with the CRM lead. Overview filters by
+       tracker.assignedTo; leaving it stale made Marco/Wesley funnels lie. */
+    if (assignedUserName !== undefined || assignedUserId !== undefined) {
+      try {
+        const { getTrackerRecordByLead, updateTrackerRecord } = await import("./core/trackerStore.js");
+        const rec = getTrackerRecordByLead(id);
+        if (rec) {
+          updateTrackerRecord(rec.id, {
+            assignedTo: updated.assignedUserName || undefined,
+          });
+        }
+      } catch (syncErr) {
+        console.warn("[crm] tracker assignee sync failed:", syncErr);
+      }
+    }
     res.status(200).json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -4299,6 +4314,19 @@ app.put("/api/crm/lead/:id/team", express.json({ limit: "16kb" }), async (req, r
     const saved = store.setAssignments(lead.id, members);
     const { getLeadById } = await import("./core/db.js");
     const fresh = await getLeadById(lead.id);
+    if (body.primary !== undefined) {
+      try {
+        const { getTrackerRecordByLead, updateTrackerRecord } = await import("./core/trackerStore.js");
+        const rec = getTrackerRecordByLead(lead.id);
+        if (rec) {
+          updateTrackerRecord(rec.id, {
+            assignedTo: fresh?.assignedUserName || undefined,
+          });
+        }
+      } catch (syncErr) {
+        console.warn("[crm] tracker assignee sync (team) failed:", syncErr);
+      }
+    }
     res.json({
       ok: true,
       primary: { userId: fresh?.assignedUserId ?? null, userName: fresh?.assignedUserName ?? null },
@@ -11525,7 +11553,7 @@ app.post("/api/tracker/records", express.json({ limit: "256kb" }), (req, res) =>
   res.json({ ok: true, record: createTrackerRecord({ ...(body as object), name } as never) });
 });
 
-app.patch("/api/tracker/records/:id", express.json({ limit: "256kb" }), (req, res) => {
+app.patch("/api/tracker/records/:id", express.json({ limit: "256kb" }), async (req, res) => {
   const body = { ...(req.body && typeof req.body === "object" ? req.body : {}) } as Record<string, unknown>;
   const id = String(req.params.id);
   const before = getTrackerRecord(id);
@@ -11546,6 +11574,18 @@ app.patch("/api/tracker/records/:id", express.json({ limit: "256kb" }), (req, re
   const synced = "checklist" in body
     ? syncChecklistToTasks(applyTaskState(before).checklist, rec.checklist)
     : 0;
+  /* Tracker → lead ownership: Overview and Dialer both read assignee; keep them one. */
+  if ("assignedTo" in body && rec.leadId) {
+    try {
+      const name = typeof rec.assignedTo === "string" ? rec.assignedTo.trim() : "";
+      await updateLeadCrmFields({
+        leadId: rec.leadId,
+        assignedUserName: name || null,
+      });
+    } catch (syncErr) {
+      console.warn("[tracker] lead assignee sync failed:", syncErr);
+    }
+  }
   const fresh = applyTaskState(rec);
   // Return the linked-task state alongside, so the drawer's chips do not sit
   // stale showing "open" for a task the save just completed.
