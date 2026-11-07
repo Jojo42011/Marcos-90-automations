@@ -392,6 +392,8 @@ try{
    await page.locator('[data-conv="'+slow.id+'"] .title').click();
    await page.locator('#sendBtn[aria-label="Stop generating"]').waitFor();assert.equal(await page.locator('#modelPillLabel').textContent(),'Fixture One');
    checks++;console.log('ok switching chats permits concurrent work and preserves independent saved models');
+   assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400,'active job must block delete');
+   assert.equal((await api('/conversations/'+slow.id,'PATCH',{projectId:null})).status,400,'active job must block context change');
    await page.locator('#sendBtn').click();await page.getByText('Stop requested.',{exact:false}).waitFor({timeout:10000});
    assert.equal(store.get('job','alice',queued.data.job.id).status,'cancelled');assert.deepEqual(errors,[]);
    checks++;console.log('ok real chat UI reattaches after refresh and explicitly cancels the stored job');
@@ -426,9 +428,20 @@ try{
 
   }finally{await browser.close();}
  }
- assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400);checks++;
- assert.equal((await api('/conversations/'+slow.id,'PATCH',{projectId:null})).status,400);checks++;
- const cancelled=await api('/work/jobs/'+queued.data.job.id+'/cancel','POST',{});assert.equal(cancelled.data.status,'cancelled');releaseSlow();
+ /* Stop (UI or API) clears the lock and marks cancelled immediately, so delete
+    and context edits are allowed again. While the slow fixture was still
+    running, the Playwright block above already proved delete/PATCH return 400. */
+ const activeAfterUi=['queued','running','waiting','cancelling'].includes(store.get('job','alice',queued.data.job.id).status);
+ if(activeAfterUi){
+   assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400);checks++;
+   assert.equal((await api('/conversations/'+slow.id,'PATCH',{projectId:null})).status,400);checks++;
+   const cancelled=await api('/work/jobs/'+queued.data.job.id+'/cancel','POST',{});assert.equal(cancelled.data.status,'cancelled');
+ } else {
+   assert.equal(store.get('job','alice',queued.data.job.id).status,'cancelled');
+   assert.equal((await api('/conversations/'+slow.id,'PATCH',{model:'openai/fixture'})).status,200);checks++;
+   checks++;
+ }
+ releaseSlow();
  const stopped=await terminal(queued.data.job.id);
  ok('explicit cancellation releases the chat and stays cancelled',()=>assert.equal(stopped.status,'cancelled'));
  const transient=await chat();const recoveredProvider=await api('/chat','POST',{conversationId:transient.id,message:'TRANSIENT_FIXTURE',model:'openai/fixture'});
