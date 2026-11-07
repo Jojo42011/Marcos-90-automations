@@ -306,9 +306,11 @@ body.selecting #bulkBar{display:flex}
 #bulkEngageBtn{border-color:var(--teal);color:var(--teal-strong)}
 #bulkEngageBtn:hover{background:var(--glass-tint,var(--soft))}
 </style>
+<link rel="stylesheet" href="/pipeline-ui.css">
 </head>
 <body>
 
+<section class="pipeline-heading"><div><span class="eyebrow">RELATIONSHIPS → RESULTS</span><h1>Pipeline</h1><p>Know who needs you. Make the next move.</p></div><div class="sync-state" id="syncState" role="status">Loading your pipeline…</div></section>
 <header id="top">
   <!-- Hidden when embedded (CRM tab, shell): the host page already shows the
        Marco Puga mark, and two stacked logos read as a broken nesting. -->
@@ -327,14 +329,15 @@ body.selecting #bulkBar{display:flex}
     <button data-side="both"><span class="dot"></span>Both</button>
     <button data-side="funnel"><span class="dot"></span>Funnel</button>
   </div>
-  <input id="search" placeholder="Search name, phone, email, address…" autocomplete="off" />
+  <input aria-label="Search pipeline contacts" id="search" placeholder="Search name, phone, email, address…" autocomplete="off" />
+  <button class="tbtn" id="filterToggle" aria-expanded="false" aria-controls="filters">Filters</button>
   <button class="tbtn" id="themeBtn">◐ Theme</button>
   <button class="tbtn" id="refreshBtn">↺ Refresh</button>
   <button class="tbtn" id="selectModeBtn">☐ Select</button>
-  <button class="tbtn primary" id="addBtn">+ Add Person</button>
+  <button class="tbtn primary" id="addBtn">+ Add person</button>
 </header>
 
-<div id="filters">
+<div id="filters" hidden>
   <span class="flabel">SHOW</span>
   <button class="chip" id="fContact" title="Hide people with no phone and no email">
     <span class="cdot" style="background:#0891B2"></span><span id="fContactLabel">Contactable only</span>
@@ -346,9 +349,9 @@ body.selecting #bulkBar{display:flex}
   <div class="chips" id="stageChips"></div>
   <span class="frow-break"></span>
   <span class="flabel">SOURCE</span>
-  <select class="fsel" id="fSource"><option value="">All</option></select>
+  <select class="fsel" id="fSource" aria-label="Filter by source"><option value="">All</option></select>
   <span class="flabel">ASSIGNED</span>
-  <select class="fsel" id="fAssigned"><option value="">Anyone</option></select>
+  <select class="fsel" id="fAssigned" aria-label="Filter by assignee"><option value="">Anyone</option></select>
   <span class="flabel">ADDED</span>
   <input class="fdate" type="date" id="fFrom" title="Added on or after" />
   <span style="color:var(--muted)">–</span>
@@ -357,10 +360,11 @@ body.selecting #bulkBar{display:flex}
   <input class="fdate" type="date" id="fIFrom" title="Last interaction on or after" />
   <span style="color:var(--muted)">–</span>
   <input class="fdate" type="date" id="fITo" title="Last interaction on or before" />
-  <button id="clearF">Clear</button>
-  <div id="countLine"></div>
+
 </div>
 
+<section class="pipeline-focus" aria-label="Pipeline focus"><div id="pipelineSummary"></div><div class="board-tools"><label for="boardSort">Sort</label><select class="fsel" id="boardSort"><option value="attention">Needs attention first</option><option value="recent">Recently added</option><option value="name">Name A–Z</option></select><button id="clearF" type="button">Reset view</button><span id="countLine"></span><span id="boardHint">Drag to move · open a card to plan the next step</span></div></section>
+<div id="pipelineNotice" role="status" hidden></div>
 <!-- Bulk-stage bar: appears in select mode. Most of the tracker has no automatic
      signal to stage from — this is how the team actually advances the board. -->
 <div id="bulkBar">
@@ -384,14 +388,14 @@ body.selecting #bulkBar{display:flex}
 </div>
 <div id="empty">
   <h3>Nothing in this pipeline yet</h3>
-  <p id="emptyMsg">Add a person with “+ Add Person”, or drop an existing one into a stage.</p>
+  <p id="emptyMsg">Add a person with “+ Add person”, or drop an existing one into a stage.</p>
 </div>
 
 <div id="scrim"></div>
-<aside id="drawer" aria-hidden="true">
+<aside id="drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dName" tabindex="-1">
   <div id="dHead">
     <h2 id="dName">—</h2>
-    <button class="tbtn" id="dClose">✕</button>
+    <button class="tbtn" id="dClose" aria-label="Close person details">✕</button>
   </div>
   <div id="dBody"></div>
   <div id="dFoot">
@@ -402,7 +406,8 @@ body.selecting #bulkBar{display:flex}
   </div>
 </aside>
 
-<div id="toast"></div>
+<dialog id="addPersonDialog" aria-labelledby="addPersonTitle"><form id="addPersonForm"><div class="dialog-top"><div><span class="eyebrow">START A RELATIONSHIP</span><h2 id="addPersonTitle">Add to your pipeline</h2></div><button class="tbtn" type="button" id="cancelAdd" aria-label="Close add person">✕</button></div><p class="dialog-note" id="addContext">Create a pipeline record. Existing linked contacts keep their CRM connection when you move them between stages.</p><label>Name<input name="name" id="newName" required maxlength="200" autocomplete="name"></label><div class="dialog-grid"><label>Pipeline<select name="side" id="newSide"><option value="buyer">Buyer</option><option value="seller">Seller</option></select></label><label>Phone<input name="phone" type="tel" autocomplete="tel"></label></div><label>Email<input name="email" type="email" autocomplete="email"></label><label>Source<input name="source" placeholder="e.g. Instagram, referral, open house"></label><p id="addPersonError" role="alert"></p><button class="tbtn primary" id="createPerson" type="submit">Create person</button></form></dialog>
+<div id="toast" role="status"></div>
 
 <script>
 "use strict";
@@ -424,6 +429,7 @@ var TIMELINE_STAGE = {buyer:"qualified", seller:"cma_requested"};
 var STALE_DAYS = 14;
 
 /* ================= state ================= */
+var QUICK="all", BOARD_SORT="attention", DATA_VERSION=0, LOAD_VERSION=0, FIRST_LOAD=true, LOADING=false, ADD_STAGE=null;
 var SIDE   = "buyer";          // which pipeline the board is showing
 var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[]};
 var RECORDS = [];              // everything, unfiltered
@@ -439,6 +445,7 @@ try{ FILTER.contactable = localStorage.getItem(CONTACT_KEY)==="1"; }catch(_){}
    survive a re-render (drag/filter change) without losing the picks. */
 var SELECTING = false;
 var SELECTED = {};
+var DRAWER_FOCUS=null;
 var CUR = null;                // record open in the drawer
 var CK  = [];                  // drawer checklist working copy
 var TASKS = {};                // taskId -> live Task Manager state for CUR
@@ -451,7 +458,7 @@ function toast(m){var t=document.getElementById("toast");t.textContent=m;t.class
 var EMBEDDED = (function(){ try{ return window.self !== window.top; }catch(_){ return true; } })();
 if(EMBEDDED){ var _b=document.getElementById("brand"); if(_b) _b.style.display="none"; }
 
-function api(p,opts){return fetch(p,opts).then(function(r){
+function api(p,opts){if(opts&&opts.method&&opts.method!=="GET")DATA_VERSION++;return fetch(p,opts).then(function(r){
   if(!r.ok)return r.json().catch(function(){return{};}).then(function(j){
     throw new Error(j.error||("HTTP "+r.status));});
   return r.json();});}
@@ -516,7 +523,7 @@ function stageCounts(){
   var check=sidesShown(), only=oneSide();
   RECORDS.forEach(function(rec){
     var sides=rec.sides||[];
-    if(!sides.length) return;
+    if(!sides.length || !quickMatches(rec)) return;
     if(only && sides.indexOf(only)<0) return;
     if(FILTER.contactable && !contactable(rec)) return;
     if(anyStatusOn() && !FILTER.status[rec.status]) return;
@@ -598,6 +605,7 @@ function passes(rec){
      buying at once, who appears in each column rather than being shown twice
      in one. */
   if(!sides.length) return false;
+  if(!quickMatches(rec))return false;
   var only=oneSide();
   if(only && sides.indexOf(only)<0) return false;
   if(FILTER.contactable && !contactable(rec)) return false;
@@ -625,7 +633,30 @@ function matchesQuery(rec){
   var digits=String(rec.phone||"").replace(/\D/g,"");
   return hay.indexOf(q)>=0 || (/\d/.test(q)&&digits.indexOf(q.replace(/\D/g,""))>=0);
 }
-function visible(){return RECORDS.filter(passes);}
+function quickMatches(rec){
+ if(QUICK==='attention')return needsAttention(rec);
+ if(QUICK==='unstaged')return sidesShown().some(function(side){return (rec.sides||[]).includes(side)&&!stageOf(rec,side);});
+ return true;
+}
+function needsAttention(rec){return !rec.lastInteractionAt || daysSince(rec.lastInteractionAt)>=STALE_DAYS;}
+function visible(){return RECORDS.filter(passes).sort(function(a,b){
+ if(BOARD_SORT==='name')return String(a.name||'').localeCompare(String(b.name||''));
+ if(BOARD_SORT==='recent')return (Date.parse(b.addedAt)||0)-(Date.parse(a.addedAt)||0);
+ return (Date.parse(a.lastInteractionAt)||0)-(Date.parse(b.lastInteractionAt)||0);
+});}
+function paintPipelineSummary(){
+ var rows=RECORDS.filter(function(r){return (r.sides||[]).some(function(side){return sidesShown().includes(side);});});
+ var values=[['all','All pipeline contacts',rows.length],['attention','No contact or 14+ days',rows.filter(needsAttention).length],['unstaged','Need a stage',rows.filter(function(r){return sidesShown().some(function(side){return (r.sides||[]).includes(side)&&!stageOf(r,side);});}).length]];
+ document.getElementById('pipelineSummary').innerHTML=values.map(function(v){return '<button class="focus-stat'+(QUICK===v[0]?' active':'')+'" data-quick="'+v[0]+'" aria-pressed="'+(QUICK===v[0])+'"><strong>'+v[2].toLocaleString()+'</strong><span>'+v[1]+'</span></button>';}).join('');
+ document.querySelectorAll('[data-quick]').forEach(function(b){b.onclick=function(){QUICK=b.dataset.quick;paintStageChips();renderBoard();};});
+ var active=Object.values(FILTER.status).filter(Boolean).length+Object.values(FILTER.stage).filter(Boolean).length+['source','assigned','from','to','ifrom','ito'].filter(function(k){return FILTER[k];}).length+(FILTER.contactable?1:0);
+ document.getElementById('filterToggle').textContent='Filters'+(active?' · '+active:'');
+ document.getElementById('boardHint').textContent=SIDE==='both'?'Open a card to update either pipeline':SIDE==='funnel'?'Stage progress and reported activity':'Drag to move · open a card to plan the next step';
+ document.getElementById('pipelineSummary').hidden=SIDE==='funnel';
+ document.getElementById('boardSort').disabled=SIDE==='funnel';
+ document.querySelectorAll('#sideSwitch button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.side===SIDE));});
+}
+
 
 /* ================= board ================= */
 /**
@@ -636,48 +667,20 @@ function visible(){return RECORDS.filter(passes);}
  *   on the card or it disappears from the view entirely.
  */
 function cardHtml(rec,viewSide){
-  var mine = viewSide || (SIDE==="seller"?"seller":"buyer");
-  var st=STATUS_META[rec.status]||STATUS_META.new;
-  var bits=[];
-  if(viewSide){
-    var ms=stageOf(rec,mine);
-    bits.push('<span class="tag stagetag'+(ms?"":" none")+'">'+
-      (ms?esc(stageLabel(mine,ms)):"Unstaged")+'</span>');
-  }
-  if(rec.phone)   bits.push('<span class="tag">'+esc(rec.phone)+'</span>');
-  if(rec.address) bits.push('<span class="tag">'+esc(rec.address)+'</span>');
-  if(rec.source)  bits.push('<span class="tag">'+esc(rec.source)+'</span>');
-  /* A two-sided person shows where they sit on the OTHER pipeline, so working the
-     buyer board never hides the fact that they are also selling. */
-  var other = mine==="buyer"?"seller":"buyer";
-  if((rec.sides||[]).indexOf(other)>=0){
-    var os=stageOf(rec,other);
-    bits.push('<span class="tag sidetag '+(other==="buyer"?"b":"s")+'">'+
-      (other==="buyer"?"Buying":"Selling")+(os?" · "+esc(stageLabel(other,os)):"")+'</span>');
-  }
-  var ck=Array.isArray(rec.checklist)?rec.checklist:[];
-  if(ck.length){
-    var done=ck.filter(function(i){return i.done;}).length;
-    bits.push('<span class="ckchip'+(done===ck.length?" alldone":"")+'">'+
-      (done===ck.length?"☑":"☐")+" "+done+"/"+ck.length+'</span>');
-  }
-  /* Only ever reported from a real logged contact. Falling back to updatedAt made
-     every untouched record claim "Contacted today", which is the opposite of what
-     this line is for. */
-  var d=rec.lastInteractionAt?daysSince(rec.lastInteractionAt):null;
-  var foot = d===null
-    ? '<span style="opacity:.7">No contact logged</span>'
-    : (d>=STALE_DAYS
-        ? '<span class="stale">● '+d+'d since contact</span>'
-        : '<span>'+(d<=0?"Contacted today":d+"d since contact")+'</span>');
-  return '<article class="rec '+sideClass(rec)+(SELECTED[rec.id]?" picked":"")+
-    '" draggable="'+(SELECTING?"false":"true")+'" data-id="'+esc(rec.id)+'">'+
-    '<input type="checkbox" class="rsel" data-selid="'+esc(rec.id)+'"'+(SELECTED[rec.id]?" checked":"")+'>'+
-    '<div class="rtop"><div class="rname">'+esc(rec.name)+'</div>'+
-      '<span class="pill" style="background:'+st.c+'">'+esc(st.label)+'</span></div>'+
-    (bits.length?'<div class="rmeta">'+bits.join("")+'</div>':'')+
-    '<div class="rfoot">'+foot+'</div>'+
-  '</article>';
+  var mine=typeof viewSide==='string'?viewSide:(SIDE==='seller'?'seller':'buyer');
+  var status=STATUS_META[rec.status]||STATUS_META.new;
+  var initials=String(rec.name||'?').split(/\s+/).slice(0,2).map(function(x){return x[0]||'';}).join('');
+  var items=Array.isArray(rec.checklist)?rec.checklist:[],next=items.find(function(i){return !i.done;}),done=items.filter(function(i){return i.done;}).length;
+  var age=rec.lastInteractionAt?daysSince(rec.lastInteractionAt):null;
+  var touch=age===null?'No contact logged':age<=0?'Contacted today':age+'d since contact';
+  var other=mine==='buyer'?'seller':'buyer';
+  return '<article class="rec '+sideClass(rec)+(SELECTED[rec.id]?' picked':'')+'" tabindex="0" aria-label="'+esc('Open '+rec.name)+'" draggable="'+(!SELECTING)+'" data-id="'+esc(rec.id)+'">'+
+    '<input aria-label="'+esc('Select '+rec.name)+'" type="checkbox" class="rsel" data-selid="'+esc(rec.id)+'"'+(SELECTED[rec.id]?' checked':'')+'>'+
+    '<div class="rtop"><span class="person-avatar">'+esc(initials)+'</span><div class="person-title"><div class="rname">'+esc(rec.name)+'</div><div class="person-source">'+esc(rec.source||'Source not set')+'</div></div><span class="status-dot" style="--status-color:'+status.c+'" title="'+esc(status.label)+'"></span></div>'+
+    '<div class="card-details">'+(rec.address?'<p>'+esc(rec.address)+'</p>':'')+(rec.phone?'<p>'+esc(rec.phone)+'</p>':rec.email?'<p>'+esc(rec.email)+'</p>':'<p class="muted">No phone or email yet</p>')+'</div>'+
+    '<div class="rmeta"><span class="tag">'+esc(status.label)+'</span>'+(typeof viewSide==='string'?'<span class="tag">'+esc(stageLabel(mine,stageOf(rec,mine))||'Unstaged')+'</span>':'')+((rec.sides||[]).includes(other)?'<span class="tag">Also '+(other==='buyer'?'buying':'selling')+'</span>':'')+'</div>'+
+    '<div class="next-step"><span class="eyebrow">NEXT STEP'+(items.length?' · '+done+'/'+items.length:'')+'</span><p>'+esc(next?next.text:items.length?'Checklist complete — plan the next step':!stageOf(rec,mine)?'Review this person and choose a stage':'Add a follow-up in the checklist')+'</p></div>'+
+    '<div class="rfoot"><span class="'+(needsAttention(rec)?'stale':'')+'">'+esc(touch)+'</span><span class="assignee" title="'+esc(rec.assignedTo||'Unassigned')+'">'+esc(rec.assignedTo||'Unassigned')+'</span></div></article>';
 }
 
 /**
@@ -1090,6 +1093,8 @@ function wireFunnelControls(){
 }
 
 function renderBoard(){
+  paintPipelineSummary();
+  document.getElementById('pipelineNotice').hidden=true;
   if(SIDE==="funnel") return renderFunnel();
   if(SIDE==="both") return renderCombined();
   var board=document.getElementById("board");
@@ -1113,11 +1118,11 @@ function renderBoard(){
       '<div class="colhead">'+
         '<span class="cbar" style="background:'+(c.muted?"var(--line)":SIDE_COLOR[SIDE])+'"></span>'+
         '<h3'+(c.muted?' style="color:var(--muted)"':'')+'>'+esc(c.label)+'</h3>'+
-        '<span class="cnt">'+c.items.length+'</span>'+
+        '<span class="cnt">'+c.items.length+'</span><button class="column-add" data-add-stage="'+esc(c.key||'')+'" aria-label="'+esc('Add person to '+c.label)+'">+</button>'+
       '</div>'+
       '<div class="colbody">'+
-        (c.items.length?c.items.map(cardHtml).join("")
-          :'<div class="colempty">'+(c.muted?"Everyone is staged":"Drop someone here")+'</div>')+
+        (c.items.length?c.items.map(function(r){return cardHtml(r);}).join("")
+          :'<div class="colempty">'+(c.muted?"No unstaged people in this view":"Drop someone here")+'</div>')+
       '</div>'+
     '</section>';
   }).join("");
@@ -1132,9 +1137,10 @@ function renderBoard(){
     (hidden?' · <span title="No phone or email on file">'+hidden+' hidden with no contact info</span>':'')+
     (RECORDS.length!==total?' · '+RECORDS.length+' total in tracker':'');
 
-  var none=RECORDS.length===0;
-  document.getElementById("empty").style.display=none?"flex":"none";
-  document.getElementById("boardWrap").style.display=none?"none":"flex";
+  document.getElementById("empty").style.display="none";
+  document.getElementById("boardWrap").style.display="flex";
+  var notice=document.getElementById('pipelineNotice');notice.hidden=!!list.length;
+  notice.textContent=RECORDS.length?'No people match this view. Try another pipeline or clear the filters.':'Start with a person you are actively helping. Add a person above; linked dialer outcomes and Task Manager updates appear here automatically.';
 
   if(SELECTING)updateBulkBar();
   bindCards();
@@ -1185,9 +1191,10 @@ function renderCombined(){
     '<b>'+cols[1].items.length+'</b> of '+totalSellers+' sellers'+
     (hidden?' · <span title="No phone or email on file">'+hidden+' hidden with no contact info</span>':'');
 
-  var none=RECORDS.length===0;
-  document.getElementById("empty").style.display=none?"flex":"none";
-  document.getElementById("boardWrap").style.display=none?"none":"flex";
+  document.getElementById("empty").style.display="none";
+  document.getElementById("boardWrap").style.display="flex";
+  var notice=document.getElementById('pipelineNotice');notice.hidden=!!list.length;
+  notice.textContent=RECORDS.length?'No people match this view. Try another pipeline or clear the filters.':'Start with a person you are actively helping. Add a person above; linked dialer outcomes and Task Manager updates appear here automatically.';
 
   if(SELECTING)updateBulkBar();
   bindCards();
@@ -1197,6 +1204,7 @@ function renderCombined(){
 /* ================= drag between stages ================= */
 var dragId=null;
 function bindCards(){
+  document.querySelectorAll('[data-add-stage]').forEach(function(b){b.onclick=function(){openAddPerson(b.dataset.addStage);};});
   document.querySelectorAll(".rec").forEach(function(el){
     var id=el.getAttribute("data-id");
     el.onclick=function(e){
@@ -1206,6 +1214,7 @@ function bindCards(){
       if(SELECTING){ if(e.target.tagName!=="INPUT") toggleSelect(id); return; }
       openDrawer(id);
     };
+    el.onkeydown=function(e){if(e.target!==el)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();if(SELECTING)toggleSelect(id);else openDrawer(id);}};
     el.ondragstart=function(e){
       if(SELECTING){e.preventDefault();return;}
       dragId=id;el.classList.add("dragging");
@@ -1394,6 +1403,7 @@ function paintSelectFilters(){
     if(r.assignedTo){var a=r.assignedTo.trim().toLowerCase(); if(!asg[a])asg[a]=r.assignedTo.trim();}
   });
   function fill(sel,vals,all,cur){
+    if(cur&&!vals[cur])vals[cur]=cur;
     sel.innerHTML='<option value="">'+all+'</option>'+
       Object.keys(vals).sort().map(function(v){
         return '<option value="'+esc(v)+'"'+(v===cur?" selected":"")+'>'+esc(vals[v])+'</option>';}).join("");
@@ -1422,6 +1432,7 @@ document.getElementById("fIFrom").onchange=function(){FILTER.ifrom=this.value;pa
 document.getElementById("fITo").onchange=function(){FILTER.ito=this.value;paintStageChips();renderBoard();};
 document.getElementById("search").oninput=function(){FILTER.q=this.value.trim();paintStageChips();renderBoard();};
 document.getElementById("clearF").onclick=function(){
+  QUICK="all";
   FILTER={status:{},stage:{},source:"",assigned:"",from:"",to:"",ifrom:"",ito:"",q:"",contactable:false};
   try{ localStorage.setItem(CONTACT_KEY,"0"); }catch(_){}
   paintContactChip();
@@ -1434,9 +1445,10 @@ document.getElementById("clearF").onclick=function(){
 document.querySelectorAll("#sideSwitch button").forEach(function(b){
   b.onclick=function(){
     SIDE=b.getAttribute("data-side");
+    QUICK="all";
     document.querySelectorAll("#sideSwitch button").forEach(function(x){x.classList.toggle("on",x===b);});
     document.getElementById("emptyMsg").textContent=
-      "Add a person with “+ Add Person”, or drop an existing one into a stage.";
+      "Add a person with “+ Add person”, or drop an existing one into a stage.";
     clearSelection();          // stage keys belong to the OTHER pipeline now
     /* No cards on screen in Funnel, so "select all on this page" would silently
        arm 1,219 invisible records. Leave select mode. */
@@ -1580,6 +1592,7 @@ function adoptRecord(rec,tasks){
 function openDrawer(id){
   var rec=RECORDS.find(function(r){return r.id===id;});
   if(!rec)return;
+  DRAWER_FOCUS=document.activeElement;
   TASKS={};
   adoptRecord(rec,null);
   DIRTY=false;
@@ -1597,6 +1610,8 @@ function openDrawer(id){
   document.getElementById("drawer").classList.add("on");
   document.getElementById("drawer").setAttribute("aria-hidden","false");
   document.getElementById("scrim").classList.add("on");
+  Array.from(document.body.children).forEach(function(el){if(el.id!=='drawer'&&el.id!=='scrim'&&el.tagName!=='SCRIPT')el.inert=true;});
+  document.getElementById('drawer').focus();
 }
 function closeDrawer(){
   if(DIRTY && !confirm("Close without saving your changes?"))return;
@@ -1604,6 +1619,9 @@ function closeDrawer(){
   document.getElementById("drawer").classList.remove("on");
   document.getElementById("drawer").setAttribute("aria-hidden","true");
   document.getElementById("scrim").classList.remove("on");
+  Array.from(document.body.children).forEach(function(el){el.inert=false;});
+  if(DRAWER_FOCUS&&DRAWER_FOCUS.isConnected)DRAWER_FOCUS.focus();else document.getElementById('addBtn').focus();
+  load(false,true);
 }
 document.getElementById("dClose").onclick=closeDrawer;
 document.getElementById("scrim").onclick=closeDrawer;
@@ -1711,6 +1729,7 @@ function bindDrawer(){
   document.querySelectorAll("[data-clear]").forEach(function(b){
     b.onclick=function(){setStageFor(CUR.id,b.getAttribute("data-clear"),null);};
   });
+  document.querySelectorAll('#dBody .f').forEach(function(field){var label=field.querySelector('label'),input=field.querySelector('input,select,textarea');if(label&&input&&input.id)label.htmlFor=input.id;});
 }
 
 /* Stage moves save on their own — a pipeline move is the single most common
@@ -1887,30 +1906,31 @@ document.getElementById("dDelete").onclick=function(){
 };
 
 /* ================= add ================= */
-document.getElementById("addBtn").onclick=function(){
-  /* Both and Funnel are views, not pipelines. sides:["both"] would create
-     someone who shows up in neither column, so ask which one they are. */
-  var side=oneSide();
-  if(!side){
-    var a=prompt("Is this a buyer or a seller? (type buyer or seller)","buyer");
-    if(a===null)return;
-    a=String(a).trim().toLowerCase();
-    side = /^b/.test(a) ? "buyer" : /^s/.test(a) ? "seller" : null;
-    if(!side){toast("Type buyer or seller.");return;}
-  }
-  var name=prompt("Name of the "+side+"?");
-  if(name===null)return;
-  name=name.trim();
-  if(!name){toast("A name is required.");return;}
-  api("/api/tracker/records",jsonReq("POST",{name:name,sides:[side],status:"new"}))
-    .then(function(j){
-      RECORDS.push(j.record);
-      paintSelectFilters();renderBoard();
-      openDrawer(j.record.id);
-      toast("Added — fill in the rest here.");
-    })
-    .catch(function(e){toast("Could not add: "+e.message);});
+function openAddPerson(stage){
+  ADD_STAGE=stage===undefined?null:stage;
+  document.getElementById('addPersonForm').reset();
+  document.getElementById('newSide').value=oneSide()||'buyer';
+  document.getElementById('addPersonError').textContent='';
+  document.getElementById('addContext').textContent='Starting stage: '+(ADD_STAGE?stageLabel(oneSide()||'buyer',ADD_STAGE):'Unstaged')+'. Add contact details now, then plan the next step.';
+  document.getElementById('addPersonDialog').showModal();
+  document.getElementById('newName').focus();
+}
+document.getElementById('addBtn').onclick=function(){openAddPerson();};
+document.getElementById('cancelAdd').onclick=function(){document.getElementById('addPersonDialog').close();};
+document.getElementById('newSide').onchange=function(){ADD_STAGE=null;document.getElementById('addContext').textContent='Starting stage: Unstaged. Add contact details now, then plan the next step.';};
+document.getElementById('addPersonForm').onsubmit=async function(e){
+ e.preventDefault();var form=this,button=document.getElementById('createPerson');if(button.disabled)return;
+ var values=new FormData(form),name=String(values.get('name')||'').trim(),side=String(values.get('side'));
+ if(!name){document.getElementById('addPersonError').textContent='Enter a name.';return;}
+ button.disabled=true;
+ try{var body={name:name,sides:[side],status:'new',phone:String(values.get('phone')||'').trim(),email:String(values.get('email')||'').trim(),source:String(values.get('source')||'').trim()};
+ if(ADD_STAGE){body[side==='buyer'?'buyerStage':'sellerStage']=ADD_STAGE;body.stageMeta={};body.stageMeta[side+':'+ADD_STAGE]={enteredAt:new Date().toISOString()};}
+ var result=await api('/api/tracker/records',jsonReq('POST',body));replaceRecord(result.record);
+ document.getElementById('addPersonDialog').close();SIDE=side;document.querySelectorAll('#sideSwitch button').forEach(function(b){b.classList.toggle('on',b.dataset.side===side);});document.getElementById('selectModeBtn').style.display='';paintSelectFilters();document.getElementById('clearF').click();openDrawer(result.record.id);toast('Person added');
+ }catch(err){document.getElementById('addPersonError').textContent=err.message;}finally{button.disabled=false;}
 };
+document.getElementById('filterToggle').onclick=function(){var f=document.getElementById('filters');f.hidden=!f.hidden;this.setAttribute('aria-expanded',String(!f.hidden));syncScrollbar();};
+document.getElementById('boardSort').onchange=function(){BOARD_SORT=this.value;renderBoard();};
 
 /* ================= Overview deep-link (?side=&stages=&assigned=&unstaged=) =================
    CRM Overview clicks reload this iframe with query params so the board opens
@@ -1950,24 +1970,42 @@ function applyOverviewQuery(){
 }
 
 /* ================= boot ================= */
-function load(announce){
-  return Promise.all([api("/api/tracker/schema"),api("/api/tracker/records")])
-    .then(function(res){
-      SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
-      RECORDS=res[1].records||[];
-      paintSelectFilters();
-      applyOverviewQuery();
-      paintStatusChips();paintStageChips();paintContactChip();paintBulkStageOptions();renderBoard();
-      if(announce)toast("Refreshed — "+RECORDS.length+" in tracker");
-    })
-    .catch(function(e){
-      document.getElementById("empty").style.display="flex";
-      document.getElementById("boardWrap").style.display="none";
-      document.getElementById("emptyMsg").textContent="Could not load the tracker: "+e.message;
-    });
+function load(announce,background){
+  if(background&&(LOADING||CUR||DIRTY||SELECTING||dragId||document.hidden||document.getElementById('addPersonDialog').open))return Promise.resolve();
+  var request=++LOAD_VERSION,version=DATA_VERSION,initial=FIRST_LOAD;LOADING=true;
+  var oldScroll=document.getElementById('board').scrollLeft;
+  var columnScroll={};document.querySelectorAll('#board .col').forEach(function(col){columnScroll[col.dataset.stage||col.dataset.side||'']=col.querySelector('.colbody')?.scrollTop||0;});
+  return Promise.all([FIRST_LOAD?api('/api/tracker/schema'):Promise.resolve(SCHEMA),api('/api/tracker/records')]).then(function(res){
+    if(request!==LOAD_VERSION||version!==DATA_VERSION)return;
+    if(background&&(CUR||DIRTY||SELECTING||dragId||document.getElementById('addPersonDialog').open))return;
+    if(!Array.isArray(res[1].records))throw new Error('The pipeline response could not be read.');
+    SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
+    var changed=JSON.stringify(RECORDS)!==JSON.stringify(res[1].records);
+    RECORDS=res[1].records;
+    if(FIRST_LOAD){applyOverviewQuery();FIRST_LOAD=false;}
+    if(changed||!background||initial){paintSelectFilters();paintStatusChips();paintStageChips();paintContactChip();paintBulkStageOptions();renderBoard();document.getElementById('board').scrollLeft=oldScroll;document.querySelectorAll('#board .col').forEach(function(col){var body=col.querySelector('.colbody');if(body)body.scrollTop=columnScroll[col.dataset.stage||col.dataset.side||'']||0;});}
+    document.getElementById('syncState').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · Auto-refresh on';
+    if(announce)toast('Pipeline refreshed');
+  }).catch(function(e){
+    if(request!==LOAD_VERSION)return;
+    document.getElementById('syncState').textContent='Refresh failed · retry with Refresh';
+    if(FIRST_LOAD){document.getElementById('empty').style.display='flex';document.getElementById('emptyMsg').textContent='Could not load the pipeline: '+e.message;}
+    if(announce)toast(e.message);
+  }).finally(function(){if(request===LOAD_VERSION)LOADING=false;});
 }
+setInterval(function(){load(false,true);},30000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden)load(false,true);});
+window.addEventListener('focus',function(){load(false,true);});
 document.addEventListener("keydown",function(e){
-  if(e.key==="Escape"&&document.getElementById("drawer").classList.contains("on"))closeDrawer();
+  var drawer=document.getElementById('drawer');
+  if(!drawer.classList.contains('on'))return;
+  if(e.key==='Escape')closeDrawer();
+  if(e.key==='Tab'){
+    var controls=Array.from(drawer.querySelectorAll('button,input,select,textarea,a[href]')).filter(function(el){return !el.disabled&&el.getClientRects().length;});
+    var first=controls[0],last=controls[controls.length-1];
+    if(e.shiftKey&&(document.activeElement===first||document.activeElement===drawer)){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===drawer)){e.preventDefault();first.focus();}
+  }
 });
 load(false);
 </script>
