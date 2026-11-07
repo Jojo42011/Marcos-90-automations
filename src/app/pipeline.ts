@@ -1377,6 +1377,22 @@ export async function run(
 
   await db.updateLead(lead);
 
+  /* When the DM funnel reaches a real two-way state, stage any linked tracker
+     row Unstaged → Contacted (same rules as /api/tracker/stage-from-engagement).
+     Scoped to this lead only — no full-store scan on every inbound. */
+  if (
+    lead.state === FunnelStage.CriteriaCollected ||
+    lead.state === FunnelStage.PropertySent ||
+    lead.state === FunnelStage.Closed
+  ) {
+    try {
+      const { stageTrackerFromEngagement } = await import("../core/trackerEngagement.js");
+      stageTrackerFromEngagement([lead], { dryRun: false, leadIds: [lead.id] });
+    } catch (err) {
+      console.error("[trackerEngagement] inbound stage bump failed:", err);
+    }
+  }
+
   marcoLog("pipeline_end", {
     requestId,
     correlationId,

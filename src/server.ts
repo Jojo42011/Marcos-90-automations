@@ -3801,6 +3801,27 @@ app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (r
     }
     const lead = await appendLeadActivity(id, [entry], pin);
     if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    /* Dialer outcomes feed the CRM Overview funnels: Talked → Contacted,
+       Appointment Set → listing_appointment_set / actively_showing. Existing
+       tracker rows only; never invent Closed or create a missing tracker. */
+    if (type === "call") {
+      try {
+        const { bumpTrackerFromDialerActivity } = await import("./core/trackerDialerBump.js");
+        const outcome =
+          (meta && typeof meta.Outcome === "string" && meta.Outcome) ||
+          subType ||
+          description;
+        const source = meta && meta.Source != null ? String(meta.Source) : undefined;
+        bumpTrackerFromDialerActivity({
+          leadId: id,
+          outcome: String(outcome || ""),
+          source,
+          leadIntent: lead.crmIntent,
+        });
+      } catch (bumpErr) {
+        console.error("[trackerDialerBump] failed:", bumpErr);
+      }
+    }
     res.json({ ok: true, activity: lead.activity ?? [] });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
