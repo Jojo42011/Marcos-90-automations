@@ -12,7 +12,7 @@ for(const node of parsed.statements)if(ts.isVariableStatement(node))for(const d 
 // CAMPAIGNS/DRIPS/NEWSLETTERS demo email lists were removed; CRM Email embeds live SMTP email-marketing.
 for(const name of ['LEADS','PEOPLE','CONVOS'])assert.equal(declarations.get(name),'[]',name+' starts empty');
 const apply=parsed.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='applyLive').getText(parsed);
-const element={textContent:''};
+const element={textContent:'',classList:{add(){},remove(){},toggle(){}}};
 const context=vm.createContext({window:{},document:{getElementById:()=>element,querySelector:()=>element},
  LEADS:[],PEOPLE:[],CONVOS:[],TX:[],LIVE_DATA:false,DEMO_REASON:'',currentReport:'business',
  loadTransactions:async()=>[],mapLeadRow:x=>x,mapPeopleLive:x=>x,deriveConvosLive:()=>[],calEventsFromTx:()=>[],
