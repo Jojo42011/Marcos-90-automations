@@ -69,18 +69,20 @@
   [data-theme="dark"] .banner.bad{background:#342328;color:#efb0b7}
   [data-theme="dark"] a.top{color:#8bd6cf}
 </style>
+<link rel="stylesheet" href="/growth-ui.css">
 </head>
-<body>
+<body class="growth-page">
 
 <div class="head">
   <div class="grow">
-    <h1>Analytics</h1>
+    <div class="eyebrow">Your growth workspace</div><h1>Analytics</h1>
     <div class="sub" id="sub"></div>
   </div>
   <button class="refresh" id="refresh">Refresh</button>
 </div>
 
 <div class="tabs" id="tabs"></div>
+<div id="dmView" hidden></div>
 <div id="view"><div class="empty" aria-hidden="true"></div></div>
 
 <script>
@@ -176,127 +178,50 @@ function mixBar(mix){
     }).join("") + '</div></div>';
 }
 
-function metricsBody(p){
-  var html = statusBanner(p);
-
-  if (p.status !== "live") {
-    html += '<div class="panel"><div class="empty">' +
-      '<div class="big">Nothing to show for ' + esc(p.label) + ' yet</div>' +
-      esc(p.note || "No data source is connected for this platform.") +
-      '</div></div>';
-    return html;
-  }
-
-  if (p.accountUsername) {
-    html += '<div class="banner info"><b>@' + esc(p.accountUsername) + '</b> via Zernio</div>';
-  }
-
-  html += '<div class="cards">' +
-    card("Followers", p.followers) +
-    card("Posts", p.posts) +
-    card("Views", p.views) +
-    card("Likes", p.likes) +
-    card("Comments", p.comments) +
-    card("Shares", p.shares) +
-    card("Saves", p.saves) +
-    card("Reach", p.reach) +
-    card("Profile views", p.profileViews) +
-    card("Follows from posts", p.followsFromPosts) +
-    card("Avg views / post", p.avgViews) +
-    card("Engagement rate", p.engagementRate, p.engagementRate == null ? null : "of views interacted", "%") +
-  '</div>';
-
-  html += '<div class="panel"><h2>Detail</h2>' +
-    '<div class="row"><span class="lbl">Views</span><span class="val">' + full(p.views) + '</span></div>' +
-    '<div class="row"><span class="lbl">Likes</span><span class="val">' + full(p.likes) + '</span></div>' +
-    '<div class="row"><span class="lbl">Comments</span><span class="val">' + full(p.comments) + '</span></div>' +
-    '<div class="row"><span class="lbl">Shares</span><span class="val">' + full(p.shares) + '</span></div>' +
-    '<div class="row"><span class="lbl">Saves</span><span class="val">' + full(p.saves) + '</span></div>' +
-    '<div class="row"><span class="lbl">Reach</span><span class="val">' + full(p.reach) + '</span></div>' +
-    '<div class="row"><span class="lbl">Profile views</span><span class="val">' + full(p.profileViews) + '</span></div>' +
-    '<div class="row"><span class="lbl">Follows from posts</span><span class="val">' + full(p.followsFromPosts) + '</span></div>' +
-    '<div class="row"><span class="lbl">Engagement rate</span><span class="val">' +
-      (p.engagementRate == null ? "—" : p.engagementRate + "%") + '</span></div>' +
-    '<div class="src">Source: ' + esc(p.source || "unknown") + ' · updated ' + esc(ago(p.lastUpdated)) + '</div>' +
-  '</div>';
-
-  if (p.topPost && (p.topPost.url || p.topPost.caption)) {
-    html += '<div class="panel"><h2>Top post</h2>' +
-      '<div class="row"><span class="lbl">Views</span><span class="val">' + full(p.topPost.views) + '</span></div>' +
-      (p.topPost.caption ? '<div class="row"><span class="lbl">Caption</span><span class="val">' + esc(shortCaption(p.topPost.caption)) + '</span></div>' : '') +
-      (p.topPost.url ? '<div class="row"><span class="lbl">Link</span><span class="val"><a class="top" target="_blank" rel="noopener" href="' + esc(p.topPost.url) + '">Open</a></span></div>' : '') +
-      (p.topPost.platform ? '<div class="row"><span class="lbl">Platform</span><span class="val">' + esc(p.topPost.platform) + '</span></div>' : '') +
-    '</div>';
-  }
-
-  html += mixBar(p.mix);
-
-  if (p.recentPosts && p.recentPosts.length) {
-    html += '<div class="panel"><h2>Recent posts</h2>' +
-      p.recentPosts.map(function(post){
-        return '<div class="row"><span class="lbl">' +
-          (post.url
-            ? '<a class="top" target="_blank" rel="noopener" href="' + esc(post.url) + '">' + esc(shortCaption(post.caption || "Post")) + '</a>'
-            : esc(shortCaption(post.caption || "Post"))) +
-          '</span><span class="val">' + full(post.views) + ' views · ' + full(post.likes) + ' likes</span></div>';
-      }).join("") +
-    '</div>';
-  }
+function safePostURL(url){
+  try { var u=new URL(url); return /^https?:$/.test(u.protocol)?u.href:""; } catch(_){ return ""; }
+}
+var POST_SORT="views", POST_QUERY="";
+function postLink(post,label,cls){
+  var url=safePostURL(post.url);
+  return url?'<a class="'+(cls||'top')+'" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>':'<span class="'+(cls||'')+'">'+esc(label)+'</span>';
+}
+function dashboardBody(p,combined){
+  var posts=p.recentPosts||[];
+  var html='<section class="hero"><div><div class="eyebrow">Content intelligence / '+esc(combined?'All channels':p.label)+'</div><h2>Find what moves your audience.</h2><p>See what earns attention, learn from your strongest posts, and bring that insight into your next piece of content.</p></div><div class="hero-mark" aria-hidden="true">↗</div></section>';
+  if(combined){
+    html+='<div class="banner info"><b>Reporting: '+esc((p.included||[]).join(', ')||'No platforms yet')+'.</b> Totals reflect the available source data, not a selected date range.'+
+      ((p.excluded||[]).length?' Not included: '+esc(p.excluded.map(function(x){return x.label+' ('+x.reason+')';}).join('; '))+'.':'')+'</div>';
+    html+=DATA.platforms.filter(function(x){return x.status==='live';}).map(statusBanner).join('');
+  }else html+=statusBanner(p);
+  if((combined&&!(p.included||[]).length)||(!combined&&p.status!=='live')) return html+'<div class="panel empty"><div class="big">Your next insight starts with connected data.</div>'+esc(p.note||'Connect a social account to begin seeing performance here.')+'</div>';
+  html+='<div class="cards">'+card('Audience',p.followers,'Reported followers across selected channels')+card('Content views',p.views,'Reported views · not unique people')+card('Engagement',p.engagementRate,'Interactions as a share of views','%')+card('Average views',p.avgViews,'Per post in the source data')+'</div>';
+  var ranked=posts.filter(function(x){return x.views!=null;}).slice().sort(function(a,b){return b.views-a.views;}).slice(0,7);
+  var max=Math.max.apply(null,[1].concat(ranked.map(function(x){return x.views;})));
+  html+='<div class="analytics-grid"><section class="panel"><div class="panel-head"><div><div class="eyebrow">The content signal</div><h2>What earns attention</h2><div class="sub">Most-viewed recent posts · limited to available data</div></div><span class="sub">'+posts.length+' posts available</span></div>';
+  html+=ranked.length?'<div class="chart" role="img" aria-label="Recent posts ranked by views: '+esc(ranked.map(function(x,i){return shortCaption(x.caption||'Post '+(i+1))+': '+full(x.views)+' views';}).join('; '))+'">'+ranked.map(function(x){return '<div class="chart-col" title="'+esc(shortCaption(x.caption))+'"><strong>'+esc(num(x.views))+'</strong><div class="chart-bar" style="height:'+Math.max(0,x.views/max*170)+'px"></div></div>';}).join('')+'</div><div class="chart-labels">'+ranked.map(function(x,i){return '<span title="'+esc(shortCaption(x.caption))+'">'+esc(x.caption?String(x.caption).slice(0,38)+(x.caption.length>38?'…':''):'Post '+(i+1))+'</span>';}).join('')+'</div>':'<div class="empty">Post-level views will appear when the source reports them.</div>';
+  html+='<div class="src">A comparison of posts, not a growth trend. Open the ranked content below to review the hook, topic, and call to action.</div></section>';
+  var top=p.topPost;
+  html+='<section class="panel spotlight"><div class="eyebrow">Creative to learn from</div><h2>Standout content</h2>'+(top?'<p class="quote">'+esc(shortCaption(top.caption)||'Your highest-viewed post')+'</p><div class="score">'+esc(num(top.views)||'—')+' <span class="sub">views</span></div><div class="sub">'+esc(top.platform||p.label)+'</div><p class="src">Review the opening, format, and audience question. Use what worked as a starting point for your next idea.</p><div style="margin-top:18px">'+postLink(top,'Review this post ↗')+'</div>':'<div class="empty">Your strongest post will appear here once performance data is available.</div>')+'</section></div>';
+  html+='<div class="analytics-grid"><section class="panel"><div class="panel-head"><div><div class="eyebrow">Channel breakdown</div><h2>'+esc(combined?'Where attention comes from':'Your account at a glance')+'</h2></div></div>';
+  var channels=combined?DATA.platforms:[p];
+  var maxViews=Math.max.apply(null,[1].concat(channels.map(function(x){return x.status==='live'?x.views||0:0;})));
+  html+=channels.map(function(x){return '<button class="channel" data-channel="'+esc(x.id)+'"><div class="channel-line"><strong>'+esc(x.label)+(x.accountUsername?' · @'+esc(x.accountUsername):'')+'</strong><span>'+esc(x.status==='live'?full(x.views)+' views':x.status.replace(/_/g,' '))+' →</span></div><div class="meter"><i style="width:'+(x.status==='live'?Math.max(0,(x.views||0)/maxViews*100):0)+'%"></i></div></button>';}).join('');
+  html+='<div class="src">'+esc(combined?'Oldest included data: '+ago(p.lastUpdated):'Source: '+(p.source||'unknown')+' · updated '+ago(p.lastUpdated))+'</div></section><section class="panel"><div class="eyebrow">Audience actions</div><h2>Beyond the view</h2>'+[['Likes',p.likes],['Comments',p.comments],['Shares',p.shares],['Saves',p.saves]].map(function(x){return '<div class="row"><span class="lbl">'+x[0]+'</span><span class="val">'+full(x[1])+'</span></div>';}).join('')+'<div class="src">Look for content people discuss, share, or save. A dash means the source has not supplied that metric.</div></section></div>';
+  html+='<section class="panel"><div class="panel-head"><div><div class="eyebrow">Content library</div><h2>Turn performance into your next idea</h2></div><div class="actions"><input class="search" id="postSearch" type="search" aria-label="Search post captions" placeholder="Search captions…" value="'+esc(POST_QUERY)+'"><select id="postSort" aria-label="Sort posts"><option value="views"'+(POST_SORT==='views'?' selected':'')+'>Most views</option><option value="comments"'+(POST_SORT==='comments'?' selected':'')+'>Most comments</option><option value="shares"'+(POST_SORT==='shares'?' selected':'')+'>Most shares</option><option value="recent"'+(POST_SORT==='recent'?' selected':'')+'>Most recent</option></select></div></div><div id="postResults">'+postRows(p)+'</div></section>';
+  html+='<details class="panel details"><summary>All reported metrics & source details</summary><div class="detail-grid">'+[['Posts',p.posts],['Reach',p.reach],['Profile views',p.profileViews],['Follows from posts',p.followsFromPosts]].map(function(x){return '<div><div class="k">'+x[0]+'</div><div class="v">'+full(x[1])+'</div></div>';}).join('')+'</div><div class="src">Metrics may use different reporting windows across providers. Totals are not a deduplicated audience or an attributed sales funnel.</div></details>'+mixBar(p.mix);
   return html;
 }
-
-function combinedBody(c){
-  var html = "";
-
-  /* The combined tab is the easiest place to mislead: a total that quietly
-     leaves out three platforms still reads as "everything". Say what it
-     covers, every time, before any number. */
-  if (c.included && c.included.length) {
-    html += '<div class="banner ' + (c.excluded && c.excluded.length ? "warn" : "info") + '">' +
-      '<b>These totals cover ' + esc(c.included.join(", ")) + '.</b>' +
-      (c.excluded && c.excluded.length
-        ? ' Not included: ' + esc(c.excluded.map(function(e){ return e.label; }).join(", ")) +
-          ' — no data source connected yet.'
-        : '') +
-      '</div>';
-  } else {
-    html += '<div class="banner info"><b>No platform is reporting yet.</b> ' + esc(c.note || "") + '</div>';
-  }
-
-  if (!c.included || !c.included.length) return html;
-
-  html += '<div class="cards">' +
-    card("Followers", c.followers) +
-    card("Posts", c.posts) +
-    card("Views", c.views) +
-    card("Likes", c.likes) +
-    card("Comments", c.comments) +
-    card("Shares", c.shares) +
-    card("Avg views / post", c.avgViews) +
-    card("Engagement rate", c.engagementRate, c.engagementRate == null ? null : "of views interacted", "%") +
-  '</div>';
-
-  html += '<div class="panel"><h2>Per platform</h2>' +
-    DATA.platforms.map(function(p){
-      return '<div class="row"><span class="lbl">' + esc(p.label) + '</span><span class="val">' +
-        (p.status === "live" ? full(p.views) + ' views' : '<span style="color:var(--muted);font-weight:500">' +
-          (p.status === "not_connected" ? "not connected" : p.status) + '</span>') +
-      '</span></div>';
-    }).join("") +
-    '<div class="src">Oldest data in this roll-up: ' + esc(ago(c.lastUpdated)) + '</div>' +
-  '</div>';
-
-  if (c.topPost && (c.topPost.url || c.topPost.caption)) {
-    html += '<div class="panel"><h2>Best performing post, any platform</h2>' +
-      '<div class="row"><span class="lbl">Platform</span><span class="val">' + esc(c.topPost.platform || "—") + '</span></div>' +
-      '<div class="row"><span class="lbl">Views</span><span class="val">' + full(c.topPost.views) + '</span></div>' +
-      (c.topPost.caption ? '<div class="row"><span class="lbl">Caption</span><span class="val">' + esc(shortCaption(c.topPost.caption)) + '</span></div>' : '') +
-      (c.topPost.url ? '<div class="row"><span class="lbl">Link</span><span class="val"><a class="top" target="_blank" rel="noopener" href="' + esc(c.topPost.url) + '">Open</a></span></div>' : '') +
-    '</div>';
-  }
-
-  return html;
+function postRows(p){
+  var posts=(p.recentPosts||[]).filter(function(x){return String(x.caption||'').toLowerCase().includes(POST_QUERY.toLowerCase());}).slice().sort(function(a,b){
+    if(POST_SORT==='recent') return (Date.parse(b.publishedAt)||0)-(Date.parse(a.publishedAt)||0);
+    return (b[POST_SORT]==null?-1:b[POST_SORT])-(a[POST_SORT]==null?-1:a[POST_SORT]);
+  });
+  if(!posts.length)return '<div class="empty">'+(POST_QUERY?'No captions match your search.':'No recent posts have been reported yet.')+'</div>';
+  return '<div class="table-scroll"><table class="post-table"><thead><tr><th scope="col">Content</th><th scope="col">Views</th><th scope="col">Likes</th><th scope="col">Comments</th><th scope="col">Shares</th><th scope="col">Saves</th></tr></thead><tbody>'+posts.map(function(x,i){return '<tr><td><div class="rank">'+String(i+1).padStart(2,'0')+' · '+esc(x.platform||p.label)+(x.publishedAt?' · '+esc(new Date(x.publishedAt).toLocaleDateString()):'')+'</div>'+postLink(x,shortCaption(x.caption)||'Untitled post','post-title')+'</td>'+['views','likes','comments','shares','saves'].map(function(k){return '<td>'+full(x[k])+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
 }
+function metricsBody(p){return dashboardBody(p,false);}
+function combinedBody(p){return dashboardBody(p,true);}
 
 function render(){
   if (!DATA) return;
@@ -305,13 +230,13 @@ function render(){
     .concat(DATA.platforms.map(function(p){ return { id:p.id, label:p.label, status:p.status, stale:p.stale }; }));
 
   document.getElementById("tabs").innerHTML = tabs.map(function(t){
-    return '<button class="tab' + (t.id === CURRENT ? " active" : "") + '" data-id="' + esc(t.id) + '">' +
+    return '<button class="tab' + (t.id === CURRENT ? " active" : "") + '" aria-pressed="' + (t.id === CURRENT) + '" data-id="' + esc(t.id) + '">' +
       '<span class="dot ' + dotClass(t) + '"></span>' + esc(t.label) + '</button>';
   }).join("") +
     /* Separated on purpose: the DM Agent is a console, not a platform, and a
        plain fifth chip would read as another set of metrics. */
     '<span class="tabsep"></span>' +
-    '<button class="tab' + (CURRENT === "dm" ? " active" : "") + '" data-id="dm">DM Agent</button>';
+    '<button class="tab' + (CURRENT === "dm" ? " active" : "") + '" aria-pressed="' + (CURRENT === 'dm') + '" data-id="dm">DM Agent</button>';
 
   var live = DATA.platforms.filter(function(p){ return p.status === "live"; }).length;
   var connected = DATA.zernio && DATA.zernio.connectedAccounts ? DATA.zernio.connectedAccounts.length : live;
@@ -322,12 +247,14 @@ function render(){
     (DATA.zernio && DATA.zernio.configured ? "" : " · Zernio not connected");
 
   var view = document.getElementById("view");
+  var dmView=document.getElementById("dmView");
+  view.hidden=CURRENT==="dm"; dmView.hidden=CURRENT!=="dm";
   if (CURRENT === "dm") {
     /* Embedded, not reimplemented — it is a full console with its own thread
        list and reply flow. Kept mounted once loaded so switching tabs doesn't
        throw away an open conversation. */
     if (!document.getElementById("dmFrame")) {
-      view.innerHTML = '<iframe id="dmFrame" title="DM Agent" src="/chat" ' +
+      dmView.innerHTML = '<iframe id="dmFrame" title="DM Agent" src="/chat" ' +
         'style="width:100%;height:calc(100vh - 190px);min-height:520px;border:1px solid var(--line);' +
         'border-radius:11px;background:#fff;display:block"></iframe>';
     }
@@ -339,6 +266,9 @@ function render(){
     : metricsBody(DATA.platforms.filter(function(p){ return p.id === CURRENT; })[0] || DATA.platforms[0]);
 }
 
+document.getElementById("view").addEventListener("click",function(e){var b=e.target.closest("[data-channel]");if(b){CURRENT=b.dataset.channel;render();}});
+document.getElementById("view").addEventListener("input",function(e){if(e.target.id!=="postSearch")return;POST_QUERY=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
+document.getElementById("view").addEventListener("change",function(e){if(e.target.id!=="postSort")return;POST_SORT=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
 async function load(){
   var btn = document.getElementById("refresh");
   btn.disabled = true; btn.textContent = "Loading…";

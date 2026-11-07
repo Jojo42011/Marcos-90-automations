@@ -19,6 +19,7 @@
 <script src="/account-session.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CRM · Marco Puga Realty</title>
+<link rel="stylesheet" href="/growth-overview.css">
 <style>
   :root{
     /* Brivity palette (resolved from tw- design tokens): teal #59C4C4,
@@ -2017,38 +2018,26 @@ function fmtPoNum(n){
   return String(n);
 }
 function poFunnelHTML(side){
-  if(!side||!side.steps||!side.steps.length){
-    return '<div class="po-empty">No pipeline data yet.</div>';
-  }
-  var parts=[];
-  side.steps.forEach(function(s,i){
-    if(i) parts.push('<div class="po-arrow" aria-hidden="true">→</div>');
-    var rate="";
-    if(s.rateFromPrev!=null){
-      rate='<div class="r'+(s.rateFromPrev>0?" ok":"")+'">'+s.rateFromPrev+'%</div>';
-    } else {
-      rate='<div class="r">&nbsp;</div>';
-    }
-    var cls="po-step"+(s.kind==="metric"?" metric":"")+(s.kind==="people"?" go":"");
-    var attrs=s.kind==="people"?' data-po-step="'+esc(s.key)+'" title="Open in Tracker"':"";
-    parts.push(
-      '<div class="'+cls+'"'+attrs+'>'+
-        '<div class="n">'+esc(fmtPoNum(s.count))+'</div>'+
-        '<div class="l">'+esc(s.label)+'</div>'+rate+
-      '</div>'
-    );
-  });
-  return '<div class="po-funnel">'+parts.join("")+'</div>';
+  if(!side||!side.steps||!side.steps.length)return '<div class="po-empty">No pipeline data yet.</div>';
+  var metrics=side.steps.filter(function(s){return s.kind==='metric';});
+  var people=side.steps.filter(function(s){return s.kind==='people';});
+  var max=Math.max.apply(null,[1].concat(people.map(function(s){return s.count||0;})));
+  return '<div class="po-eyebrow">'+(side.side==='seller'?'Outreach activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){return '<div class="po-metric"><strong title="'+esc(String(s.count))+'">'+esc(fmtPoNum(s.count))+'</strong><span>'+esc(s.label)+'</span></div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
+    // Ratios between heterogeneous social/people sources are not attributed conversion.
+    var prev=i?people[i-1]:null;
+    var ratio=prev&&prev.count>0?Math.round(s.count/prev.count*1000)/10:null;
+    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,s.count/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoNum(s.count))+'</span>'+(ratio!=null?'<span class="r">'+ratio+'% of previous</span>':'')+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
+  }).join('')+'</div><div class="po-note">Bars compare cumulative stage counts within this pipeline. Ratios are stage comparisons, not attributed conversion rates.</div>';
 }
 function poCardHTML(side){
-  var sideKey=side&&side.side==="seller"?"seller":"buyer";
-  var sub=side&&side.subtitle?String(side.subtitle):"";
-  return '<div class="po-card" data-side="'+esc(sideKey)+'" aria-label="'+esc(sideKey==="seller"?"Sellers":"Buyers")+'">'+
-    (sub?'<span class="po-sub">'+esc(sub)+'</span>':'')+
-    poFunnelHTML(side)+
-  '</div>';
+  var sideKey=side&&side.side==='seller'?'seller':'buyer';
+  if(!side)return '<div class="po-card"><div class="po-empty">Pipeline data unavailable.</div></div>';
+  return '<section class="po-card" data-side="'+sideKey+'" aria-label="'+(sideKey==='seller'?'Sellers':'Buyers')+'"><div class="po-card-head"><div><h3>'+(sideKey==='seller'?'Seller pipeline':'Buyer pipeline')+'</h3><span class="po-sub">'+esc(side.subtitle||'')+'</span></div><span class="po-side-icon" aria-hidden="true">'+(sideKey==='seller'?'⌂':'↗')+'</span></div>'+
+    '<div class="po-summary">'+[['all','Tracker contacts',side.inPipeline],['unstaged','Need a stage',side.unstaged],['closed','Closed',side.closed]].map(function(x){return '<button type="button" data-po-meta="'+x[0]+'"><strong>'+esc(fmtPoNum(x[2]))+'</strong><span>'+x[1]+' ↗</span></button>';}).join('')+'</div>'+poFunnelHTML(side)+
+    '<div class="po-next"><div><strong>'+(side.unstaged>0?esc(fmtPoNum(side.unstaged))+' contacts need a next step':'Keep your next conversations moving')+'</strong>'+(side.unstaged>0?'Assign a stage so these contacts are visible in your pipeline.':'Open your contacts to review the next follow-up.')+'</div><button type="button" data-po-meta="'+(side.unstaged>0?'unstaged':'all')+'">'+(side.unstaged>0?'Review unstaged':'Open Tracker')+' →</button></div></section>';
 }
 var PIPE_OVERVIEW=null;
+var PO_REQUEST=0;
 function openTrackerFromOverview(side, opts){
   opts=opts||{};
   var p=new URLSearchParams();
@@ -2091,23 +2080,25 @@ function renderPipelineOverview(){
   var el=document.getElementById("pipeOverview");
   if(!el) return;
   bindPipelineOverviewClicks(el);
+  var request=++PO_REQUEST;
   /* null = All; [] = no agents checked (must not fall back to All / Marco's totals). */
   var agent=USER_FILTER==null?"":(USER_FILTER.length?USER_FILTER.join(","):"__none__");
   var q=agent?("?agent="+encodeURIComponent(agent)):"";
-  el.innerHTML='<div class="po-card"><div class="po-empty" aria-hidden="true"></div></div>';
+  el.innerHTML='<div class="po-card"><div class="po-empty" role="status">Loading your pipelines…</div></div>';
   fetch(crmApi("/api/crm/pipeline-overview"+q),{headers:{Accept:"application/json"}})
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(d){
+      if(request!==PO_REQUEST)return;
       if(!d||!d.ok){
         el.innerHTML='<div class="po-card"><div class="po-empty">Pipeline overview unavailable.</div></div>';
         return;
       }
       PIPE_OVERVIEW=d;
-      var note=(d.notes&&d.notes[0])?('<div class="po-note">'+esc(d.notes[0])+' · Click a step to open Tracker</div>'):'<div class="po-note">Click a step to open Tracker</div>';
-      el.innerHTML=poCardHTML(d.buyers)+poCardHTML(d.sellers)+
-        '<div style="grid-column:1/-1">'+note+'</div>';
+      var note='<details class="po-method"><summary>How to read these pipelines · sources & coverage</summary><p>Content metrics and contact stages come from different sources. These figures show activity and pipeline position; they do not prove that a view or a call caused a sale.</p>'+(d.notes||[]).map(function(n){return '<p>'+esc(n)+'</p>';}).join('')+'</details>';
+      el.innerHTML='<div class="po-hero"><div><div class="po-eyebrow">Business momentum / '+esc(d.agent||'Selected team')+'</div><h2>Turn attention into appointments.</h2><p>Follow the path from first contact to closed deal. Find the next conversation, spot unstaged contacts, and keep both pipelines moving.</p></div><div class="po-orbit" aria-hidden="true">↗</div></div>'+poCardHTML(d.buyers)+poCardHTML(d.sellers)+note;
     })
     .catch(function(){
+      if(request!==PO_REQUEST)return;
       el.innerHTML='<div class="po-card"><div class="po-empty">Could not load pipeline overview.</div></div>';
     });
 }

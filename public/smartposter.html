@@ -154,11 +154,12 @@
   [data-theme="dark"] .banner.warn{background:#342b1b;color:#edc98c}
   [data-theme="dark"] .banner.bad{background:#342328;color:#efb0b7}
 </style>
+<link rel="stylesheet" href="/growth-ui.css">
 </head>
-<body>
+<body class="growth-page">
 <div class="head">
   <div class="grow">
-    <h1>SmartPoster</h1>
+    <div class="eyebrow">Your publishing workspace</div><h1>SmartPoster</h1>
     <div class="sub" id="sub">Drive inbox → AI captions → spaced schedule across your Zernio accounts.</div>
   </div>
   <div class="actions">
@@ -167,18 +168,20 @@
   </div>
 </div>
 
-<div id="banner"></div>
+<div id="banner" role="status"></div>
+<div id="publishSummary" class="publish-summary"></div>
 <div class="profiles" id="profiles"></div>
 
-<div class="tabs" id="tabs">
-  <div class="tab active" data-view="calendar">Calendar</div>
-  <div class="tab" data-view="queue">Queue</div>
+<div class="workspace-tools"><div class="tabs" id="tabs">
+  <button class="tab active" data-view="calendar">Weekly planner</button>
+  <button class="tab" data-view="queue">All content</button>
 </div>
 
+<label class="sub" for="statusFilter">Show</label><select id="statusFilter"><option value="all">All statuses</option><option value="inbox">Inbox</option><option value="draft">Draft</option><option value="ready">Ready</option><option value="scheduled">Scheduled</option><option value="published">Published</option><option value="failed">Needs attention</option></select></div>
 <div id="view"></div>
 
 <div class="drawer-bg" id="drawerBg"></div>
-<aside class="drawer" id="drawer">
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Publishing details" tabindex="-1">
   <button class="x" id="drawerClose" type="button" aria-label="Close">×</button>
   <div id="drawerBody"></div>
 </aside>
@@ -191,6 +194,8 @@ var VIEW = "calendar";
 var FILTER = new Set();
 var WEEK_OFFSET = 0;
 var SELECTED = null;
+var STATUS_FILTER="all";
+var DRAWER_RETURN=null;
 
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -246,12 +251,37 @@ function weekDates(){
 }
 
 function postMatchesFilter(p){
-  if (!FILTER.size) return true;
-  if (!p.platforms || !p.platforms.length) return true;
-  return p.platforms.some(function(x){ return FILTER.has(x); })
-    || (p.accountIds || []).some(function(id){ return FILTER.has(id); });
+  if(STATUS_FILTER!=="all" && p.status!==STATUS_FILTER)return false;
+  if(!FILTER.size)return true;
+  if((p.accountIds||[]).length)return p.accountIds.some(function(id){return FILTER.has(id);});
+  var platforms=(DATA.accounts||[]).filter(function(a){return FILTER.has(a.id);}).map(function(a){return a.platform;});
+  return (p.platforms||[]).some(function(x){return x==="all" || platforms.includes(x);});
 }
-
+function renderSummary(){
+  var n=DATA.counts||{};
+  document.getElementById("publishSummary").innerHTML='<div><div class="eyebrow">From idea to published</div><h2>Make room for your next great post.</h2><small>'+(DATA.settings.autoSchedule!==false?'Auto-scheduling on · Sync may publish to your schedule':'Manual review · You choose when to schedule')+'</small></div>'+
+    [['ready','Ready to schedule',n.ready||0],['scheduled','On the calendar',n.scheduled||0],['failed','Needs attention',n.failed||0]].map(function(x){return '<button data-summary="'+x[0]+'"><div class="eyebrow">'+x[1]+'</div><strong>'+x[2]+'</strong><small>Review content →</small></button>';}).join('');
+  document.getElementById("publishSummary").querySelectorAll('[data-summary]').forEach(function(b){b.onclick=function(){STATUS_FILTER=b.dataset.summary;FILTER.clear();VIEW='queue';document.getElementById('statusFilter').value=STATUS_FILTER;render();};});
+}
+function showDrawer(){
+  var drawer=document.getElementById('drawer');
+  if(!drawer.classList.contains('on'))DRAWER_RETURN=document.activeElement;
+  document.getElementById('drawerBg').classList.add('on');drawer.classList.add('on');
+  Array.from(document.body.children).forEach(function(el){if(el!==drawer&&el.id!=='drawerBg'&&el.tagName!=='SCRIPT')el.inert=true;});
+  document.body.style.overflow='hidden';
+  drawer.querySelectorAll('.field').forEach(function(f){var l=f.querySelector('label'),i=f.querySelector('input,textarea,select');if(l&&i&&i.id)l.htmlFor=i.id;});
+  drawer.focus();
+}
+function drawerError(message){
+  var el=document.getElementById('drawerError');
+  if(!el){el=document.createElement('div');el.id='drawerError';el.className='banner bad';el.setAttribute('role','alert');document.getElementById('drawerBody').prepend(el);}
+  el.textContent=message;el.scrollIntoView({block:'nearest'});
+}
+async function runAction(button,action){
+  button.disabled=true;
+  try{await action();}catch(err){if(document.getElementById('drawer').classList.contains('on'))drawerError(err.message);else document.getElementById('banner').innerHTML='<div class="banner bad" role="alert">'+esc(err.message)+'</div>';}
+  finally{button.disabled=false;}
+}
 function platformColor(p){
   var x = String(p || "").toLowerCase();
   if (x === "tiktok") return "tiktok";
@@ -274,7 +304,7 @@ function renderBanner(){
     bits.push('<div class="banner warn"><b>No Zernio social accounts on this profile yet.</b> Connect them in Zernio, then refresh.</div>');
   }
   if (!DATA.drive || !DATA.drive.connected) {
-    bits.push('<div class="banner info"><b>Google Drive not connected.</b> Open Settings and connect with Composio (same sign-in as Harvey Plugins).</div>');
+    bits.push('<div class="banner info"><b>Google Drive not connected.</b> Open Settings to connect your content folder.</div>');
   } else if (!DATA.settings.driveFolderName && !DATA.settings.driveFolderId) {
     bits.push('<div class="banner warn"><b>Drive is connected — pick a folder by name in Settings.</b></div>');
   } else if (DATA.settings.lastSyncNote) {
@@ -295,8 +325,8 @@ function renderProfiles(){
   }
   var html = '<span class="lbl">Profiles</span>';
   accounts.forEach(function(a){
-    var on = FILTER.has(a.platform) || FILTER.has(a.id);
-    html += '<button type="button" class="chip' + (on ? ' on' : '') + '" data-plat="' + esc(a.platform) + '" data-id="' + esc(a.id) + '">'
+    var on = FILTER.has(a.id);
+    html += '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-plat="' + esc(a.platform) + '" data-id="' + esc(a.id) + '">'
       + '<span class="av ' + platformColor(a.platform) + '">' + esc(initials(a.username || a.platform)) + '</span>'
       + esc((a.username ? '@' + a.username : a.platform))
       + '</button>';
@@ -304,7 +334,7 @@ function renderProfiles(){
   el.innerHTML = html;
   el.querySelectorAll(".chip").forEach(function(btn){
     btn.onclick = function(){
-      var plat = btn.getAttribute("data-plat");
+      var plat = btn.getAttribute("data-id");
       if (FILTER.has(plat)) FILTER.delete(plat); else FILTER.add(plat);
       render();
     };
@@ -320,15 +350,15 @@ function libraryPosts(){
 function renderLibrary(){
   var items = libraryPosts();
   if (!items.length) {
-    return '<div class="rail"><h2>Media</h2><div class="rail-meta">Unused / pending videos from Drive land here — Later-style side library.</div>'
-      + '<div class="empty"><div class="big">Library empty</div>Drop dated videos into the Drive folder, then Sync.</div></div>';
+    return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">Review a caption, then send it to your schedule.</div>'
+      + '<div class="empty"><div class="big">No pending content here</div>Try another filter, or add dated videos to your Drive folder and sync.</div></div>';
   }
-  return '<div class="rail"><h2>Media</h2><div class="rail-meta">' + items.length + ' pending</div>'
+  return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">' + items.length + ' pending</div>'
     + items.map(function(p){
-      return '<div class="media-item' + (SELECTED === p.id ? ' on' : '') + '" data-id="' + esc(p.id) + '">'
-        + '<div class="name">' + esc(p.title || p.fileName) + '</div>'
+      return '<button type="button" data-act="edit" class="media-item' + (SELECTED === p.id ? ' on' : '') + '" data-id="' + esc(p.id) + '">'
+        + '<div class="media-cover" aria-hidden="true">▷ <span>Video / Drive</span></div><div class="name">' + esc(p.title || p.fileName) + '</div>'
         + '<div class="meta"><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span> · '
-        + esc((p.platforms || []).join(", ") || "all") + '</div></div>';
+        + esc((p.platforms || []).join(", ") || "all") + '</div></button>';
     }).join("")
     + '</div>';
 }
@@ -358,15 +388,15 @@ function renderCalendar(){
       + '<div class="dh"><span class="d">' + esc(dayNum) + '</span><span class="w">' + esc(wd) + '</span></div>'
       + '<div class="slots">'
       + (posts.length ? posts.map(function(p){
-          return '<div class="post-block ' + esc(p.status) + '" data-id="' + esc(p.id) + '">'
+          return '<button type="button" data-act="edit" class="post-block ' + esc(p.status) + '" data-id="' + esc(p.id) + '">'
             + '<div class="t">' + esc(fmtHM(p.scheduledFor, tz) || "unscheduled") + '</div>'
             + '<div class="c">' + esc(p.title || p.fileName) + '</div>'
-            + '<div class="p">' + esc((p.platforms || []).join(" · ")) + '</div></div>';
-        }).join("") : '<div class="slot-hint">' + esc(slots.join(" · ") || "No slots") + '</div>')
+            + '<div class="p">' + esc((p.platforms || []).join(" · ")) + '</div><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></button>';
+        }).join("") : '<div class="slot-hint">' + (FILTER.size || STATUS_FILTER!=='all'?'No matching posts<br>':'No content planned<br>') + esc(slots.join(" · ") || "Set slots in Settings") + '</div>')
       + '</div></div>';
   }).join("") + '</div>';
 
-  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">'
+  return '<div class="calendar-heading"><div><div class="eyebrow">Your publishing rhythm</div><h2>' + esc(new Date(days[0]+'T12:00:00Z').toLocaleDateString('en-US',{month:'long',day:'numeric',timeZone:'UTC'})) + ' – ' + esc(new Date(days[6]+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'})) + '</h2></div>'
     + '<div class="actions">'
     + '<button class="btn" type="button" id="weekPrev">← Week</button>'
     + '<button class="btn" type="button" id="weekToday">This week</button>'
@@ -374,13 +404,13 @@ function renderCalendar(){
     + '</div>'
     + '<div class="sub">Slots: ' + esc((DATA.settings.slots || []).join(", ")) + ' · ' + esc(tz) + '</div>'
     + '</div>'
-    + '<div class="layout">' + renderLibrary() + '<div>' + weekHtml + '</div></div>';
+    + '<div class="layout">' + renderLibrary() + '<div class="calendar-scroll" tabindex="0" aria-label="Weekly publishing calendar, scroll horizontally to see all days">' + weekHtml + '</div></div>';
 }
 
 function renderQueue(){
   var posts = ((DATA && DATA.posts) || []).filter(postMatchesFilter).slice().reverse();
   if (!posts.length) {
-    return '<div class="panel"><div class="empty"><div class="big">Queue is clear</div>Synced videos and schedules will show here.</div></div>';
+    return '<div class="panel"><div class="empty"><div class="big">No matching content</div>Try another profile or status. Synced videos and schedules will show here.</div></div>';
   }
   return '<div class="queue">' + posts.map(function(p){
     return '<div class="qrow" data-id="' + esc(p.id) + '">'
@@ -392,55 +422,63 @@ function renderQueue(){
       + '<div class="qacts">'
       + (p.status === "draft" || p.status === "ready" || p.status === "failed"
           ? '<button class="btn primary" data-act="schedule" data-id="' + esc(p.id) + '" type="button">Schedule</button>' : '')
-      + '<button class="btn" data-act="edit" data-id="' + esc(p.id) + '" type="button">Edit</button>'
+      + '<button class="btn" data-act="edit" data-id="' + esc(p.id) + '" type="button">Review</button>'
       + '</div></div>';
   }).join("") + '</div>';
 }
 
+function localInputTime(iso){
+  if(!iso)return '';
+  var d=new Date(iso);if(!isFinite(d.getTime()))return '';
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+function postEdits(){
+  var field=document.getElementById('editWhen'),value=field.value;
+  if(!field.checkValidity())throw new Error('Choose a valid date and time.');
+  return {caption:document.getElementById('editCaption').value,title:document.getElementById('editTitle').value,scheduledFor:value?new Date(value).toISOString():null};
+}
 function openPostDrawer(id){
   var p = ((DATA && DATA.posts) || []).find(function(x){ return x.id === id; });
   if (!p) return;
+  var deviceTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
   SELECTED = id;
+  var remote=!!p.zernioPostId || p.status==="scheduled" || p.status==="published";
   var body = document.getElementById("drawerBody");
   body.innerHTML = '<h3>' + esc(p.title || p.fileName) + '</h3>'
     + '<div class="sub" style="margin-bottom:14px">' + esc(p.fileName) + ' · <span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></div>'
     + (p.error ? '<div class="banner bad" style="margin-bottom:12px">' + esc(p.error) + '</div>' : '')
+    + (remote?'<div class="banner info">This post has been sent to Zernio. Changes here update the local record only. Manage the live post or cancel its schedule in Zernio.</div>':'')
     + '<div class="field"><label>Caption</label><textarea id="editCaption">' + esc(p.caption) + '</textarea></div>'
     + '<div class="field"><label>Title</label><input id="editTitle" value="' + esc(p.title) + '" /></div>'
-    + '<div class="field"><label>Scheduled for (ISO)</label><input id="editWhen" value="' + esc(p.scheduledFor || "") + '" /></div>'
+    + '<div class="field"><label>Schedule · ' + esc(deviceTimezone) + '</label><input type="datetime-local" id="editWhen" value="' + esc(localInputTime(p.scheduledFor)) + '" /><div class="hint">Choose a time in your device timezone. The calendar displays ' + esc(DATA.settings.timezone) + '.</div></div>'
     + '<div class="hint" style="margin-bottom:12px">Platforms: ' + esc((p.platforms || []).join(", ") || "—")
-    + (p.zernioPostId ? '<br>Zernio id: ' + esc(p.zernioPostId) : '') + '</div>'
+    + '</div>'
     + '<div class="actions">'
-    + '<button class="btn primary" type="button" id="savePost">Save</button>'
+    + '<button class="btn primary" type="button" id="savePost">' + (remote?'Save local changes':'Save draft') + '</button>'
     + ((p.status === "draft" || p.status === "ready" || p.status === "failed")
-        ? '<button class="btn" type="button" id="schedPost">Push to Zernio</button>' : '')
+        ? '<button class="btn" type="button" id="schedPost">Save & schedule</button>' : '')
     + '<button class="btn" type="button" id="delPost">Remove</button>'
     + '</div>';
-  document.getElementById("drawerBg").classList.add("on");
-  document.getElementById("drawer").classList.add("on");
+  showDrawer();
 
-  document.getElementById("savePost").onclick = async function(){
-    await api("PATCH", "/api/smartposter/posts/" + encodeURIComponent(p.id), {
-      caption: document.getElementById("editCaption").value,
-      title: document.getElementById("editTitle").value,
-      scheduledFor: document.getElementById("editWhen").value || null
-    });
+  document.getElementById("savePost").onclick = function(){var btn=this;return runAction(btn,async function(){
+    await api("PATCH", "/api/smartposter/posts/" + encodeURIComponent(p.id), postEdits());
     await load();
     openPostDrawer(p.id);
-  };
+  });};
   var sp = document.getElementById("schedPost");
-  if (sp) sp.onclick = async function(){
-    sp.disabled = true;
+  if (sp) sp.onclick = function(){return runAction(sp,async function(){
+    await api("PATCH", "/api/smartposter/posts/" + encodeURIComponent(p.id), postEdits());
     await api("POST", "/api/smartposter/posts/" + encodeURIComponent(p.id) + "/schedule", {});
     await load();
     openPostDrawer(p.id);
-  };
-  document.getElementById("delPost").onclick = async function(){
-    if (!confirm("Remove this SmartPoster item? (Does not delete the Drive file.)")) return;
+  });};
+  document.getElementById("delPost").onclick = function(){var btn=this;return runAction(btn,async function(){
+    if (!confirm("Remove this local SmartPoster record? This does not delete the Drive file or cancel any scheduled or published post in Zernio.")) return;
     await api("DELETE", "/api/smartposter/posts/" + encodeURIComponent(p.id));
     closeDrawer();
     await load();
-  };
+  });};
 }
 
 function openSettings(){
@@ -456,7 +494,7 @@ function openSettings(){
           + '<button class="btn" type="button" id="driveDisc">Disconnect</button></div>'
         : (composioOk
             ? '<button class="btn primary" type="button" id="driveConnect">Connect with Composio</button>'
-              + '<div class="hint" style="margin-top:6px">Same managed Google sign-in Harvey Plugins uses — no client IDs or folder IDs to paste.</div>'
+              + '<div class="hint" style="margin-top:6px">Sign in to choose the Drive folder containing your content.</div>'
             : '<div class="banner warn">Composio is not configured on this server (COMPOSIO_API_KEY).</div>'))
     + '</div>'
     + '<div class="field"><label>Inbox folder</label>'
@@ -474,10 +512,10 @@ function openSettings(){
     + '<div class="field"><label class="toggle"><input type="checkbox" id="setAuto"' + (s.autoSchedule !== false ? " checked" : "") + ' /> Auto-schedule to Zernio on sync</label></div>'
     + '<div class="actions"><button class="btn primary" type="button" id="saveSettings">Save settings</button></div>';
 
-  document.getElementById("drawerBg").classList.add("on");
-  document.getElementById("drawer").classList.add("on");
+  showDrawer();
 
   var pickedId = s.driveFolderId || "";
+  document.getElementById("setFolderName").oninput=function(){pickedId="";};
   var connect = document.getElementById("driveConnect");
   if (connect) connect.onclick = async function(){
     connect.disabled = true;
@@ -485,16 +523,16 @@ function openSettings(){
       var r = await api("GET", "/api/smartposter/drive/connect?redirect=0");
       if (r && r.url) location.href = r.url;
     } catch (err) {
-      document.getElementById("banner").innerHTML = '<div class="banner bad"><b>Connect failed.</b> ' + esc(err.message) + '</div>';
+      drawerError("Connect failed. " + err.message);
       connect.disabled = false;
     }
   };
   var disc = document.getElementById("driveDisc");
-  if (disc) disc.onclick = async function(){
+  if (disc) disc.onclick = function(){return runAction(disc,async function(){
     await api("POST", "/api/smartposter/drive/disconnect", {});
     await load();
     openSettings();
-  };
+  });};
   document.getElementById("findFolders").onclick = async function(){
     var q = document.getElementById("setFolderName").value.trim();
     var hits = document.getElementById("folderHits");
@@ -520,7 +558,7 @@ function openSettings(){
       hits.textContent = err.message || "Search failed";
     }
   };
-  document.getElementById("saveSettings").onclick = async function(){
+  document.getElementById("saveSettings").onclick = function(){var btn=this;return runAction(btn,async function(){
     var slots = document.getElementById("setSlots").value.split(",").map(function(x){ return x.trim(); }).filter(Boolean);
     await api("PATCH", "/api/smartposter/settings", {
       driveFolderName: document.getElementById("setFolderName").value,
@@ -532,17 +570,22 @@ function openSettings(){
     });
     await load();
     openSettings();
-  };
+  });};
 }
 
 function closeDrawer(){
   document.getElementById("drawerBg").classList.remove("on");
   document.getElementById("drawer").classList.remove("on");
   SELECTED = null;
+  Array.from(document.body.children).forEach(function(el){el.inert=false;});
+  document.body.style.overflow='';
+  if(DRAWER_RETURN&&DRAWER_RETURN.isConnected)DRAWER_RETURN.focus();else document.getElementById('btnSettings').focus();
 }
 
 function render(){
+  if(!DATA)return;
   renderBanner();
+  renderSummary();
   renderProfiles();
   var view = document.getElementById("view");
   view.innerHTML = VIEW === "queue" ? renderQueue() : renderCalendar();
@@ -573,13 +616,15 @@ function render(){
       var act = btn.getAttribute("data-act");
       if (act === "edit") openPostDrawer(id);
       if (act === "schedule") {
-        btn.disabled = true;
+        await runAction(btn,async function(){
         await api("POST", "/api/smartposter/posts/" + encodeURIComponent(id) + "/schedule", {});
         await load();
+        });
       }
     });
   });
 
+  document.querySelectorAll("#tabs .tab").forEach(function(t){t.setAttribute("aria-pressed",String(t.dataset.view===VIEW));});
   var sub = document.getElementById("sub");
   var n = ((DATA && DATA.counts) || {});
   sub.textContent = (DATA && DATA.drive && DATA.drive.connected ? "Drive connected · " : "Drive offline · ")
@@ -610,7 +655,7 @@ document.getElementById("tabs").onclick = function(e){
   VIEW = t.getAttribute("data-view");
   render();
 };
-document.getElementById("btnSettings").onclick = function(){ openSettings(); };
+document.getElementById("btnSettings").onclick = function(){ if(DATA)openSettings(); };
 document.getElementById("btnSync").onclick = async function(){
   var btn = document.getElementById("btnSync");
   btn.disabled = true;
@@ -631,6 +676,17 @@ document.getElementById("btnSync").onclick = async function(){
 document.getElementById("drawerClose").onclick = closeDrawer;
 document.getElementById("drawerBg").onclick = closeDrawer;
 
+document.getElementById('statusFilter').onchange=function(){STATUS_FILTER=this.value;render();};
+document.addEventListener('keydown',function(e){
+  var drawer=document.getElementById('drawer');if(!drawer.classList.contains('on'))return;
+  if(e.key==='Escape'){e.preventDefault();closeDrawer();}
+  if(e.key==='Tab'){
+    var els=Array.from(drawer.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]')).filter(function(el){return el.offsetParent!==null;});
+    var first=els[0],last=els[els.length-1];
+    if(e.shiftKey&&(document.activeElement===first||document.activeElement===drawer)){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===drawer)){e.preventDefault();first.focus();}
+  }
+});
 load().catch(function(err){
   document.getElementById("banner").innerHTML = '<div class="banner bad"><b>Could not load SmartPoster.</b> ' + esc(err.message) + '</div>';
 });
