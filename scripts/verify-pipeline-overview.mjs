@@ -87,9 +87,15 @@ writeFileSync(
 );
 
 const { createTrackerRecord, listTrackerRecords } = await import("../dist/src/core/trackerStore.js");
-const { agentKey, buildPipelineOverview, parseAgentFilter, buyerCrmRank } = await import(
-  "../dist/src/core/pipelineOverview.js"
-);
+const {
+  agentKey,
+  buildPipelineOverview,
+  parseAgentFilter,
+  buyerCrmRank,
+  socialAllowedForAgentFilter,
+  matchesAgentFilter,
+  AGENT_FILTER_NONE,
+} = await import("../dist/src/core/pipelineOverview.js");
 
 let passed = 0;
 let failed = 0;
@@ -106,7 +112,7 @@ function check(name, fn) {
   }
 }
 
-check("agentKey maps Marco / Wesley / Carlos", () => {
+check("agentKey maps Marco / Wesley", () => {
   assert.equal(agentKey("Marco Puga"), "marco");
   assert.equal(agentKey("wesley"), "wesley");
   assert.equal(agentKey("Wes"), "wesley");
@@ -114,10 +120,26 @@ check("agentKey maps Marco / Wesley / Carlos", () => {
   assert.equal(agentKey(""), "");
 });
 
-check("parseAgentFilter empty = all", () => {
+check("parseAgentFilter empty = all; __none__; strips Carlos", () => {
   assert.deepEqual(parseAgentFilter(""), []);
   assert.deepEqual(parseAgentFilter("all"), []);
   assert.deepEqual(parseAgentFilter("Marco Puga,Wesley"), ["Marco Puga", "Wesley"]);
+  assert.deepEqual(parseAgentFilter(AGENT_FILTER_NONE), [AGENT_FILTER_NONE]);
+  assert.deepEqual(parseAgentFilter("Marco Puga,Carlos"), ["Marco Puga"]);
+});
+
+check("socialAllowedForAgentFilter: All/Marco yes, Wesley/none no", () => {
+  assert.equal(socialAllowedForAgentFilter([]), true);
+  assert.equal(socialAllowedForAgentFilter(["Marco Puga"]), true);
+  assert.equal(socialAllowedForAgentFilter(["Wesley"]), false);
+  assert.equal(socialAllowedForAgentFilter([AGENT_FILTER_NONE]), false);
+});
+
+check("matchesAgentFilter __none__ matches nobody", () => {
+  assert.equal(matchesAgentFilter("Marco Puga", [AGENT_FILTER_NONE]), false);
+  assert.equal(matchesAgentFilter("Wesley", [AGENT_FILTER_NONE]), false);
+  assert.equal(matchesAgentFilter("Marco Puga", ["Wesley"]), false);
+  assert.equal(matchesAgentFilter("Wesley", ["Wesley"]), true);
 });
 
 check("buyerCrmRank ladder", () => {
@@ -208,12 +230,31 @@ check("Marco filter excludes Wesley seller + unassigned tracker", () => {
 });
 
 const wes = await buildPipelineOverview({ agent: "Wesley" });
-check("Wesley filter keeps his seller + calls", () => {
+check("Wesley filter keeps his seller + calls; no Marco social Views", () => {
   assert.equal(wes.sellers.inPipeline, 1);
   const calls = wes.sellers.steps.find((s) => s.key === "calls");
   assert.equal(calls.count, 2);
   const dms = wes.buyers.steps.find((s) => s.key === "dms");
   assert.equal(dms.count, 0);
+  assert.equal(wes.buyers.steps.find((s) => s.key === "views"), undefined);
+  assert.equal(wes.buyers.steps.find((s) => s.key === "comments"), undefined);
+});
+
+const none = await buildPipelineOverview({ agent: AGENT_FILTER_NONE });
+check("empty agent pick zeros the funnel (unselect Marco must not show All)", () => {
+  assert.equal(none.buyers.steps.find((s) => s.key === "dms").count, 0);
+  assert.equal(none.buyers.steps.find((s) => s.key === "number").count, 0);
+  assert.equal(none.sellers.steps.find((s) => s.key === "calls").count, 0);
+  assert.equal(none.sellers.inPipeline, 0);
+  assert.equal(none.buyers.steps.find((s) => s.key === "views"), undefined);
+});
+
+check("Overview UI: agents are Marco+Wesley only; filter uses __none__", () => {
+  const crm = readFileSync(new URL("../public/crm-brivity.html", import.meta.url), "utf8");
+  assert(/const TEAM=\["Marco Puga","Wesley"\]/.test(crm));
+  assert(/USER_FILTER==null/.test(crm));
+  assert(/__none__/.test(crm));
+  assert(!/const TEAM=\["Marco Puga","Wesley","Carlos"\]/.test(crm));
 });
 
 check("Harvey tool + CRM route + Overview UI exist", () => {

@@ -1885,7 +1885,7 @@
         <option>Canceled/Expired Calls</option><option>For Sale By Owner Calls</option><option>Non-CRM Contacts</option>
       </select></div>
     <div><div class="na-label">For User</div>
-      <select class="select na-in" id="actUser"><option>Marco Puga</option><option>Wesley</option><option>Carlos</option></select></div>
+      <select class="select na-in" id="actUser"><option>Marco Puga</option><option>Wesley</option></select></div>
     <div><div class="na-label">Date <i>*</i></div><input type="date" class="na-in" id="actDate"></div>
     <div><div class="na-label"># <i>*</i></div><input type="number" class="na-in" id="actCount" value="1" min="1"></div>
   </div>
@@ -2055,7 +2055,7 @@ function openTrackerFromOverview(side, opts){
   p.set("side", side==="seller"?"seller":"buyer");
   if(opts.unstaged) p.set("unstaged","1");
   if(opts.stages&&opts.stages.length) p.set("stages", opts.stages.join(","));
-  if(USER_FILTER.length===1) p.set("assigned", USER_FILTER[0]);
+  if(USER_FILTER&&USER_FILTER.length===1) p.set("assigned", USER_FILTER[0]);
   var src="/tracker?"+p.toString();
   var f=document.getElementById("trackerFrame");
   if(f) f.setAttribute("src", src);
@@ -2091,7 +2091,8 @@ function renderPipelineOverview(){
   var el=document.getElementById("pipeOverview");
   if(!el) return;
   bindPipelineOverviewClicks(el);
-  var agent=USER_FILTER.length?USER_FILTER.join(","):"";
+  /* null = All; [] = no agents checked (must not fall back to All / Marco's totals). */
+  var agent=USER_FILTER==null?"":(USER_FILTER.length?USER_FILTER.join(","):"__none__");
   var q=agent?("?agent="+encodeURIComponent(agent)):"";
   el.innerHTML='<div class="po-card"><div class="po-empty" aria-hidden="true"></div></div>';
   fetch(crmApi("/api/crm/pipeline-overview"+q),{headers:{Accept:"application/json"}})
@@ -3437,7 +3438,7 @@ function txMarket(t){
    Start empty. Brivity has no transaction API — rows only appear after a CSV
    import or a hand-entered deal. Fabricated GCI was removed. */
 const TX_STATUS={active:{l:"ACTIVE",c:"var(--teal)"},pending:{l:"PENDING",c:"var(--st-nurture)"},closed:{l:"CLOSED",c:"#3fae86"},withdrawn:{l:"WITHDRAWN",c:"#3a444e"},canceled:{l:"CANCELED",c:"#3a444e"},draft:{l:"DRAFT",c:"#aab2ba"},coming_soon:{l:"COMING SOON",c:"#4a90d9"},expired:{l:"EXPIRED",c:"var(--st-new)"},pipeline:{l:"PIPELINE",c:"#7c8b98"},archived:{l:"ARCHIVED",c:"#aab2ba"}};
-const AGENTS_TX=["Marco Puga","Wesley","Carlos"];
+const AGENTS_TX=["Marco Puga","Wesley"];
 let TX=[];
 let txBucket="all";
 let txMarketFilter="all";
@@ -3924,7 +3925,7 @@ function leadSourceHTML(){
   const rows=Object.keys(bySrc).sort().map(s=>[s,bySrc[s]]);
   const tot=cols.map((_,i)=>rows.reduce((a,r)=>a+r[1][i],0));
   return '<div class="rep-head"><h1>Lead Source</h1></div>'+
-    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga","Wesley","Carlos"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
+    '<div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:13px"><span>Track the number of leads and status pipeline of all your leads.</span><span style="flex:1"></span>Filter by user '+repSelect(["All Active Users","Marco Puga","Wesley"])+repSelect(["Last 7 days","This Month","This Year"])+'</div>'+
     '<div class="card"><div class="tbl-scroll"><table class="leads" style="min-width:900px"><thead><tr><th>Source</th>'+cols.map(c=>'<th>'+c+'</th>').join("")+'</tr></thead><tbody>'+
     (rows.length?rows.map(r=>'<tr><td><span class="addlink">'+esc(r[0])+'</span></td>'+r[1].map(v=>'<td style="color:#6b7480">'+v+'</td>').join("")+'</tr>').join(""):'<tr><td colspan="11" class="empty">No leads yet.</td></tr>')+
     '</tbody><tfoot><tr class="tot-row"><td>Totals</td>'+tot.map(v=>'<td>'+v+'</td>').join("")+'</tr></tfoot></table></div></div>';
@@ -3932,7 +3933,7 @@ function leadSourceHTML(){
 const REPORTS={
   business:businessHTML,
   sales_funnel:()=>'<div class="rep-head"><h1>Sales Funnel Dashboard</h1>'+repSelect(["This Year","This Month","Last 7 days"])+'</div><div class="card card-pad">'+funnelHTML(funnelCounts().steps)+'</div>',
-  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga","Wesley","Carlos"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
+  agent_dash:()=>{const s=dealStats(),f=funnelCounts();return '<div class="rep-head"><h1>Agent Dashboard</h1>'+repSelect(["Marco Puga","Wesley"])+'</div>'+kpiRow([["New Leads",repNum(LEADS.filter(l=>l.crmStatus==="new").length)],["Contacts",repNum(f.contacted)],["Appts Set",repNum(f.apptSet)],["Under Contract",repNum(s.pending.length)],["Closed YTD",repNum(s.closed.length)],["GCI YTD",repMoney0(s.sum(s.closed,t=>t.gci))]]);},
   leaderboards:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Activity Leaderboard</h1>'+repSelect(["This Month","This Week","This Year"])+'</div>'+activityTable([["Calls",a.calls],["Texts",a.texts],["Emails",a.emails],["Appts Set",a.appts],["Contacts",a.contacts]]);},
   open_house:()=>'<div class="rep-head"><h1>Open House Dashboard</h1>'+repSelect(["This Year","This Month"])+'</div>'+kpiRow([["Open Houses","0"],["Attendees","0"],["Leads","0"],["Avg. Leads","0.00"],["Follow-ups","0"],["Converted","0"]]),
   agent_activity:()=>{const a=activityCounts();return '<div class="rep-head"><h1>Agent Activity</h1>'+repSelect(["Last 7 days","Last 30 days","This Year"])+'</div>'+activityTable([["Dials",a.calls],["Contacts",a.contacts],["Conversations",a.convos],["Appts Set",a.appts],["Emails",a.emails],["Texts",a.texts]]);},
@@ -11608,18 +11609,19 @@ document.addEventListener("click",e=>{
   else { crmToast(t||"OK"); }
 });
 /* ===== Team, user filter, date ranges, Brivity dropdowns, activity logging ===== */
-const TEAM=["Marco Puga","Wesley","Carlos"];
-let USER_FILTER=[];           // empty = All Active Users
+/* Overview agents only — Carlos is not an agent on this board. */
+const TEAM=["Marco Puga","Wesley"];
+let USER_FILTER=null;         // null = All Active Users; [] = none selected; ["Wesley"] = Wesley only
 let CUSTOM_FROM="",CUSTOM_TO="";
 function dashLeads(){
-  if(!USER_FILTER.length) return LEADS;
+  if(USER_FILTER==null) return LEADS;
+  if(!USER_FILTER.length) return [];
   return LEADS.filter(function(l){
-    var name=l.assignedUserName||l.assignedTo||"Marco Puga";
+    var name=l.assignedUserName||l.assignedTo||"";
     return USER_FILTER.some(function(f){
       var a=String(name).toLowerCase(), b=String(f).toLowerCase();
       if(b.indexOf("marco")>=0) return a.indexOf("marco")>=0;
       if(b.indexOf("wesley")>=0||b==="wes") return a.indexOf("wesley")>=0||a.indexOf("wes")>=0;
-      if(b.indexOf("carlos")>=0) return a.indexOf("carlos")>=0;
       return a===b||a.indexOf(b)>=0;
     });
   });
@@ -11650,7 +11652,9 @@ function loggedEntries(){ try{ return JSON.parse(localStorage.getItem("crmLogged
 function loggedTotals(tok){
   const out={};
   loggedEntries().forEach(e=>{
-    if(USER_FILTER.length&&!USER_FILTER.includes(e.user))return;
+    if(USER_FILTER==null){ /* all */ }
+    else if(!USER_FILTER.length) return;
+    else if(!USER_FILTER.includes(e.user)) return;
     if(!inRange(e.date+"T12:00:00",tok))return;
     out[e.type]=(out[e.type]||0)+(Number(e.count)||1);
   });
@@ -11683,18 +11687,34 @@ document.addEventListener("mousedown",e=>{
   openSelectDD(s);
 },true);
 
-/* ---- User filter (checkbox multi-select, like Brivity) ---- */
-function userLabel(){ return USER_FILTER.length?(USER_FILTER.length===1?USER_FILTER[0]:USER_FILTER.length+" Users"):"All Active Users"; }
+/* ---- User filter (checkbox multi-select) ----
+   null = All. Unchecking the last agent must NOT snap back to All (that kept
+   showing Marco's numbers after "unselect Marco"). Empty pick → __none__. */
+function userLabel(){
+  if(USER_FILTER==null) return "All Active Users";
+  if(!USER_FILTER.length) return "No agents selected";
+  if(USER_FILTER.length===1) return USER_FILTER[0];
+  return USER_FILTER.length+" Users";
+}
 function paintUserMenu(){
-  const rows=[["__all","All Active Users",!USER_FILTER.length]].concat(TEAM.map(n=>[n,n,USER_FILTER.includes(n)]));
-  ddMenu.innerHTML=rows.map(x=>'<button data-u="'+esc(x[0])+'" class="'+(x[2]?"on":"")+'"><span class="chk">'+(x[2]?"✓":"")+'</span>'+esc(x[1])+'</button>').join("");
-  ddMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",ev=>{ ev.stopPropagation();
-    const u=b.getAttribute("data-u");
-    if(u==="__all") USER_FILTER=[];
-    else { const i=USER_FILTER.indexOf(u); i>=0?USER_FILTER.splice(i,1):USER_FILTER.push(u); }
+  const rows=[["__all","All Active Users",USER_FILTER==null]].concat(
+    TEAM.map(function(n){ return [n,n,Array.isArray(USER_FILTER)&&USER_FILTER.indexOf(n)>=0]; })
+  );
+  ddMenu.innerHTML=rows.map(function(x){
+    return '<button data-u="'+esc(x[0])+'" class="'+(x[2]?"on":"")+'"><span class="chk">'+(x[2]?"✓":"")+'</span>'+esc(x[1])+'</button>';
+  }).join("");
+  ddMenu.querySelectorAll("button").forEach(function(b){ b.addEventListener("click",function(ev){ ev.stopPropagation();
+    var u=b.getAttribute("data-u");
+    if(u==="__all") USER_FILTER=null;
+    else if(USER_FILTER==null) USER_FILTER=[u];
+    else {
+      var i=USER_FILTER.indexOf(u);
+      if(i>=0) USER_FILTER.splice(i,1);
+      else USER_FILTER.push(u);
+    }
     document.getElementById("userFilter").textContent=userLabel();
     paintUserMenu(); renderPipelineOverview();
-  }));
+  }); });
 }
 document.getElementById("userFilter").addEventListener("click",e=>{
   e.stopPropagation();

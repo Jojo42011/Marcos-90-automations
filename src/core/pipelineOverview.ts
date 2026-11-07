@@ -11,7 +11,9 @@
  * Buyer people steps follow Marco's Overview funnel (Call is intentionally
  * omitted). Stage buckets are cumulative (reached this step or further).
  * Agent filter matches assignedTo / assignedUserName loosely
- * (Marco / Wesley / Carlos) so spelling variants do not drop rows.
+ * (Marco / Wesley — Carlos is not an agent) so spelling variants do not drop rows.
+ * Views/Comments are account-level social totals and only appear when the filter
+ * is All or includes Marco; Wesley-only must not keep showing Marco's social.
  */
 import { getInboundDmCount, listAllLeads } from "./db.js";
 import { getSocialAnalytics } from "./socialAnalytics.js";
@@ -162,23 +164,38 @@ export function agentKey(name: string | null | undefined): "marco" | "wesley" | 
   return "other";
 }
 
+/** Sentinel: client asked for an empty pick (no agents checked) — match nobody. */
+export const AGENT_FILTER_NONE = "__none__";
+
 export function parseAgentFilter(raw: string | null | undefined): string[] {
   if (!raw || !String(raw).trim() || /^all$/i.test(String(raw).trim())) return [];
-  return String(raw)
+  const parts = String(raw)
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  if (parts.length === 1 && parts[0] === AGENT_FILTER_NONE) return [AGENT_FILTER_NONE];
+  // Carlos is not an agent on this Overview — ignore if a stale client sends him.
+  return parts.filter((p) => p !== AGENT_FILTER_NONE && agentKey(p) !== "carlos");
 }
 
-function matchesAgentFilter(assignee: string | null | undefined, filter: string[]): boolean {
+export function matchesAgentFilter(assignee: string | null | undefined, filter: string[]): boolean {
   if (!filter.length) return true;
+  if (filter.includes(AGENT_FILTER_NONE)) return false;
   const key = agentKey(assignee);
   if (!key) return false; // unassigned — do not invent ownership
   return filter.some((f) => {
     const want = agentKey(f);
+    if (want === "carlos") return false;
     if (want && want !== "other") return key === want;
     return normAgent(assignee) === normAgent(f) || normAgent(assignee).includes(normAgent(f));
   });
+}
+
+/** Account social Views/Comments only when All or Marco is in the pick. */
+export function socialAllowedForAgentFilter(filter: string[]): boolean {
+  if (!filter.length) return true;
+  if (filter.includes(AGENT_FILTER_NONE)) return false;
+  return filter.some((f) => agentKey(f) === "marco");
 }
 
 function leadAssignee(l: Lead): string | undefined {
@@ -452,18 +469,27 @@ export async function buildPipelineOverview(opts: {
   const allTracker = listTrackerRecords({});
   const tracker = allTracker.filter((r) => matchesAgentFilter(r.assignedTo, filter));
   const leads = await listAllLeads();
-  const { views, comments, note: viewsNote } = await socialTop();
+  const includeSocial = socialAllowedForAgentFilter(filter);
+  const social = includeSocial
+    ? await socialTop()
+    : {
+        views: null,
+        comments: null,
+        note: filter.includes(AGENT_FILTER_NONE)
+          ? null
+          : "Views/Comments are account social totals — shown only for All or when Marco is selected.",
+      };
   const calls = countCalls(leads, filter);
 
   const buyer = countBuyerPeopleSteps(leads, tracker, filter);
   const seller = countInBuckets(tracker, "seller", SELLER_BUCKETS, SELLER_ORDER);
 
   const buyerStepsRaw: Array<{ key: string; label: string; kind: FunnelStepKind; count: number }> = [];
-  if (views != null) {
-    buyerStepsRaw.push({ key: "views", label: "Views", kind: "metric", count: views });
+  if (includeSocial && social.views != null) {
+    buyerStepsRaw.push({ key: "views", label: "Views", kind: "metric", count: social.views });
   }
-  if (comments != null) {
-    buyerStepsRaw.push({ key: "comments", label: "Comments", kind: "metric", count: comments });
+  if (includeSocial && social.comments != null) {
+    buyerStepsRaw.push({ key: "comments", label: "Comments", kind: "metric", count: social.comments });
   }
   buyerStepsRaw.push({ key: "dms", label: "DMs", kind: "metric", count: buyer.dms });
   buyerStepsRaw.push({ key: "number", label: "Number", kind: "metric", count: buyer.numbers });
@@ -480,20 +506,28 @@ export async function buildPipelineOverview(opts: {
   }
 
   const notes: string[] = [];
-  if (viewsNote) notes.push(viewsNote);
+  if (social.note) notes.push(social.note);
   notes.push(
     "Buyer funnel: Views → Comments → DMs → Number → Appt set → Appt show → Showing → U/C → Closed (no Call). People steps are cumulative from CRM stages + Tracker.",
   );
   notes.push(
     "Seller pipeline steps are cumulative from the Buyers & Sellers Tracker. Unstaged contacts count in Sellers only.",
   );
-  if (filter.length) {
+  if (filter.includes(AGENT_FILTER_NONE)) {
+    notes.push("No agents selected — funnel counts are zero until you pick Marco and/or Wesley.");
+  } else if (filter.length) {
     notes.push(
       `Filtered to ${filter.join(", ")}. Unassigned tracker rows are excluded so ownership stays honest.`,
     );
   }
 
-  const agentLabel = filter.length === 1 ? filter[0] : filter.length ? filter.join(", ") : null;
+  const agentLabel = filter.includes(AGENT_FILTER_NONE)
+    ? null
+    : filter.length === 1
+      ? filter[0]
+      : filter.length
+        ? filter.join(", ")
+        : null;
 
   return {
     ok: true,
