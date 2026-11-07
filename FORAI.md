@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-07: Overview agent filter fixed — unchecking Marco no longer snaps back to All (empty pick → zeros); Carlos removed from agent list; Views/Comments only when All or Marco is selected so Wesley picks do not keep Marco's social totals.
 - 2026-11-07: Overview funnel tiles taller (more vertical padding / larger numbers) without widening, so both funnels stay readable without horizontal scroll.
 - 2026-11-07: Overview funnel UI compact (no horizontal scroll), Buyers/Sellers titles and In pipeline/Unstaged/Closed footers removed; buyer counts green, seller counts red.
 - 2026-11-07: Overview buyer funnel is Views → Comments → DMs → Number → Appt set → Appt show → Showing → U/C → Closed (Call removed). Social totals + inbound DM/phone counts feed the top; CRM stages + Tracker fill people steps. Seller Call→Close unchanged.
