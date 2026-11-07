@@ -1,5 +1,5 @@
 /**
- * CRM Overview: Views→Close / Call→Close aggregation.
+ * CRM Overview: buyer Views→Close (no Call) / seller Call→Close.
  * Run after `npm run build`: node scripts/verify-pipeline-overview.mjs
  */
 import assert from "assert";
@@ -25,7 +25,7 @@ writeFileSync(
         state: "new",
         source: "TikTok",
         crmStatus: "new",
-        crmStage: "new",
+        crmStage: "appointment_set",
         crmIntent: "buyer",
         assignedUserName: "Marco Puga",
         activity: [{ type: "call", at: "2026-11-01T12:00:00.000Z" }],
@@ -52,15 +52,42 @@ writeFileSync(
         createdAt: "2026-11-01T12:00:00.000Z",
         updatedAt: "2026-11-01T12:00:00.000Z",
       },
+      lead_3: {
+        id: "lead_3",
+        platform: "instagram",
+        userId: "u3",
+        username: "u3",
+        name: "DM Buyer",
+        phone: null,
+        state: "new",
+        source: "Instagram",
+        crmStatus: "new",
+        crmStage: "new_lead",
+        crmIntent: "buyer",
+        assignedUserName: "Marco Puga",
+        activity: [],
+        createdAt: "2026-11-01T12:00:00.000Z",
+        updatedAt: "2026-11-01T12:00:00.000Z",
+      },
     },
     leadKeyToId: {},
-    conversationsByLeadId: {},
+    conversationsByLeadId: {
+      lead_1: {
+        messages: [
+          { role: "user", text: "hi", at: "2026-11-01T10:00:00.000Z" },
+          { role: "assistant", text: "hey", at: "2026-11-01T10:01:00.000Z" },
+        ],
+      },
+      lead_3: {
+        messages: [{ role: "user", text: "interested", at: "2026-11-01T11:00:00.000Z" }],
+      },
+    },
     commandTasks: [],
   }),
 );
 
 const { createTrackerRecord, listTrackerRecords } = await import("../dist/src/core/trackerStore.js");
-const { agentKey, buildPipelineOverview, parseAgentFilter } = await import(
+const { agentKey, buildPipelineOverview, parseAgentFilter, buyerCrmRank } = await import(
   "../dist/src/core/pipelineOverview.js"
 );
 
@@ -93,6 +120,16 @@ check("parseAgentFilter empty = all", () => {
   assert.deepEqual(parseAgentFilter("Marco Puga,Wesley"), ["Marco Puga", "Wesley"]);
 });
 
+check("buyerCrmRank ladder", () => {
+  assert.equal(buyerCrmRank("appointment_set"), 0);
+  assert.equal(buyerCrmRank("met_with_customer"), 1);
+  assert.equal(buyerCrmRank("showing_homes"), 2);
+  assert.equal(buyerCrmRank("under_contract"), 4);
+  assert.equal(buyerCrmRank("sale_closed"), 5);
+  assert.equal(buyerCrmRank("closed"), 5); // legacy map
+  assert.equal(buyerCrmRank("new_lead"), -1);
+});
+
 createTrackerRecord({
   name: "Marco Buyer",
   sides: ["buyer"],
@@ -118,14 +155,35 @@ check("seeded tracker rows exist", () => {
 });
 
 const all = await buildPipelineOverview({});
-check("overview all: buyer funnel has Buyers + Showing", () => {
+check("buyer funnel shape: no Call, has DMs/Number/Appt set", () => {
   assert.equal(all.ok, true);
-  const buyers = all.buyers.steps.find((s) => s.key === "buyers");
+  const keys = all.buyers.steps.map((s) => s.key);
+  assert.ok(!keys.includes("calls"), "buyer must not include Call");
+  assert.ok(!keys.includes("contacted"), "old Contacted bucket removed");
+  assert.ok(keys.includes("dms"));
+  assert.ok(keys.includes("number"));
+  assert.ok(keys.includes("appt_set"));
+  assert.ok(keys.includes("appt_show"));
+  assert.ok(keys.includes("showing"));
+  assert.ok(keys.includes("contract"));
+  assert.ok(keys.includes("closed"));
+  assert.equal(all.buyers.subtitle, "Views → Close");
+});
+
+check("buyer DMs + number counts", () => {
+  const dms = all.buyers.steps.find((s) => s.key === "dms");
+  const number = all.buyers.steps.find((s) => s.key === "number");
+  // lead_1 + lead_3 have inbound DMs; lead_2 is seller-only
+  assert.equal(dms.count, 2);
+  // lead_1 has phone; lead_3 does not; seller excluded
+  assert.equal(number.count, 1);
+});
+
+check("buyer appt set counts appointment_set / showing tracker", () => {
+  const appt = all.buyers.steps.find((s) => s.key === "appt_set");
   const showing = all.buyers.steps.find((s) => s.key === "showing");
-  const contacted = all.buyers.steps.find((s) => s.key === "contacted");
-  assert.equal(buyers.count, 2);
-  assert.ok(contacted.count >= 2);
-  assert.ok(showing.count >= 1);
+  assert.ok(appt.count >= 1);
+  assert.ok(showing.count >= 1); // lead_1 tracker actively_showing
 });
 
 check("overview all: seller funnel counts Wesley appointment", () => {
@@ -141,19 +199,21 @@ check("overview all: calls include both agents' call activities", () => {
 });
 
 const marco = await buildPipelineOverview({ agent: "Marco Puga" });
-check("Marco filter excludes Wesley seller + unassigned", () => {
-  assert.equal(marco.buyers.inPipeline, 1);
+check("Marco filter excludes Wesley seller + unassigned tracker", () => {
   assert.equal(marco.sellers.inPipeline, 0);
   const calls = marco.sellers.steps.find((s) => s.key === "calls");
   assert.equal(calls.count, 1);
+  const dms = marco.buyers.steps.find((s) => s.key === "dms");
+  assert.equal(dms.count, 2);
 });
 
 const wes = await buildPipelineOverview({ agent: "Wesley" });
 check("Wesley filter keeps his seller + calls", () => {
   assert.equal(wes.sellers.inPipeline, 1);
-  assert.equal(wes.buyers.inPipeline, 0);
   const calls = wes.sellers.steps.find((s) => s.key === "calls");
   assert.equal(calls.count, 2);
+  const dms = wes.buyers.steps.find((s) => s.key === "dms");
+  assert.equal(dms.count, 0);
 });
 
 check("Harvey tool + CRM route + Overview UI exist", () => {
@@ -165,7 +225,7 @@ check("Harvey tool + CRM route + Overview UI exist", () => {
   assert(/pipeOverview/.test(crm));
   assert(/renderPipelineOverview/.test(crm));
   assert(/>Overview</.test(crm));
-  assert(/Views → Close/.test(tools) || /Views→Close/.test(tools));
+  assert(/Views → Close/.test(tools) || /Views→Close/.test(tools) || /Views→Comments/.test(tools));
 });
 
 rmSync(tmp, { recursive: true, force: true });

@@ -2028,7 +2028,7 @@ function poFunnelHTML(side){
   side.steps.forEach(function(s,i){
     if(i) parts.push('<div class="po-arrow" aria-hidden="true">→</div>');
     var rate="";
-    if(s.kind==="people"&&s.rateFromPrev!=null){
+    if(s.rateFromPrev!=null){
       rate='<div class="r'+(s.rateFromPrev>0?" ok":"")+'">'+s.rateFromPrev+'%</div>';
     } else {
       rate='<div class="r">&nbsp;</div>';

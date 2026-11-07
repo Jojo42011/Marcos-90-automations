@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-07: Overview buyer funnel is Views → Comments → DMs → Number → Appt set → Appt show → Showing → U/C → Closed (Call removed). Social totals + inbound DM/phone counts feed the top; CRM stages + Tracker fill people steps. Seller Call→Close unchanged.
 - 2026-11-07: Dialer upgrades — account-scoped Quo From-line picker (same numbers Messages uses per worker), Mojo expired queue (Mojo + Expired/Canceled tags), + Add lead (creates CRM lead + Tracker seller/buyer row), Appointment Set outcome, call meta logs From line. Dialer Talked/Appointment creates a missing Tracker row so Call→Close can start. `POST /api/crm/lead` accepts tags + `track`/`trackSide`.
 - 2026-11-06: Shell warm-prefetches CRM/Analytics/Tasks iframes after idle; CRM/Analytics no longer flash a "Loading…" banner on first open (status chip appears only when live or failed).
 - 2026-11-06: Harvey stress fixes — successful API tool observations are no longer marked truncated solely by size (recovery/evidence gate); Stop cancels jobs and clears the chat lock immediately; user turns persist at job enqueue; `search_tracker` supports `unstagedOnly`; `get_quo_lines` + crm_api Quo read paths; Tracker vs CRM scope clarified in tool copy; social videos default limit 15; explicit model picks are not silently degraded.
