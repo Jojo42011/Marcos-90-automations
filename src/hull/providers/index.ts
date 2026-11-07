@@ -202,7 +202,10 @@ export async function complete(req: CompletionRequest): Promise<CompletionOutcom
     throw new BudgetRefusedError(verdict);
   }
 
-  if (verdict.degradeToCheap) {
+  /* An explicit picker choice is honoured or it fails — never silently swapped
+     for the cheapest model when spend is high (Mercury stress: operator picked
+     Mercury and meta showed Claude after degrade). */
+  if (verdict.degradeToCheap && resolved.source !== "explicit") {
     const cheap = resolveModel(job, { forceCheap: true });
     if (cheap.model !== resolved.model) {
       resolved = cheap;

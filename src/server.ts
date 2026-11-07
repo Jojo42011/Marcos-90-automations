@@ -11531,6 +11531,7 @@ app.get("/api/tracker/records", (req, res) => {
     status: csv(q.status) as TrackerFilter["status"],
     buyerStage: csv(q.buyerStage) as TrackerFilter["buyerStage"],
     sellerStage: csv(q.sellerStage) as TrackerFilter["sellerStage"],
+    unstagedOnly: q.unstagedOnly === "1" || q.unstagedOnly === "true",
     source: csv(q.source),
     assignedTo: q.assignedTo || undefined,
     q: q.q || undefined,
