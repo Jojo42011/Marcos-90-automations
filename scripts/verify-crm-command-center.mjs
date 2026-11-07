@@ -38,10 +38,14 @@ ok("no OPPS seed loop", !/OPPS\.push\(/.test(html) && !/for\(let i=0;i<16;i\+\+\
 ok("opportunity types are tags", /OPP_TYPE_TAGS\s*=\s*\[/.test(html) && /"FSBO"/.test(html) && /"Pre-Foreclosure"/.test(html));
 ok("profile can add opportunity type", /ldOppTagBtn/.test(html) && /Opportunity type/.test(html));
 
-// 2. Follow-Up
+// 2. Follow-Up / Dialer
 ok("Follow-Up rail button exists", /data-view="followup"/.test(html));
 ok("Follow-Up view + renderer", /id="view-followup"/.test(html) && /function renderFollowUp\(/.test(html));
 ok("Follow-Up matches Due Today or urgent", /due\.label==="Due Today"/.test(html) && /crmCallQueue==="urgent"/.test(html));
+ok("Dialer Mojo expired queue", /data-dq="mojo"/.test(html) && /function dialIsMojoExpired\(/.test(html));
+ok("Dialer From line bar", /id="dlFromBar"/.test(html) && /function paintDialFromBar\(/.test(html));
+ok("Dialer Add lead", /id="dlAddLeadBtn"/.test(html) && /function dialAddLead\(/.test(html));
+ok("Dialer Appointment Set outcome", /Appointment Set/.test(html));
 
 // 3. People merge
 ok("no visible separate Leads rail button", !/<button class="r" data-view="leads"[^>]*title="Leads"><svg/.test(html));

@@ -984,6 +984,18 @@
   .dl-empty{max-width:440px;margin:60px auto;text-align:center;color:var(--text-2)}
   .dl-empty b{display:block;font-size:18px;color:var(--title);margin:14px 0 6px}
   .dl-empty .ic{width:64px;height:64px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--teal-soft);color:var(--teal)}
+  .dl-from{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 16px 0;border-bottom:0}
+  .dl-from .quo-line-lbl{margin-right:2px}
+  .dl-addq{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .dl-addq .pill-btn{font-size:11.5px;padding:6px 10px}
+  .dl-addform{padding:14px 16px;border-bottom:1px solid var(--line);background:var(--surface-1);display:none}
+  .dl-addform.on{display:block}
+  .dl-addform label{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3);margin:0 0 4px}
+  .dl-addform .row{margin-bottom:10px}
+  .dl-addform input,.dl-addform select{width:100%;height:36px;border:1px solid var(--line-3);border-radius:8px;background:var(--card);color:var(--ink);padding:0 10px;font:13px var(--sans)}
+  .dl-addform .dl-addacts{display:flex;gap:8px;align-items:center;margin-top:4px}
+  .dl-addform .ck{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-2);text-transform:none;letter-spacing:0;font-weight:500;margin:0}
+  .dl-addform .ck input{width:auto;height:auto}
   .dl-pad{padding:16px;border-bottom:1px solid var(--line)}
   .dl-padnum{display:flex;align-items:center;gap:6px;margin-bottom:12px}
   .dl-padnum input{flex:1;min-width:0;height:44px;border:0;background:none;color:var(--title);font-size:22px;font-weight:500;text-align:center;letter-spacing:.03em;outline:none;font-variant-numeric:tabular-nums}
@@ -1620,12 +1632,17 @@
     </div>
   </section>
 
-  <!-- DIALER (view id kept as "followup" for deep links): power-dial queues; "Due today" is Due Today / crmCallQueue urgent -->
+  <!-- DIALER (view id kept as "followup" for deep links): power-dial queues; "Due today" is Due Today / crmCallQueue urgent.
+       From-line chips are this account's Quo numbers (same list Messages uses). Mojo expired is Mojo + Expired/Canceled tags. -->
   <section class="view" id="view-followup">
     <div class="dl-top">
-      <div class="dl-title"><h1>Dialer</h1><span class="dl-sub">Power dialing through Quo · <span id="fuCount">0</span> in queue</span></div>
+      <div class="dl-title"><h1>Dialer</h1><span class="dl-sub" id="dlSub">Power dialing through Quo · <span id="fuCount">0</span> in queue</span></div>
       <div class="dl-queues" id="dlQueues">
-        <button data-dq="due" class="on">Due today</button><button data-dq="new">New leads</button><button data-dq="nurture">Nurture</button><button data-dq="all">Everyone</button>
+        <button data-dq="due" class="on">Due today</button>
+        <button data-dq="mojo">Mojo expired</button>
+        <button data-dq="new">New leads</button>
+        <button data-dq="nurture">Nurture</button>
+        <button data-dq="all">Everyone</button>
       </div>
       <div class="dl-stats">
         <div><b id="dlDials">0</b><span>Dials</span></div>
@@ -1638,10 +1655,30 @@
     <div class="dl-body">
       <aside class="dl-queue">
         <div class="dl-qhead"><input id="dlSearch" placeholder="Search queue…" autocomplete="off"><span id="dlQMeta"></span></div>
+        <div class="dl-addq">
+          <button type="button" class="pill-btn" id="dlAddLeadBtn">+ Add lead</button>
+          <button type="button" class="pill-btn ghost" id="dlMojoHint" title="Mojo has no bulk API — expired contacts land via webhook/import or Add lead">Mojo tips</button>
+        </div>
+        <div class="dl-addform" id="dlAddForm">
+          <div class="row"><label for="dlAddName">Name</label><input id="dlAddName" autocomplete="name" placeholder="Seller or buyer name"></div>
+          <div class="row"><label for="dlAddPhone">Phone</label><input id="dlAddPhone" inputmode="tel" autocomplete="tel" placeholder="(210) 555-0100"></div>
+          <div class="row"><label for="dlAddSide">Pipeline</label>
+            <select id="dlAddSide"><option value="seller">Seller → Close</option><option value="buyer">Buyer → Close</option><option value="both">Buyer &amp; Seller</option></select>
+          </div>
+          <div class="row"><label for="dlAddSource">Source</label>
+            <select id="dlAddSource"><option value="Mojo">Mojo</option><option value="Mojo FL">Mojo FL</option><option value="Manual">Manual</option><option value="Expired Listing">Expired Listing</option></select>
+          </div>
+          <label class="ck"><input type="checkbox" id="dlAddExpired" checked> Tag as Expired (Mojo expired listings)</label>
+          <div class="dl-addacts">
+            <button type="button" class="pill-btn ghost" id="dlAddCancel">Cancel</button>
+            <button type="button" class="pill-btn" id="dlAddSave">Save &amp; dial</button>
+          </div>
+        </div>
         <div class="dl-qlist" id="fuList"></div>
       </aside>
       <main class="dl-stage" id="dlStage"></main>
       <aside class="dl-side">
+        <div class="dl-from quo-line-bar" id="dlFromBar" style="display:none" aria-label="Call from Quo line"></div>
         <div class="dl-pad">
           <div class="dl-padnum"><input id="dlPadNum" placeholder="Enter a number" inputmode="tel" autocomplete="off"><button id="dlPadDel" aria-label="Delete digit">⌫</button></div>
           <div class="dl-keys" id="dlKeys"></div>
@@ -2445,23 +2482,26 @@ function paintQuoLineBar(){
   var bar=document.getElementById("quoLineBar");
   if(!bar) return;
   if(!QUO.configured||!(QUO.numbers&&QUO.numbers.length)||(convGroupMode!=="sms"&&convGroupMode!=="all")){
-    bar.style.display="none"; bar.innerHTML=""; return;
-  }
-  bar.style.display="flex";
-  var active=quoActiveId();
-  bar.innerHTML='<span class="quo-line-lbl">From</span>'+QUO.numbers.map(function(n){
-    var on=n.id===active?" on":"";
-    return '<button type="button" class="quo-line-chip'+on+'" data-qid="'+esc(n.id)+'">'+esc(quoLineLabel(n))+'</button>';
-  }).join("");
-  bar.querySelectorAll("[data-qid]").forEach(function(btn){
-    btn.addEventListener("click",function(){
-      setQuoActiveId(btn.getAttribute("data-qid"));
-      QUO.sig="";
-      paintQuoLineBar();
-      loadMyLine().then(function(){ loadQuoThreads(); });
-      if(typeof ldTab!=="undefined"&&ldTab==="text"&&typeof renderLeadTab==="function") renderLeadTab();
+    bar.style.display="none"; bar.innerHTML="";
+  } else {
+    bar.style.display="flex";
+    var active=quoActiveId();
+    bar.innerHTML='<span class="quo-line-lbl">From</span>'+QUO.numbers.map(function(n){
+      var on=n.id===active?" on":"";
+      return '<button type="button" class="quo-line-chip'+on+'" data-qid="'+esc(n.id)+'">'+esc(quoLineLabel(n))+'</button>';
+    }).join("");
+    bar.querySelectorAll("[data-qid]").forEach(function(btn){
+      btn.addEventListener("click",function(){
+        setQuoActiveId(btn.getAttribute("data-qid"));
+        QUO.sig="";
+        paintQuoLineBar();
+        paintDialFromBar();
+        loadMyLine().then(function(){ loadQuoThreads(); });
+        if(typeof ldTab!=="undefined"&&ldTab==="text"&&typeof renderLeadTab==="function") renderLeadTab();
+      });
     });
-  });
+  }
+  if(typeof paintDialFromBar==="function") paintDialFromBar();
 }
 
 /* Fold the Quo threads into CONVOS. Quo rows are replaced wholesale on every
@@ -11196,10 +11236,11 @@ document.querySelectorAll('#view-leads .sf-list .sf[data-sf]').forEach(a=>{
 /* ────────────────────────── DIALER ──────────────────────────
    Quo exposes no outbound-call API, so a dial hands the number to the device's
    tel: handler (the Quo app when it is installed) and the outcome is logged
-   here through the same /activity endpoint as the contact record's Call tab. */
+   here through the same /activity endpoint as the contact record's Call tab.
+   From-line chips are THIS account's Quo numbers only (worker-scoped QUO_*). */
 var DIAL_OUTCOMES=[
-  {o:"Talked",c:"talked"},{o:"Left Message",c:"vm"},{o:"No Answer",c:""},
-  {o:"Busy",c:"busy"},{o:"Wrong Number",c:"bad"},{o:"Failed",c:"bad"}];
+  {o:"Talked",c:"talked"},{o:"Appointment Set",c:"talked"},{o:"Left Message",c:"vm"},
+  {o:"No Answer",c:""},{o:"Busy",c:"busy"},{o:"Wrong Number",c:"bad"}];
 var DIAL_KEYS=[["1",""],["2","ABC"],["3","DEF"],["4","GHI"],["5","JKL"],["6","MNO"],["7","PQRS"],["8","TUV"],["9","WXYZ"],["*",""],["0","+"],["#",""]];
 var DIAL={queue:"due",curId:null,search:"",callStart:0,lastDur:0,outcome:null,notes:"",skipped:{},tick:null,bound:false,
   session:(function(){ try{ var s=JSON.parse(sessionStorage.getItem("dialerSession")||"null"); if(s&&s.day===todayKey())return s; }catch(_){}
@@ -11209,9 +11250,58 @@ function dialTel(n){ return "tel:"+String(n||"").replace(/[^0-9+]/g,""); }
 function dialDur(ms){ var s=Math.max(0,Math.round(ms/1000)); return ((s/60)|0)+":"+String(s%60).padStart(2,"0"); }
 function dialHue(name){ var h=0; String(name||"").split("").forEach(function(ch){ h=(h*31+ch.charCodeAt(0))%360; }); return "hsl("+h+",42%,42%)"; }
 function dialDnc(l){ return leadMetric(l.id,"phoneDnc")===true; }
+/** Mojo (or Mojo FL) contacts tagged Expired/Canceled — the expired-listings dial list. */
+function dialIsMojoExpired(l){
+  var src=String(l.source||"").toLowerCase();
+  var isMojo=/\bmojo\b/.test(src)||src==="mojo"||src.indexOf("mojo ")===0||/mojo\s*fl/.test(src);
+  var tags=(l.tags||[]).map(function(t){ return String(t).toLowerCase().trim(); });
+  var expiredTag=tags.some(function(t){
+    return t==="expired"||t==="canceled"||t==="cancelled"||t.indexOf("expired")>=0||/cancel+ed/.test(t);
+  });
+  var expiredSource=/expir|cancel/.test(src);
+  return isMojo&&(expiredTag||expiredSource||/\bexpired listing\b/.test(src));
+}
+function dialFromLine(){
+  var id=quoActiveId();
+  return quoLineById(id)||(QUO.numbers&&QUO.numbers[0])||null;
+}
+function paintDialFromBar(){
+  var bar=document.getElementById("dlFromBar");
+  if(!bar) return;
+  if(!QUO.configured||!(QUO.numbers&&QUO.numbers.length)){
+    bar.style.display="none"; bar.innerHTML="";
+    dialPaintSub();
+    return;
+  }
+  bar.style.display="flex";
+  var active=quoActiveId();
+  bar.innerHTML='<span class="quo-line-lbl">From</span>'+QUO.numbers.map(function(n){
+    var on=n.id===active?" on":"";
+    return '<button type="button" class="quo-line-chip'+on+'" data-dlqid="'+esc(n.id)+'">'+esc(quoLineLabel(n))+'</button>';
+  }).join("");
+  bar.querySelectorAll("[data-dlqid]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      setQuoActiveId(btn.getAttribute("data-dlqid"));
+      paintDialFromBar();
+      paintQuoLineBar();
+      dialPaintSub();
+    });
+  });
+  dialPaintSub();
+}
+function dialPaintSub(){
+  var sub=document.getElementById("dlSub");
+  if(!sub) return;
+  var line=dialFromLine();
+  var from=line?(" · From "+quoLineLabel(line)):"";
+  var n=document.getElementById("fuCount");
+  var count=n?n.textContent:"0";
+  sub.innerHTML=(QUO.configured?"Power dialing through Quo":"Device dialer")+esc(from)+' · <span id="fuCount">'+esc(count)+'</span> in queue';
+}
 function dialQueueRows(){
   var q=DIAL.queue, rows=(LEADS||[]).filter(function(l){ return l.phone&&String(l.phone).trim(); });
   if(q==="due") rows=rows.filter(function(l){ return (l.due&&l.due.label==="Due Today")||l.crmCallQueue==="urgent"; });
+  else if(q==="mojo") rows=rows.filter(dialIsMojoExpired);
   else if(q==="new") rows=rows.filter(function(l){ return l.statusDisp==="new"; });
   else if(q==="nurture") rows=rows.filter(function(l){ return l.statusDisp==="nurture"; });
   var t=function(l){ var d=new Date(l.lastActivity||0).getTime(); return isNaN(d)?0:d; };
@@ -11230,8 +11320,11 @@ function renderFollowUp(){
   var el=document.getElementById("fuList"); if(!el)return;
   if(!DIAL.bound) dialBind();
   if(!LEAD_METRICS.data) ensureLeadMetrics(function(){ renderFollowUp(); });
+  paintDialFromBar();
   var rows=dialQueueRows(), cur=dialCurrent(rows), pend=dialPending(rows).length;
-  var count=document.getElementById("fuCount"); if(count)count.textContent=pend;
+  var count=document.getElementById("fuCount"); if(count)count.textContent=String(pend);
+  dialPaintSub();
+  count=document.getElementById("fuCount"); if(count)count.textContent=String(pend);
   var meta=document.getElementById("dlQMeta"); if(meta)meta.textContent=(rows.length-pend)+"/"+rows.length+" done";
   el.innerHTML=rows.length?rows.map(function(l,i){
     var done=DIAL.session.done[l.id], oc=done?(DIAL_OUTCOMES.find(function(x){return x.o===done;})||{}).c:"";
@@ -11263,9 +11356,14 @@ var DIAL_PHONE_SVG='<svg viewBox="0 0 24 24" width="28" height="28" fill="none" 
 function dialRenderStage(l,rows){
   var st=document.getElementById("dlStage"); if(!st)return;
   if(!l){
+    var emptyHint=DIAL.queue==="due"
+      ?'Leads land here when they are due today or flagged urgent. Try Mojo expired, New leads, or Everyone — or + Add lead.'
+      :DIAL.queue==="mojo"
+        ?'No Mojo expired listings with a phone in this account yet. Import/webhook Mojo contacts tagged Expired, or + Add lead and tag them Expired.'
+        :'No leads with a phone number match this queue. Use + Add lead to put someone in the dialer and Tracker.';
     st.innerHTML='<div class="dl-empty"><div class="ic">'+DIAL_PHONE_SVG+'</div><b>'+(rows.length?"Queue complete":"Nothing to dial")+'</b>'+
       (rows.length?'Every lead in this queue has been called or skipped. Pick another queue, or <a href="#" id="dlRequeue">bring back skipped leads</a>.'
-        :(DIAL.queue==="due"?'Leads land here when they are due today or flagged urgent. Try the New leads or Everyone queue.':'No leads with a phone number match this queue.'))+'</div>';
+        :emptyHint)+'</div>';
     var rq=document.getElementById("dlRequeue"); if(rq)rq.onclick=function(e){ e.preventDefault(); DIAL.skipped={}; renderFollowUp(); };
     return;
   }
@@ -11331,15 +11429,85 @@ function dialSave(){
   if(DIAL.callStart) DIAL.lastDur=Date.now()-DIAL.callStart;
   var o=DIAL.outcome, notes=DIAL.notes.trim(), dur=DIAL.lastDur, btn=document.getElementById("dlSave");
   if(btn){ btn.disabled=true; btn.textContent="SAVING…"; }
-  logComposerActivity(l,{type:"call",description:o+(notes?": "+notes.slice(0,300):""),subType:o,notes:notes||undefined,
-    meta:{Number:l.phone||"",Outcome:o,Duration:dur?dialDur(dur):"",Source:"Dialer"}},function(ok){
+  var from=dialFromLine();
+  var meta={Number:l.phone||"",Outcome:o,Duration:dur?dialDur(dur):"",Source:"Dialer"};
+  if(from){ meta.From=from.number||""; meta.FromLabel=quoLineLabel(from); meta.FromId=from.id||""; }
+  logComposerActivity(l,{type:"call",description:o+(notes?": "+notes.slice(0,300):""),subType:o,notes:notes||undefined,meta:meta},function(ok){
     if(!ok){ if(btn){ btn.disabled=false; btn.textContent="SAVE & NEXT"; } return; }
-    DIAL.session.done[l.id]=o; DIAL.session.log.push({id:l.id,n:l.name,o:o,d:dur,at:Date.now()}); dialSaveSession();
+    DIAL.session.done[l.id]=o; DIAL.session.log.push({id:l.id,n:l.name,o:o,d:dur,at:Date.now(),from:from?quoLineLabel(from):""}); dialSaveSession();
     dialReset(); DIAL.curId=null; renderFollowUp();
   });
 }
+function dialToggleAddForm(on){
+  var f=document.getElementById("dlAddForm"); if(!f)return;
+  var show=on===true||(on!==false&&!f.classList.contains("on"));
+  f.classList.toggle("on",show);
+  if(show){ var n=document.getElementById("dlAddName"); if(n)n.focus(); }
+}
+function dialAddLead(){
+  var name=(document.getElementById("dlAddName").value||"").trim();
+  var phone=(document.getElementById("dlAddPhone").value||"").trim();
+  var side=(document.getElementById("dlAddSide").value||"seller");
+  var source=(document.getElementById("dlAddSource").value||"Mojo");
+  var expired=!!(document.getElementById("dlAddExpired")||{}).checked;
+  var digits=phone.replace(/\D/g,"");
+  if(digits.length===11&&digits.charAt(0)==="1") digits=digits.slice(1);
+  if(digits.length!==10){ crmToast("Enter a valid US phone number"); return; }
+  if(!name) name="Mojo contact";
+  var tags=[];
+  if(expired) tags.push("Expired");
+  var parts=name.split(/\s+/);
+  var body={
+    firstName:parts[0]||name, lastName:parts.slice(1).join(" ")||"",
+    phone:digits, source:source, crmIntent:side==="buyer"?"buyer":side==="both"?"buyer_seller":"seller",
+    crmStatus:"new", crmStage:"new_lead", crmCallQueue:"urgent",
+    tags:tags, track:true, trackSide:side==="buyer"?"buyer":side==="both"?"both":"seller", createTracker:true
+  };
+  var btn=document.getElementById("dlAddSave");
+  if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  fetch(crmApi("/api/crm/lead"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,status:r.status,j:j}; },function(){ return {ok:false,j:{}}; }); })
+    .then(function(res){
+      if(btn){ btn.disabled=false; btn.textContent="Save & dial"; }
+      if(!res.ok){
+        if(res.status===409&&res.j.leadId){
+          crmToast("Already in CRM — opening that lead");
+          DIAL.queue="all";
+          document.querySelectorAll("#dlQueues [data-dq]").forEach(function(x){ x.classList.toggle("on",x.getAttribute("data-dq")==="all"); });
+          dialReset(); DIAL.curId=res.j.leadId; dialToggleAddForm(false); renderFollowUp();
+          return;
+        }
+        crmToast(res.j.error||"Could not add lead");
+        return;
+      }
+      var raw=res.j.lead;
+      var mapped=raw?mapLeadRow(raw):null;
+      if(mapped){
+        LEADS=LEADS.filter(function(x){ return x.id!==mapped.id; }).concat([mapped]);
+        if(typeof PEOPLE!=="undefined"){
+          try{ PEOPLE=mapPeopleLive(LEADS); }catch(_){}
+        }
+      }else if(res.j.leadId){
+        mapped={id:res.j.leadId,name:name,phone:digits,source:source,tags:tags,intent:body.crmIntent==="buyer"?"buyer":"seller",
+          statusDisp:"new",crmStatus:"new",stage:"new_lead",stageLabel:"NEW LEAD",crmCallQueue:"urgent",
+          due:{label:"Due Today",date:""},activity:[],_live:true};
+        LEADS=LEADS.concat([mapped]);
+      }
+      dialToggleAddForm(false);
+      document.getElementById("dlAddName").value="";
+      document.getElementById("dlAddPhone").value="";
+      DIAL.queue=expired||/mojo/i.test(source)?"mojo":"due";
+      document.querySelectorAll("#dlQueues [data-dq]").forEach(function(x){ x.classList.toggle("on",x.getAttribute("data-dq")===DIAL.queue); });
+      dialReset(); DIAL.curId=mapped?mapped.id:res.j.leadId; DIAL.skipped={};
+      crmToast((mapped&&mapped.name?mapped.name:"Lead")+" added · Tracker "+(side==="buyer"?"buyer":"seller")+" pipeline ready");
+      renderFollowUp();
+      if(typeof renderPipelineOverview==="function") try{ renderPipelineOverview(); }catch(_){}
+    })
+    .catch(function(){ if(btn){ btn.disabled=false; btn.textContent="Save & dial"; } crmToast("Couldn't reach the server"); });
+}
 function dialBind(){
   DIAL.bound=true;
+  paintDialFromBar();
   document.querySelectorAll("#dlQueues [data-dq]").forEach(function(b){ b.onclick=function(){
     DIAL.queue=b.getAttribute("data-dq"); document.querySelectorAll("#dlQueues [data-dq]").forEach(function(x){ x.classList.toggle("on",x===b); });
     dialReset(); DIAL.curId=null; DIAL.skipped={}; renderFollowUp(); }; });
@@ -11353,10 +11521,20 @@ function dialBind(){
   document.getElementById("dlPadDel").onclick=function(){ pad.value=pad.value.slice(0,-1); sync(); };
   pad.addEventListener("input",sync); sync();
   document.getElementById("dlReset").onclick=function(){ DIAL.session={day:todayKey(),log:[],done:{}}; DIAL.skipped={}; dialSaveSession(); renderFollowUp(); };
+  var addBtn=document.getElementById("dlAddLeadBtn");
+  if(addBtn) addBtn.onclick=function(){ dialToggleAddForm(); };
+  var addCancel=document.getElementById("dlAddCancel");
+  if(addCancel) addCancel.onclick=function(){ dialToggleAddForm(false); };
+  var addSave=document.getElementById("dlAddSave");
+  if(addSave) addSave.onclick=function(){ dialAddLead(); };
+  var tip=document.getElementById("dlMojoHint");
+  if(tip) tip.onclick=function(){
+    crmToast("Mojo has no bulk pull API. Expired listings arrive via Mojo webhook/import, or use + Add lead and tag Expired. Calls bump Tracker Call→Close.");
+  };
   document.addEventListener("keydown",function(e){
     var v=document.getElementById("view-followup"); if(!v||!v.classList.contains("on"))return;
     if(e.metaKey||e.ctrlKey||e.altKey||/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||""))return;
-    if(document.querySelector(".crm-modal.on,.oa-modal.on,dialog[open]"))return;
+    if(document.querySelector(".crm-modal.on,.oa-modal.on,dialog[open],#dlAddForm.on"))return;
     var k=e.key.toLowerCase();
     if(k==="enter"){ var c=document.getElementById("dlCall"); if(c&&!c.classList.contains("off")){ e.preventDefault(); c.click(); } else if(DIAL.outcome){ e.preventDefault(); dialSave(); } }
     else if(k==="e"){ e.preventDefault(); dialEndCall(); }

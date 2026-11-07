@@ -118,18 +118,37 @@ check("no downgrade when already further along", () => {
   assert.equal(getTrackerRecord(aheadSeller.id).sellerStage, "listing_appointment_set");
 });
 
-check("missing tracker = no-op (does not create)", () => {
+check("missing tracker = create + bump (Dialer Call→Close seed)", () => {
   const before = getTrackerRecordByLead("lead_missing");
   assert.equal(before, null);
   const r = bumpTrackerFromDialerActivity({
     leadId: "lead_missing",
     outcome: "Talked",
     source: "Dialer",
+    leadIntent: "seller",
+    leadName: "Expired Mojo Seller",
+    leadPhone: "2105550199",
+    leadSource: "Mojo",
+  });
+  assert.equal(r.applied, true, JSON.stringify(r));
+  assert.equal(r.reason, "created_and_bumped");
+  const rec = getTrackerRecordByLead("lead_missing");
+  assert.ok(rec);
+  assert.equal(rec.sellerStage, "contacted");
+  assert.deepEqual(rec.sides, ["seller"]);
+});
+
+check("createIfMissing false keeps no-op", () => {
+  const r = bumpTrackerFromDialerActivity({
+    leadId: "lead_no_create",
+    outcome: "Talked",
+    source: "Dialer",
     leadIntent: "buyer",
+    createIfMissing: false,
   });
   assert.equal(r.applied, false);
   assert.equal(r.reason, "no_tracker");
-  assert.equal(getTrackerRecordByLead("lead_missing"), null);
+  assert.equal(getTrackerRecordByLead("lead_no_create"), null);
 });
 
 const sellerNew = createTrackerRecord({
