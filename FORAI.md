@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-06: Dialer call outcomes bump an existing Tracker row (Talked→Contacted; Appointment Set→seller `listing_appointment_set` / buyer `actively_showing`, forward-only). Shared logic in `trackerDialerBump.ts` from `/api/crm/lead/:id/activity`. Inbound DM pipeline stages Unstaged→Contacted via scoped `trackerEngagement` when funnel is engaged. `scripts/verify-tracker-dialer-bump.mjs`.
 - 2026-11-06: CRM Overview steps click through into Tracker (side + cumulative stages + agent). Lead assignee and Tracker `assignedTo` stay synced on lead PATCH, team primary change, and tracker assignee edit so Marco/Wesley funnel filters stay honest.
 - 2026-11-06: CRM Dashboard Overview is buyers Views→Close + sellers Call→Close (Tracker stages cumulative, social views, dialer/call activity), filterable by Marco/Wesley. `GET /api/crm/pipeline-overview` + Harvey `get_pipeline_overview`. Old Take Action / activity tiles removed from that tab.
 - 2026-11-06: Comment agent public auto-replies are TikTok-only — Instagram (and other non-TikTok) `comment.received` events are recorded as `skipped_platform` and never posted. TikTok comment replies and all DM flows are unchanged.

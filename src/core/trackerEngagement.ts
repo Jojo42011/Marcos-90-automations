@@ -32,10 +32,16 @@ import { listTrackerRecords, updateTrackerRecord } from "./trackerStore.js";
  */
 
 /** DM funnel states that only occur after a genuine two-way exchange. */
-const ENGAGED_STATES = new Set(["criteria_collected", "property_sent", "closed"]);
+export const ENGAGED_FUNNEL_STATES = new Set(["criteria_collected", "property_sent", "closed"]);
+
+export function isEngagedFunnelState(state: string | null | undefined): boolean {
+  return ENGAGED_FUNNEL_STATES.has(String(state || ""));
+}
 
 export interface EngagementStageOptions {
   dryRun?: boolean;
+  /** When set, only consider tracker rows linked to these lead ids. */
+  leadIds?: string[];
 }
 
 export interface EngagementStageChange {
@@ -71,15 +77,20 @@ export function stageTrackerFromEngagement(
     changes: [],
   };
 
+  const scope = opts.leadIds?.length
+    ? new Set(opts.leadIds.map((id) => String(id)))
+    : null;
+
   const records: TrackerRecord[] = listTrackerRecords({});
   for (const rec of records) {
     if (!rec.leadId) continue;
+    if (scope && !scope.has(rec.leadId)) continue;
     const lead = leadById.get(rec.leadId);
     if (!lead) continue;
     out.scanned++;
 
     const state = String(lead.state || "new");
-    if (!ENGAGED_STATES.has(state)) {
+    if (!isEngagedFunnelState(state)) {
       out.noSignal++;
       continue;
     }
