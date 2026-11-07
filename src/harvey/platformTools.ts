@@ -642,13 +642,13 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_tracker_summary",
     description:
-      "Buyers & Sellers Tracker totals: how many people, how many on each side, counts by status and by pipeline stage, and how many are actually contactable (have a phone or email). Use this for 'how many sellers do we have', 'what's in the pipeline', 'how many hot leads'.",
+      "Buyers & Sellers Tracker totals only (the curated pipeline board — typically dozens of people, not the full CRM). Counts by side, status and stage, plus how many are contactable. For the full lead database (thousands) use search_leads / CRM tools instead, and say which scope you used.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "get_pipeline_overview",
     description:
-      "CRM Overview funnels: buyers Views→Close and sellers Call→Close. Optional agent filter (Marco / Wesley / Carlos). Returns collapsed pipeline step counts, conversion rates, unstaged counts, social views and call activity. Same numbers as the CRM Dashboard Overview tab.",
+      "CRM Overview funnels from the Tracker board (not the full CRM lead list): buyers Views→Close and sellers Call→Close. Optional agent filter (Marco / Wesley / Carlos). Returns collapsed pipeline step counts, conversion rates, unstaged counts, social views and call activity. Same numbers as the CRM Dashboard Overview tab. When quoting counts, say they are Tracker pipeline counts; CRM new-lead totals are a separate, larger set.",
     input_schema: {
       type: "object",
       properties: {
@@ -669,7 +669,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "search_tracker",
     description:
-      "Find people in the tracker. Filter by side (buyer/seller), status, pipeline stage, source, assignee, or a free-text query matching name, phone digits, email or address. Returns the matching people with their stage and contact details.",
+      "Find people on the Buyers & Sellers Tracker board (curated pipeline — not the full CRM lead database). Filter by side (buyer/seller), status, pipeline stage, unstagedOnly (no stage yet on that side), source, assignee, or a free-text query matching name, phone digits, email or address. For 'Marco's unstaged' set assignedTo to Marco and unstagedOnly true. Say these are Tracker results when answering.",
     input_schema: {
       type: "object",
       properties: {
@@ -678,6 +678,10 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
         status: { type: "string", description: `One of: ${TRACKER_STATUSES.join(", ")}` },
         buyerStage: { type: "string", description: `One of: ${BUYER_STAGE_KEYS.join(", ")}` },
         sellerStage: { type: "string", description: `One of: ${SELLER_STAGE_KEYS.join(", ")}` },
+        unstagedOnly: {
+          type: "boolean",
+          description: "Only people missing a pipeline stage on the filtered side (or on any side they belong to when side is omitted).",
+        },
         source: { type: "string" },
         assignedTo: { type: "string" },
         contactableOnly: {
@@ -822,6 +826,12 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
     name: "get_command_settings",
     description:
       "The team-wide command settings — most importantly the shared time zone that every due date, deadline and task rollover resolves against, plus today's date in that zone.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_quo_lines",
+    description:
+      "List this account's Quo SMS/phone lines and which CRM user each is assigned to. Use when asked which Quo numbers we have, who texts from which line, or Marco/Carlos line inventory. Read-only — does not send SMS or change assignments.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
 ];
@@ -1478,13 +1488,21 @@ export async function executePlatformTool(
         ...c,
         contactable,
         noContactInfo: all.length - contactable,
+        scope: "tracker",
         note:
-          "Records with no phone or email are Instagram/TikTok handles from the DM funnel — they cannot be called or emailed yet.",
+          "Tracker board only (curated pipeline), not the full CRM lead database. Records with no phone or email are Instagram/TikTok handles from the DM funnel — they cannot be called or emailed yet.",
       };
     }
 
-    case "get_pipeline_overview":
-      return buildPipelineOverview({ agent: str(input.agent) || null });
+    case "get_pipeline_overview": {
+      const overview = await buildPipelineOverview({ agent: str(input.agent) || null });
+      return {
+        ...overview,
+        scope: "tracker",
+        note:
+          "These funnel counts are from the Buyers & Sellers Tracker board. Full CRM new-lead totals are a separate, larger set — say which scope you are quoting.",
+      };
+    }
 
     case "get_tracker_pipelines":
       return {
@@ -1501,6 +1519,7 @@ export async function executePlatformTool(
         status: str(input.status) ? [str(input.status) as never] : undefined,
         buyerStage: str(input.buyerStage) ? [str(input.buyerStage) as never] : undefined,
         sellerStage: str(input.sellerStage) ? [str(input.sellerStage) as never] : undefined,
+        unstagedOnly: input.unstagedOnly === true,
         source: str(input.source) ? [str(input.source)] : undefined,
         assignedTo: str(input.assignedTo) || undefined,
       };
@@ -1512,6 +1531,8 @@ export async function executePlatformTool(
       return {
         matched: rows.length,
         returned: Math.min(limit, rows.length),
+        scope: "tracker",
+        note: "Tracker board only — not the full CRM lead database.",
         records: rows.slice(0, limit).map(slimRecord),
       };
     }
@@ -1681,6 +1702,56 @@ export async function executePlatformTool(
           "This one zone drives every due date, deadline and task rollover for the whole team, regardless of where each person is.",
         updatedAt: s.updatedAt,
       };
+    }
+
+    case "get_quo_lines": {
+      const { listPhoneNumbers, isQuoConfigured, getQuoPhoneNumberId, getQuoPhoneNumber } =
+        await import("../integrations/quo/index.js");
+      const users = getUsers().filter((u) => u.active !== false);
+      const assignedBy = new Map<string, string>();
+      for (const u of users) if (u.quoPhoneNumberId) assignedBy.set(u.quoPhoneNumberId, u.name);
+      if (!isQuoConfigured()) {
+        return {
+          ok: false,
+          configured: false,
+          error: "Quo is not configured on this server, so its numbers cannot be listed.",
+          numbers: [],
+          users: users.map((u) => ({
+            id: u.id,
+            name: u.name,
+            quoPhoneNumberId: u.quoPhoneNumberId || null,
+            quoPhoneNumber: u.quoPhoneNumber || null,
+          })),
+        };
+      }
+      try {
+        const numbers = await listPhoneNumbers();
+        return {
+          ok: true,
+          configured: true,
+          defaultId: getQuoPhoneNumberId(),
+          defaultNumber: getQuoPhoneNumber(),
+          numbers: numbers.map((n) => ({
+            id: n.id,
+            number: n.number,
+            label: n.name || n.formattedNumber || n.number,
+            assignedTo: assignedBy.get(n.id) || null,
+          })),
+          users: users.map((u) => ({
+            id: u.id,
+            name: u.name,
+            quoPhoneNumberId: u.quoPhoneNumberId || null,
+            quoPhoneNumber: u.quoPhoneNumber || null,
+          })),
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          configured: true,
+          error: err instanceof Error ? err.message : String(err),
+          numbers: [],
+        };
+      }
     }
 
     default:

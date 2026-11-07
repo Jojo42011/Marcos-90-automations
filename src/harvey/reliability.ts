@@ -255,9 +255,16 @@ export class TurnVerification {
     // Pixels are evidence payload, not text truncation. Never retain base64 in the receipt/source ledger.
     const source = result && typeof result === "object" && result._image ? Object.fromEntries(Object.entries(result).filter(([key])=>key!=="_image")) : result;
     let size = 0; try { size = JSON.stringify(source)?.length || 0; } catch { size = 12001; }
+    const observation = isObservation(name, input);
+    /* Browser/DOM/file pages can be incomplete mid-page. Structured API tools
+       (business_call, get_*, search_*, list_*) return a finished payload — size
+       alone must not mark them truncated or recovery blocks answers the tools
+       already returned (live Mercury stress: social/tracker lookups). */
+    const sizeImpliesIncomplete = ["computer", "inspect_screen", "workspace_read", "workspace_sheet"].includes(name);
+    const truncated = (sizeImpliesIncomplete && size > 12000) || result?.truncated === true || result?.meta?.truncated === true;
     const receipt: Receipt = { id: `e${this.receipts.length + 1}`, tool: name, at: new Date().toISOString(),
       outcome: result?.held_for_approval ? "held" : errorResult(result) ? "failed" : "returned",
-      observation: isObservation(name, input), discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated: size > 12000 || result?.truncated === true || result?.meta?.truncated===true };
+      observation, discovery:isDiscovery(name,input), scope:resourceScope(name,input), truncated };
     if(name==='computer'&&typeof input.tool==='string'&&/^[a-z_]{1,80}$/.test(input.tool))receipt.operation=input.tool;
     if(['computer','chat_agents'].includes(name)&&['not_executed','unknown'].includes(result?.recovery?.actionOutcome))receipt.actionOutcome=result.recovery.actionOutcome;
     receipt.diagnostic=toolFailure(name,input,result);

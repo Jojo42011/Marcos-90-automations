@@ -281,7 +281,7 @@ ${EXECUTION_LANES}
 Managed integrations configured: ${composioReady()}. Lane 3 only: when COMPOSIO tools are available for EXTERNAL apps Command Center does not cover, use SEARCH_TOOLS and MANAGE_CONNECTIONS; show real sign-in links; pause only that connection's actions; continue independent authorized work. Prefer managed integrations over legacy plugin_request for external apps. Never claim a connection exists without checking. Managed apps use Composio sign-in; do not ask for OAuth client keys. Full desktop GUI control is not implemented. For video tasks inspect_video measures both originals first. Use measured timing and compatible streams; edit_video can match duration using matchFile, normalize, and recover locally. Do not ask the user to edit manually before exhausting supported local recovery. Distinguish a failed alternate audio track from an unsupported video codec. A MOV extension does not identify the codec. Never infer fps or credit usage without evidence. edit_video supports trimming/transcoding/muting with FFmpeg; advanced video editing may work on compatible browser editors or custom plugins, but do not promise it. Be concise and describe completed work and remaining blockers honestly.`,
   };
 }
-export async function runChat(owner: string, chat: Chat, message: string, options: Partial<AgentLoopOptions> = {}, runId?: string) {
+export async function runChat(owner: string, chat: Chat, message: string, options: Partial<AgentLoopOptions> & { userMessageSeq?: number } = {}, runId?: string) {
   const token = lockChat(owner, chat.id);
   let checkpoint: ReliabilityCheckpoint | undefined;
   try {
@@ -290,9 +290,20 @@ export async function runChat(owner: string, chat: Chat, message: string, option
     const credentialCommand = !options.continuationTurn && !runId && !options.workDelegated && message.match(/^\s*monte\s+carlo(?:\s+(on|off))?\s*[.!]?\s*$/i);
     chat = get<Chat>("chat",owner,chat.id);
     if(credentialCommand)chat=put("chat",owner,{...chat,allowChatCredentials:credentialCommand[1]?.toLowerCase()!=="off"});
-    const historySelection=boundedHistory(messages(owner,chat.id));
+    /* Jobs append the user turn at enqueue so Stop before execute still keeps it.
+       Reuse that seq on the first segment; continuations still append a marker.
+       Exclude the already-persisted current turn from prior history. */
+    const stored=messages(owner,chat.id);
+    const prior=options.userMessageSeq && !options.continuationTurn && stored.length
+      ? stored.slice(0, -1)
+      : stored;
+    const historySelection=boundedHistory(prior);
     const history=historySelection.messages;
-    const sourceUserSeq=append(owner, chat.id, { role: "user", actorId:options.actorId||owner, content: credentialCommand ? "[Credential access command]" : options.continuationTurn ? "[Continuing the same saved request; inspect the original scope and saved progress.]" : message, at: new Date().toISOString(), ...(runId ? { runId } : {}),...(options.continuationTurn?{origin:"continuation" as const}:options.workDelegated?{origin:"delegated" as const}:{}) });
+    const sourceUserSeq = options.continuationTurn
+      ? append(owner, chat.id, { role: "user", actorId:options.actorId||owner, content: "[Continuing the same saved request; inspect the original scope and saved progress.]", at: new Date().toISOString(), ...(runId ? { runId } : {}), origin: "continuation" as const })
+      : options.userMessageSeq
+        ? options.userMessageSeq
+        : append(owner, chat.id, { role: "user", actorId:options.actorId||owner, content: credentialCommand ? "[Credential access command]" : message, at: new Date().toISOString(), ...(runId ? { runId } : {}),...(options.workDelegated?{origin:"delegated" as const}:{}) });
     // Consent is an app command, not a request for the selected model to approve.
     // This works even if a provider is unavailable or its model budget is exhausted.
     if (credentialCommand) {

@@ -539,7 +539,8 @@
   .pager button.on{background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)}
   .pager button:disabled{opacity:.4}
   .cb{width:16px;height:16px;accent-color:var(--teal)}
-  .demo-tag{position:fixed;bottom:12px;left:66px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);box-shadow:var(--shadow);z-index:50}
+  .demo-tag{display:none;position:fixed;bottom:12px;left:66px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);box-shadow:var(--shadow);z-index:50}
+  .demo-tag.on{display:block}
   /* transactions */
   .txchip{display:inline-flex;align-items:center;gap:8px;background:var(--surface-1);border-radius:16px;padding:5px 12px;font-size:12px;color:var(--text-2);font-weight:600}
   .txchip b{font-weight:700}.txchip .x{color:var(--text-3);cursor:pointer}
@@ -1455,7 +1456,7 @@
       </div>
     </div>
     <div class="po-grid" id="pipeOverview">
-      <div class="po-card"><div class="po-empty">Loading pipeline…</div></div>
+      <div class="po-card"><div class="po-empty" aria-hidden="true"></div></div>
     </div>
   </div></section>
 
@@ -1902,7 +1903,7 @@
 <div class="dd-menu" id="ddMenu"></div>
 <div class="crm-toast" id="crmToast"></div>
 
-<div class="demo-tag" id="demoTag">Loading your CRM…</div>
+<div class="demo-tag" id="demoTag" aria-live="polite"></div>
 
 <script>
 /* ========================= DATA AND DISPLAY HELPERS ========================= */
@@ -2062,7 +2063,7 @@ function renderPipelineOverview(){
   bindPipelineOverviewClicks(el);
   var agent=USER_FILTER.length?USER_FILTER.join(","):"";
   var q=agent?("?agent="+encodeURIComponent(agent)):"";
-  el.innerHTML='<div class="po-card"><div class="po-empty">Loading pipeline…</div></div>';
+  el.innerHTML='<div class="po-card"><div class="po-empty" aria-hidden="true"></div></div>';
   fetch(crmApi("/api/crm/pipeline-overview"+q),{headers:{Accept:"application/json"}})
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(d){
@@ -4284,7 +4285,10 @@ async function applyLive(body,brv,opts){
   const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
   document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
   const tag=document.querySelector(".demo-tag");
-  if(tag) tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(txCount?" · "+txCount+" transactions":"");
+  if(tag){
+    tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(txCount?" · "+txCount+" transactions":"");
+    tag.classList.add("on");
+  }
 }
 
 /* ===== Advanced filter — the Brivity "Filter Leads" side panel =====
@@ -5284,14 +5288,20 @@ function paintDataBanner(){
   /* SAMPLE DATA WINS OVER EVERYTHING. If the board is showing invented people,
      that is the only thing worth saying — and it is NOT dismissible, because
      the entire failure mode here was a person believing fabricated rows were
-     their business. Every other notice can wait behind it. */
+     their business. Every other notice can wait behind it. Quiet while the
+     first fetch is in flight — no "Loading…" flash on open. */
   if(!LIVE_DATA){
-    if(tag) tag.textContent=DEMO_REASON?"CRM unavailable":"Loading your CRM…";
+    if(!DEMO_REASON){
+      if(tag){ tag.textContent=""; tag.classList.remove("on"); }
+      el.style.display="none"; el.textContent="";
+      return;
+    }
+    if(tag){ tag.textContent="CRM unavailable"; tag.classList.add("on"); }
     el.style.display="block";
-    el.textContent=DEMO_REASON?"Could not load your CRM. Please refresh to try again.":"Loading your CRM…";
+    el.textContent="Could not load your CRM. Please refresh to try again.";
     return;
   }
-  if(tag) tag.textContent="Live data · "+LEADS.length+" leads";
+  if(tag){ tag.textContent="Live data · "+LEADS.length+" leads"; tag.classList.add("on"); }
 
   if(sessionStorage.getItem("brvBannerHidden")==="1"){ el.style.display="none"; return; }
   var imported=LEADS.filter(function(l){return l.source&&/brivity/i.test(l.source);}).length;

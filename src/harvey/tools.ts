@@ -293,7 +293,7 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_social_videos",
     description:
-      "Get a list of this account's TikTok videos filtered by performance tier and time period. Use when the signed-in user asks about best videos, worst videos, recent videos, or specific video performance.",
+      "Get a list of this account's TikTok videos filtered by performance tier and time period. Use when the signed-in user asks about best videos, worst videos, recent videos, top posts, or specific video performance. For 'top posts' omit tier or use hot and keep limit at least 5–15 so more than one video returns.",
     input_schema: {
       type: "object",
       properties: {
@@ -301,9 +301,9 @@ export const HARVEY_TOOL_DEFINITIONS: Tool[] = [
           type: "string",
           enum: ["hot", "average", "warm", "cold"],
           description:
-            "Performance tier — hot=top performers, average/warm=mid tier, cold=underperformers",
+            "Performance tier — hot=top performers, average/warm=mid tier, cold=underperformers. Omit for overall top by views.",
         },
-        limit: { type: "number", description: "Number of videos to return (default 10)" },
+        limit: { type: "number", description: "Number of videos to return (default 15, max 100)" },
         days: { type: "number", description: "Only return videos from the last N days" },
       },
       required: [],
@@ -1531,7 +1531,7 @@ function getSocialVideosForHarvey(input: Record<string, unknown>): unknown {
   const limit =
     typeof input.limit === "number" && Number.isFinite(input.limit)
       ? Math.min(100, Math.max(1, Math.floor(input.limit)))
-      : 10;
+      : 15;
   const days =
     typeof input.days === "number" && Number.isFinite(input.days)
       ? Math.max(1, Math.floor(input.days))

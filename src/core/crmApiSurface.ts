@@ -51,6 +51,7 @@ export const CRM_API_ALLOW: readonly string[] = [
   "/api/scheduled/",
   "/api/notifications/",
   "/api/users",          // the roster the CRM assigns work to (read only, below)
+  "/api/quo/",           // Quo lines/status/threads (writes denied below)
 ];
 
 /**
@@ -68,6 +69,10 @@ export const CRM_API_DENY: readonly string[] = [
   "/webhook",
   "/sinch/",
   "/api/quo/webhook",
+  "/api/quo/send",
+  "/api/quo/sync",
+  "/api/quo/register-webhook",
+  "/api/quo/numbers/assign",
   "/api/exec/",
   "/api/jarvis/",        // Harvey calling Harvey
   "/v1/",

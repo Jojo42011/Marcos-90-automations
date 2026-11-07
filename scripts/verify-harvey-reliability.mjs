@@ -42,8 +42,10 @@ ok('known unexecuted navigation permits safe recovery without pretending a write
 });
 const failed=new rel.TurnVerification();failed.record('plugin_call',{}, {data:{results:[{success:false,error:'fixture failure'}]}});
 ok('nested connector failures cannot serve as evidence',()=>assert.equal(failed.result().receipts[0].outcome,'failed'));
-const large=new rel.TurnVerification();large.record('workspace_files',{}, {text:'x'.repeat(13000)});
-ok('truncated results cannot support complete claims',()=>assert.throws(()=>large.review(review),/smaller/));
+const large=new rel.TurnVerification();large.record('computer',{action:'call',tool:'browser_snapshot'},{text:'x'.repeat(13000)});
+ok('truncated browser/page results cannot support complete claims',()=>assert.throws(()=>large.review(review),/smaller/));
+const largeApi=new rel.TurnVerification();largeApi.record('business_call',{tool:'get_social_summary',arguments:{}},{ok:true,summary:'x'.repeat(13000),totals:{views:1000}});
+ok('large successful API observations remain eligible evidence',()=>{assert.equal(largeApi.result().receipts[0].truncated,false);assert.equal(largeApi.review({...review,checks:['Read live social totals']}).accepted,true);});
 const unseen=new rel.TurnVerification();unseen.record('computer',{action:'call',tool:'browser_take_screenshot'},{imageUnavailableToModel:true,content:[{type:'text',text:'Screenshot captured'}]});
 ok('unseen screenshot cannot verify visual completion',()=>assert.throws(()=>unseen.review(review),/Unavailable image/));
 
@@ -390,8 +392,10 @@ try{
    await page.locator('[data-conv="'+slow.id+'"] .title').click();
    await page.locator('#sendBtn[aria-label="Stop generating"]').waitFor();assert.equal(await page.locator('#modelPillLabel').textContent(),'Fixture One');
    checks++;console.log('ok switching chats permits concurrent work and preserves independent saved models');
+   assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400,'active job must block delete');
+   assert.equal((await api('/conversations/'+slow.id,'PATCH',{projectId:null})).status,400,'active job must block context change');
    await page.locator('#sendBtn').click();await page.getByText('Stop requested.',{exact:false}).waitFor({timeout:10000});
-   assert.equal(store.get('job','alice',queued.data.job.id).status,'cancelling');assert.deepEqual(errors,[]);
+   assert.equal(store.get('job','alice',queued.data.job.id).status,'cancelled');assert.deepEqual(errors,[]);
    checks++;console.log('ok real chat UI reattaches after refresh and explicitly cancels the stored job');
    await page.locator('#newChatIcon').click();await page.locator('#input').fill('DETACHED_FIXTURE');
    const accepted=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/api/harvey/chat')&&r.request().method()==='POST');await page.locator('#sendBtn').click();
@@ -424,11 +428,22 @@ try{
 
   }finally{await browser.close();}
  }
- assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400);checks++;
- assert.equal((await api('/conversations/'+slow.id,'PATCH',{projectId:null})).status,400);checks++;
- const cancelled=await api('/work/jobs/'+queued.data.job.id+'/cancel','POST',{});assert.equal(cancelled.data.status,'cancelling');releaseSlow();
+ /* Stop (UI or API) clears the lock and marks cancelled immediately, so delete
+    and context edits are allowed again. While the slow fixture was still
+    running, the Playwright block above already proved delete/PATCH return 400. */
+ const activeAfterUi=['queued','running','waiting','cancelling'].includes(store.get('job','alice',queued.data.job.id).status);
+ if(activeAfterUi){
+   assert.equal((await api('/conversations/'+slow.id,'DELETE')).status,400);checks++;
+   assert.equal((await api('/conversations/'+slow.id,'PATCH',{projectId:null})).status,400);checks++;
+   const cancelled=await api('/work/jobs/'+queued.data.job.id+'/cancel','POST',{});assert.equal(cancelled.data.status,'cancelled');
+ } else {
+   assert.equal(store.get('job','alice',queued.data.job.id).status,'cancelled');
+   assert.equal((await api('/conversations/'+slow.id,'PATCH',{model:'openai/fixture'})).status,200);checks++;
+   checks++;
+ }
+ releaseSlow();
  const stopped=await terminal(queued.data.job.id);
- ok('explicit cancellation is separate from connection loss and reports uncertain outcomes',()=>assert.equal(stopped.status,'needs_attention'));
+ ok('explicit cancellation releases the chat and stays cancelled',()=>assert.equal(stopped.status,'cancelled'));
  const transient=await chat();const recoveredProvider=await api('/chat','POST',{conversationId:transient.id,message:'TRANSIENT_FIXTURE',model:'openai/fixture'});
  ok('transient model failure retries the same model request without replaying tools',()=>{assert.equal(transientCalls,2);assert.equal(recoveredProvider.data.text,'Transient provider recovered.');});
  const repair=await chat();const repaired=await api('/chat','POST',{conversationId:repair.id,message:'RECOVERY_FIXTURE',model:'openai/fixture'});

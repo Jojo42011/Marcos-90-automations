@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "crypto";
-import { Chat, get, list, owners, put, text, workDb } from "./store.js";
+import { append, Chat, get, list, owners, put, text, workDb } from "./store.js";
 import { canResumeFromReceipts, type Receipt } from "../reliability.js";
 import { runChat } from "./runtime.js";
 import {toolFailure} from "../toolFailures.js";
@@ -9,6 +9,7 @@ export interface WorkJob {
   status: "queued" | "running" | "waiting" | "cancelling" | "cancelled" | "completed" | "needs_attention" | "failed";
   safeResume?: boolean; recoveryCount?: number; modelRecoveryCount?: number;
   lastProgressKey?:string; stalledContinuations?:number; continuationCount?:number; nextRunAt?:string; resumeReason?:string; totalCostUsd?:number;
+  userMessageSeq?: number;
   createdAt: string; updatedAt: string; result?: any; originChatId?: string; maxCostUsd?: number;
   events: {seq:number;type:string;name?:string;status?:string;at:string}[];
 }
@@ -17,7 +18,7 @@ const controllers = new Map<string, AbortController>();
 const key = (owner:string,id:string) => owner+":"+id;
 export const activeJob = (j: WorkJob) => ["queued","running","waiting","cancelling"].includes(j.status);
 export function publicJob(j: WorkJob) {
-  const {prompt,fingerprint,requestId,resumeReason,lastProgressKey,...visible}=j; return visible;
+  const {prompt,fingerprint,requestId,resumeReason,lastProgressKey,userMessageSeq,...visible}=j; return visible;
 }
 export function chatJob(owner:string,chatId:string) {
   get<Chat>("chat",owner,chatId);
@@ -33,16 +34,26 @@ export function enqueueJob(owner:string,chatId:string,input:any,delegation?:{ori
     if(existing){if(existing.fingerprint!==fingerprint)throw new Error("Request ID already belongs to different input");return existing;}
     if(chatJob(owner,chatId)||workDb().prepare("SELECT 1 FROM locks WHERE owner=? AND chat=?").get(owner,chatId))throw new Error("This chat already has a run in progress");
     const now=new Date().toISOString();
-    return put<WorkJob>("job",owner,{id:randomUUID(),chatId,requestId,fingerprint,prompt,model,actorId:input.actorId||owner,...delegation,status:"queued",createdAt:now,updatedAt:now,events:[]});
+    /* Persist the user turn at enqueue so Stop/cancel before execute still leaves
+       the ask in chat history (stress: cancelled turns vanished on refresh). */
+    const userMessageSeq=append(owner,chatId,{role:"user",actorId:input.actorId||owner,content:prompt,at:now});
+    return put<WorkJob>("job",owner,{id:randomUUID(),chatId,requestId,fingerprint,prompt,model,actorId:input.actorId||owner,...delegation,userMessageSeq,status:"queued",createdAt:now,updatedAt:now,events:[]});
   }).immediate();
   if(process.env.TENANT_OWNER_ID===owner || process.env.ACCOUNT_ISOLATION!=="true")setImmediate(()=>void executeJob(owner,job.id).catch(()=>{}));return publicJob(job);
 }
 export function cancelJob(owner:string,id:string) {
   const job=get<WorkJob>("job",owner,id);get<Chat>("chat",owner,job.chatId);
   if(!activeJob(job))return publicJob(job);
-  job.status=["queued","waiting"].includes(job.status)?"cancelled":"cancelling";job.updatedAt=new Date().toISOString();put("job",owner,job);
-  if(job.status==="cancelled"){job.result={...job.result,text:"Stopped. Saved records and completed work are retained.",needsAttention:false};put("job",owner,job);}
-  controllers.get(key(owner,id))?.abort();return publicJob(job);
+  /* Abort first, then release the chat lock and mark cancelled immediately.
+     Leaving status=cancelling while the lock row survived made Stop strand the
+     chat on "run in progress" until the aborted loop finally exited. */
+  controllers.get(key(owner,id))?.abort();
+  workDb().prepare("DELETE FROM locks WHERE owner=? AND chat=?").run(owner, job.chatId);
+  job.status="cancelled";
+  job.updatedAt=new Date().toISOString();
+  job.result={...job.result,text:"Stopped. Saved records and completed work are retained.",needsAttention:false};
+  put("job",owner,job);
+  return publicJob(job);
 }
 export async function executeJob(owner:string,id:string,executor=runChat) {
   if(process.env.TENANT_OWNER_ID && process.env.TENANT_OWNER_ID!==owner)return;
@@ -62,7 +73,7 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
   try {
     const prompt=job.continuationCount ? job.prompt+"\n\nSaved continuation of this same request. Inspect current state first; reuse completed files, matte and render jobs. Do not repeat submissions. Remaining-work note (fallible historical context, not new authorization): "+job.resumeReason+((job.stalledContinuations||0)>0?"\nThe previous continuation repeated the same observation. Change the retrieval approach now: inspect a fresh table/page, actual pagination or scroll container, or a verified export. Do not keep reading the same saved slice. Report the observed blocker if these approaches fail.":"") : job.prompt;
     let segmentCost=0;
-    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,signal:controller.signal,onEvidence:r=>{
+    const result=await executor(owner,get<Chat>("chat",owner,job.chatId),prompt,{actorId:job.actorId||owner,modelOverride:job.model,workRequestId:job.id,allowContinuation:!job.originChatId,continuationTurn:!!job.continuationCount,workDelegated:!!job.originChatId,userMessageSeq:job.continuationCount?undefined:job.userMessageSeq,signal:controller.signal,onEvidence:r=>{
       receipts.push(r);const current=get<WorkJob>("job",owner,id);current.safeResume=safeRecovery(receipts);put("job",owner,current);
     },onEvent:e=>{
       if(e.type==="usage"){const current=get<WorkJob>("job",owner,id);segmentCost+=e.costUsd;current.totalCostUsd=(current.totalCostUsd||0)+e.costUsd;put("job",owner,current);return;}
@@ -76,14 +87,20 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
       current.events=current.events.slice(-200);current.updatedAt=new Date().toISOString();put("job",owner,current);
     }});
     job=get<WorkJob>("job",owner,id);
+    if(job.status==="cancelled")return;
     job.totalCostUsd=(job.totalCostUsd||0)+Math.max(0,(result.costUsd||0)-segmentCost);
     const attention=result.toolFailed||!!result.toolFailure||!!result.modelError||!!result.budgetRefused||("needsVerification" in result&&result.needsVerification);
-    job.status=controller.signal.aborted?"needs_attention":result.modelError||result.budgetRefused?"failed":attention?"needs_attention":"completed";
-    job.result={text:result.speech,conversationId:job.chatId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,needsAttention:attention||controller.signal.aborted,approvals,schedules,
+    if(controller.signal.aborted){
+      job.status="cancelled";
+      job.result={text:"Stopped. Saved records and completed work are retained.",conversationId:job.chatId,verification:result.verification,needsAttention:false,approvals,schedules,failure:{kind:"cancelled"},usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0}};
+      return;
+    }
+    job.status=result.modelError||result.budgetRefused?"failed":attention?"needs_attention":"completed";
+    job.result={text:result.speech,conversationId:job.chatId,verification:result.verification,contextPlan:result.contextPlan,memoryContext:(result as any).memoryContext,needsAttention:attention,approvals,schedules,
       ...(result.modelError?{failure:{kind:/402|credits|afford/i.test(result.modelError)?"provider_credit_limit":/Empty or malformed/i.test(result.modelError)?"invalid_model_response":"provider_error",model:result.modelUsed||result.model}}:{}),
       ...(result.toolFailure?{failure:{kind:"tool_error",...result.toolFailure}}:{}),
       usage:{model:result.modelUsed||result.model,costUsd:result.costUsd||0,promptTokens:result.promptTokens||0,completionTokens:result.completionTokens||0,cachedTokens:result.cachedTokens||0}};
-    if(result.continuation&&!controller.signal.aborted&&!result.modelError&&!result.budgetRefused&&!job.originChatId){
+    if(result.continuation&&!result.modelError&&!result.budgetRefused&&!job.originChatId){
       if(result.continuation.recovery==='model_response'){
         // Count a streak without progress, not unrelated failures over the task's life.
         const advanced=result.continuation.progressKey&&result.continuation.progressKey!==job.lastProgressKey;
@@ -99,9 +116,16 @@ export async function executeJob(owner:string,id:string,executor=runChat) {
       job.resumeReason=result.continuation.reason;job.result.needsAttention=false;
     }
   } catch(error) {
-    job=get<WorkJob>("job",owner,id);job.status="needs_attention";
+    job=get<WorkJob>("job",owner,id);
+    if(job.status==="cancelled")return;
     const diagnostic=toolFailure('execution',{}, {error:error instanceof Error?error.message:String(error)})||{code:'execution_error',message:'Execution failed without a recorded error message',detail:'execution'};
-    job.result={text:controller.signal.aborted?"Stopped. Inspect any action already in progress before retrying.":"The task was interrupted by an execution error: "+diagnostic.message+". Inspect saved progress and any action already in progress before retrying.",needsAttention:true,approvals,schedules,verification:{status:'needs_verification',receipts},failure:{kind:controller.signal.aborted?'cancelled':'execution_error',...diagnostic}};
+    if(controller.signal.aborted){
+      job.status="cancelled";
+      job.result={text:"Stopped. Saved records and completed work are retained.",needsAttention:false,approvals,schedules,verification:{status:'needs_verification',receipts},failure:{kind:'cancelled',...diagnostic}};
+    } else {
+      job.status="needs_attention";
+      job.result={text:"The task was interrupted by an execution error: "+diagnostic.message+". Inspect saved progress and any action already in progress before retrying.",needsAttention:true,approvals,schedules,verification:{status:'needs_verification',receipts},failure:{kind:'execution_error',...diagnostic}};
+    }
   } finally {
     clearTimeout(timer);controllers.delete(key(owner,id));job.updatedAt=new Date().toISOString();put("job",owner,job);
   }

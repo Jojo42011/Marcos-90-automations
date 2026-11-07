@@ -145,6 +145,8 @@ export interface TrackerFilter {
   status?: TrackerStatus[];
   buyerStage?: BuyerStage[];
   sellerStage?: SellerStage[];
+  /** When true, only people missing a stage on the filtered side (or on any side they belong to). */
+  unstagedOnly?: boolean;
   source?: string[];
   assignedTo?: string;
   /** Free text across name / phone / email / address. */
@@ -164,6 +166,15 @@ export function listTrackerRecords(filter: TrackerFilter = {}): TrackerRecord[] 
 
   if (filter.side) out = out.filter((r) => r.sides.includes(filter.side!));
   if (filter.status?.length) out = out.filter((r) => filter.status!.includes(r.status));
+  if (filter.unstagedOnly) {
+    out = out.filter((r) => {
+      if (filter.side === "buyer") return r.sides.includes("buyer") && !r.buyerStage;
+      if (filter.side === "seller") return r.sides.includes("seller") && !r.sellerStage;
+      const buyerMissing = r.sides.includes("buyer") && !r.buyerStage;
+      const sellerMissing = r.sides.includes("seller") && !r.sellerStage;
+      return buyerMissing || sellerMissing;
+    });
+  }
   if (filter.buyerStage?.length) {
     out = out.filter((r) => r.buyerStage && filter.buyerStage!.includes(r.buyerStage));
   }
