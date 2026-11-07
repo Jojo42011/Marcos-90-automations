@@ -567,20 +567,21 @@
   /* Overview: Views→Close / Call→Close — compact so both funnels fit without horizontal scroll */
   .po-grid{display:grid;grid-template-columns:1fr;gap:12px}
   @media(min-width:900px){.po-grid{grid-template-columns:1fr 1fr;gap:14px}}
-  .po-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 12px 10px;box-shadow:var(--shadow);min-width:0}
+  .po-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 12px 12px;box-shadow:var(--shadow);min-width:0}
   .po-card[data-side="buyer"]{--po-num:#2fb171}
   .po-card[data-side="seller"]{--po-num:#e05a45}
-  .po-sub{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin:0 0 8px}
+  .po-sub{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin:0 0 10px}
   .po-funnel{display:flex;align-items:stretch;gap:0;overflow:hidden;width:100%;min-width:0}
-  .po-step{flex:1 1 0;min-width:0;text-align:center;padding:8px 4px;border-radius:8px;background:var(--surface-1);border:1px solid var(--line-2)}
+  /* Taller tiles, same horizontal share — flex:1 keeps both funnels on-screen. */
+  .po-step{flex:1 1 0;min-width:0;text-align:center;padding:16px 4px 14px;border-radius:8px;background:var(--surface-1);border:1px solid var(--line-2);display:flex;flex-direction:column;justify-content:center;min-height:88px}
   .po-step + .po-step{margin-left:4px}
   .po-step.go{cursor:pointer;transition:background .15s,border-color .15s}
   .po-step.go:hover{background:var(--teal-soft);border-color:var(--teal)}
-  .po-step .n{font-size:15px;font-weight:700;color:var(--po-num,var(--teal));line-height:1.1;font-variant-numeric:tabular-nums}
-  .po-step .l{margin-top:4px;font-size:9.5px;color:var(--muted);font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .po-step .r{margin-top:3px;font-size:9px;color:var(--text-3);font-weight:600}
+  .po-step .n{font-size:20px;font-weight:700;color:var(--po-num,var(--teal));line-height:1.15;font-variant-numeric:tabular-nums}
+  .po-step .l{margin-top:8px;font-size:10.5px;color:var(--muted);font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .po-step .r{margin-top:6px;font-size:10px;color:var(--text-3);font-weight:600}
   .po-step .r.ok{color:var(--po-num,var(--teal-strong));opacity:.85}
-  .po-arrow{flex:0 0 auto;align-self:center;color:var(--text-3);font-size:10px;padding:0 1px;opacity:.45}
+  .po-arrow{flex:0 0 auto;align-self:center;color:var(--text-3);font-size:11px;padding:0 1px;opacity:.45}
   .po-note{margin-top:10px;font-size:11.5px;color:var(--muted);line-height:1.45}
   .po-empty{padding:20px 8px;text-align:center;color:var(--muted);font-size:13px}
   .po-refresh{display:inline-flex;align-items:center;gap:6px}
