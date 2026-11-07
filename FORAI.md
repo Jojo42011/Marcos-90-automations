@@ -11,7 +11,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 ## Architecture
 
 - **Server:** src/server.ts is the main Express application (roughly 15,000 lines). It registers business APIs, page routes, authentication integration, WebSockets and startup workers. Harvey Work adds a router from src/harvey/work/routes.ts.
-- **Frontend:** public/shell.html hosts standalone pages. public/crm-brivity.html is the main CRM; Harvey, team-tasks, tracker, listings, CMA, finance, reporting, analytics, knowledge and SMTP email-marketing have dedicated pages. No frontend framework/build.
+- **Frontend:** public/shell.html hosts standalone pages. public/crm-brivity.html is the main CRM; Harvey, team-tasks, tracker, listings, CMA, finance, reporting, analytics, smartposter, knowledge and SMTP email-marketing have dedicated pages. No frontend framework/build.
 - **Accounts:** ACCOUNT_ISOLATION=true in fly.toml. The parent authenticates users and forks loopback-only account workers. dataPath() uses /data/accounts/<sha256(user-id)> for account-local stores. Carlos's combined access is enforced by accountProxy/accountFederation/workspaceAccess; owner-qualified references route edits to the original store. Shared task/knowledge/MLS stores are explicit exceptions. See docs/team-access.md.
 - **Persistence:** CRM leads and conversations use JSON through core/db.ts. Business subsystems use separate SQLite or JSON stores. Command tasks use shared-tasks.db under isolation, with history and soft deletion. Shared knowledge uses shared-knowledge.db. Harvey retains owner/chat-keyed records and messages in harvey-work/work.db. Account IDs and retained source files are preserved during recovery.
 - **Social intake:** app/webhook.ts and app/pipeline.ts handle qualification, conversation state, phone/criteria capture and replies. ManyChat POST /webhook and signed Zernio POST /api/zernio/webhook remain parent-owned shared services. Comment handling uses durable queueing and fact-free reply templates. DM history is recovered with bounded pagination and chronological guards. Unknown-property replies do not pretend to understand images/video.
@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-07: SmartPoster (Growth tab under Analytics) — Later-style calendar + media rail for Marco/Wesley. Drive folder naming `YYYY-MM-DD__platform__slug.mp4`, daily ingest, AI captions from past Zernio captions, spaced slots (America/Chicago), schedule via Zernio `POST /v1/media/presign` + `POST /v1/posts`. Harvey `get_smartposter`.
 - 2026-11-07: Overview agent filter fixed — unchecking Marco no longer snaps back to All (empty pick → zeros); Carlos removed from agent list; Views/Comments only when All or Marco is selected so Wesley picks do not keep Marco's social totals.
 - 2026-11-07: Overview funnel tiles taller (more vertical padding / larger numbers) without widening, so both funnels stay readable without horizontal scroll.
 - 2026-11-07: Overview funnel UI compact (no horizontal scroll), Buyers/Sellers titles and In pipeline/Unstaged/Closed footers removed; buyer counts green, seller counts red.

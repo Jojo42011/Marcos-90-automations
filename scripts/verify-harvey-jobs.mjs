@@ -70,7 +70,7 @@ check("false-denial detector: TikTok/Composio/Command Center claims", () => {
 
 check("business tools include Command Center social jobs", () => {
   const names = new Set((tools.HARVEY_TOOL_DEFINITIONS || []).map((t) => t.name));
-  for (const n of ["get_social_summary", "get_social_videos", "get_social_analytics", "crm_api", "crm_api_index", "get_quo_lines", "search_tracker", "get_pipeline_overview"]) {
+  for (const n of ["get_social_summary", "get_social_videos", "get_social_analytics", "get_smartposter", "crm_api", "crm_api_index", "get_quo_lines", "search_tracker", "get_pipeline_overview"]) {
     assert(names.has(n), `missing tool for business_call: ${n}`);
   }
   assert(/unstagedOnly/.test(read("src/harvey/platformTools.ts")), "search_tracker must expose unstagedOnly");
@@ -83,6 +83,14 @@ check("CRM Overview funnel ships with Harvey get_pipeline_overview", () => {
   assert(/\/api\/crm\/pipeline-overview/.test(read("src/server.ts")));
   const crm = read("public/crm-brivity.html");
   assert(/pipeOverview/.test(crm) && /renderPipelineOverview/.test(crm));
+});
+
+check("SmartPoster surface ships with Harvey get_smartposter", () => {
+  const names = new Set((tools.HARVEY_TOOL_DEFINITIONS || []).map((t) => t.name));
+  assert(names.has("get_smartposter"), "missing get_smartposter");
+  assert(/registerSmartPosterRoutes/.test(read("src/server.ts")));
+  assert(/key:\s*"smartposter"/.test(read("public/shell.html")));
+  assert(/SmartPoster/.test(read("public/smartposter.html")));
 });
 
 check("FORAI pins route-with-feature convention", () => {

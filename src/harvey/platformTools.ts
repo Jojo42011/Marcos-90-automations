@@ -661,6 +661,12 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
     },
   },
   {
+    name: "get_smartposter",
+    description:
+      "SmartPoster status for this account — Drive connection, schedule slots, Zernio social targets, and the video queue (draft / ready / scheduled / failed). Use when someone asks what is queued to post, whether Drive is connected, or about SmartPoster / SmartPosting. Read-only; sync and schedule happen in the SmartPoster tab.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "get_tracker_pipelines",
     description:
       "The stage vocabulary: the ordered buyer pipeline (11 stages) and seller pipeline (15 stages), plus the status list. Call this before moving anyone so the stage key used is valid.",
@@ -1501,6 +1507,40 @@ export async function executePlatformTool(
         scope: "tracker",
         note:
           "These funnel counts are from the Buyers & Sellers Tracker board. Full CRM new-lead totals are a separate, larger set — say which scope you are quoting.",
+      };
+    }
+
+    case "get_smartposter": {
+      const { getSmartPosterOverview } = await import("../integrations/smartPoster/sync.js");
+      const overview = await getSmartPosterOverview();
+      return {
+        drive: overview.drive,
+        settings: {
+          timezone: overview.settings.timezone,
+          slots: overview.settings.slots,
+          autoSchedule: overview.settings.autoSchedule,
+          ingestHour: overview.settings.ingestHour,
+          driveFolderId: overview.settings.driveFolderId ? "(set)" : "",
+          driveFolderName: overview.settings.driveFolderName,
+          lastSyncAt: overview.settings.lastSyncAt,
+          lastSyncNote: overview.settings.lastSyncNote,
+        },
+        accounts: overview.accounts.map((a) => ({
+          id: a.id,
+          platform: a.platform,
+          username: a.username,
+        })),
+        counts: overview.counts,
+        today: overview.today,
+        recent: overview.posts.slice(0, 25).map((p) => ({
+          id: p.id,
+          title: p.title || p.fileName,
+          status: p.status,
+          platforms: p.platforms,
+          scheduledFor: p.scheduledFor,
+          error: p.error,
+        })),
+        note: "SmartPoster lives under Growth in the sidebar. Editors drop videos in Drive as YYYY-MM-DD__platform__slug.mp4; sync captions and schedules through Zernio.",
       };
     }
 
