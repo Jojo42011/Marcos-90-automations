@@ -49,9 +49,46 @@ export async function managedCatalog(owner:string,project:string|null,search="",
     return {enabled:true,items:catalog.items,cursor:catalog.nextCursor||catalog.cursor||null,connected};
   });
 }
-export async function connectManaged(owner:string,project:string|null,slug:string) {
+export async function connectManaged(owner:string,project:string|null,slug:string,callbackPath?:string) {
   if(!/^[a-z0-9_-]{1,80}$/.test(slug))throw new Error("Invalid service");
-  return guarded(async()=>{if(project)get("project",owner,project);const s=await composioSession(owner,null);const connection=await s.authorize(slug,{callbackUrl:new URL("/harvey?plugins=1&project="+encodeURIComponent(project||""),process.env.HARVEY_PUBLIC_URL||"http://localhost:3000").href});return {url:connection.redirectUrl};});
+  return guarded(async()=>{
+    if(project)get("project",owner,project);
+    const s=await composioSession(owner,null);
+    const path = callbackPath?.startsWith("/")
+      ? callbackPath
+      : `/harvey?plugins=1&project=${encodeURIComponent(project||"")}`;
+    const connection=await s.authorize(slug,{
+      callbackUrl:new URL(path,process.env.HARVEY_PUBLIC_URL||"http://localhost:3000").href,
+    });
+    return {url:connection.redirectUrl};
+  });
+}
+
+/** Run a toolkit action (e.g. GOOGLEDRIVE_FIND_FILE) inside the owner's Composio session. */
+export async function executeToolkit(
+  owner: string,
+  toolSlug: string,
+  args: Record<string, unknown> = {},
+  project: string | null = null,
+): Promise<unknown> {
+  if (!/^[A-Z0-9_]{3,120}$/.test(toolSlug)) throw new Error("Invalid toolkit action");
+  if (project) get("project", owner, project);
+  return guarded(async () => {
+    const session = await composioSession(owner, project);
+    const result = await session.execute(toolSlug, args);
+    if (result?.error) {
+      throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
+    }
+    return result?.data !== undefined ? result.data : result;
+  });
+}
+
+export function connectedToolkit(
+  connections: Awaited<ReturnType<typeof managedConnections>>,
+  slug: string,
+): any | null {
+  const want = slug.toLowerCase();
+  return connections.find((t) => String(t.slug || "").toLowerCase() === want) || null;
 }
 export async function disconnectManaged(owner:string,project:string|null,slug:string,scope?:string) {
   if(project)get("project",owner,project);

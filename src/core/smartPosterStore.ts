@@ -123,7 +123,7 @@ export function getSmartPosterDb(): Database.Database {
 function defaultSettings(): SmartPosterSettings {
   return {
     driveFolderId: "",
-    driveFolderName: "",
+    driveFolderName: "SmartPoster",
     timezone: "America/Chicago",
     slots: [...DEFAULT_SLOTS],
     autoSchedule: true,

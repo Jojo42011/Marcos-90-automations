@@ -274,9 +274,9 @@ function renderBanner(){
     bits.push('<div class="banner warn"><b>No Zernio social accounts on this profile yet.</b> Connect them in Zernio, then refresh.</div>');
   }
   if (!DATA.drive || !DATA.drive.connected) {
-    bits.push('<div class="banner info"><b>Google Drive not connected.</b> Open Settings to connect the editors\' folder, then Sync.</div>');
-  } else if (!DATA.settings.driveFolderId) {
-    bits.push('<div class="banner warn"><b>Drive is connected, but no folder id is set.</b> Paste the folder id in Settings.</div>');
+    bits.push('<div class="banner info"><b>Google Drive not connected.</b> Open Settings and connect with Composio (same sign-in as Harvey Plugins).</div>');
+  } else if (!DATA.settings.driveFolderName && !DATA.settings.driveFolderId) {
+    bits.push('<div class="banner warn"><b>Drive is connected — pick a folder by name in Settings.</b></div>');
   } else if (DATA.settings.lastSyncNote) {
     bits.push('<div class="banner info">' + esc(DATA.settings.lastSyncNote) + '</div>');
   }
@@ -447,18 +447,27 @@ function openSettings(){
   var s = DATA.settings || {};
   var drive = DATA.drive || {};
   var body = document.getElementById("drawerBody");
+  var composioOk = DATA.composioReady !== false && (DATA.composioReady || DATA.googleOAuthReady);
   body.innerHTML = '<h3>Settings</h3>'
     + '<div class="sub" style="margin-bottom:16px">Drive naming: <code>YYYY-MM-DD__platform__slug.mp4</code> · platforms: tiktok, instagram, facebook, youtube, all</div>'
     + '<div class="field"><label>Google Drive</label>'
     + (drive.connected
-        ? '<div class="row-inline"><span class="status scheduled">Connected</span><span class="hint">' + esc(drive.email || "") + '</span>'
+        ? '<div class="row-inline"><span class="status scheduled">Connected</span><span class="hint">' + esc(drive.email || "Composio") + '</span>'
           + '<button class="btn" type="button" id="driveDisc">Disconnect</button></div>'
-        : (DATA.googleOAuthReady
-            ? '<a class="btn primary" href="/api/smartposter/drive/connect">Connect Google Drive</a>'
-            : '<div class="banner warn">OAuth needs HARVEY_GOOGLE_CLIENT_ID / SECRET, HARVEY_PUBLIC_URL, HARVEY_VAULT_KEY on the server.</div>'))
+        : (composioOk
+            ? '<button class="btn primary" type="button" id="driveConnect">Connect with Composio</button>'
+              + '<div class="hint" style="margin-top:6px">Same managed Google sign-in Harvey Plugins uses — no client IDs or folder IDs to paste.</div>'
+            : '<div class="banner warn">Composio is not configured on this server (COMPOSIO_API_KEY).</div>'))
     + '</div>'
-    + '<div class="field"><label>Drive folder id</label><input id="setFolder" value="' + esc(s.driveFolderId || "") + '" placeholder="1AbC…" /></div>'
-    + '<div class="field"><label>Folder name (optional label)</label><input id="setFolderName" value="' + esc(s.driveFolderName || "") + '" /></div>'
+    + '<div class="field"><label>Inbox folder</label>'
+    + '<div class="row-inline" style="margin-bottom:8px">'
+    + '<input id="setFolderName" value="' + esc(s.driveFolderName || "SmartPoster") + '" placeholder="SmartPoster" style="flex:1" />'
+    + '<button class="btn" type="button" id="findFolders"' + (drive.connected ? "" : " disabled") + '>Find</button>'
+    + '</div>'
+    + '<div id="folderHits" class="hint">' + (s.driveFolderName
+        ? 'Using folder <b>' + esc(s.driveFolderName) + '</b>' + (s.driveFolderId ? ' (resolved).' : '. Find to confirm it exists.')
+        : 'Search by name after connecting Drive.') + '</div>'
+    + '</div>'
     + '<div class="field"><label>Daily slots (HH:MM, comma-separated)</label><input id="setSlots" value="' + esc((s.slots || []).join(", ")) + '" /></div>'
     + '<div class="field"><label>Timezone</label><input id="setTz" value="' + esc(s.timezone || "America/Chicago") + '" /></div>'
     + '<div class="field"><label>Daily ingest hour (0–23, local)</label><input id="setHour" type="number" min="0" max="23" value="' + esc(s.ingestHour) + '" /></div>'
@@ -468,17 +477,54 @@ function openSettings(){
   document.getElementById("drawerBg").classList.add("on");
   document.getElementById("drawer").classList.add("on");
 
+  var pickedId = s.driveFolderId || "";
+  var connect = document.getElementById("driveConnect");
+  if (connect) connect.onclick = async function(){
+    connect.disabled = true;
+    try {
+      var r = await api("GET", "/api/smartposter/drive/connect?redirect=0");
+      if (r && r.url) location.href = r.url;
+    } catch (err) {
+      document.getElementById("banner").innerHTML = '<div class="banner bad"><b>Connect failed.</b> ' + esc(err.message) + '</div>';
+      connect.disabled = false;
+    }
+  };
   var disc = document.getElementById("driveDisc");
   if (disc) disc.onclick = async function(){
     await api("POST", "/api/smartposter/drive/disconnect", {});
     await load();
     openSettings();
   };
+  document.getElementById("findFolders").onclick = async function(){
+    var q = document.getElementById("setFolderName").value.trim();
+    var hits = document.getElementById("folderHits");
+    hits.textContent = "Searching…";
+    try {
+      var r = await api("GET", "/api/smartposter/drive/folders?q=" + encodeURIComponent(q || "SmartPoster"));
+      var folders = (r && r.folders) || [];
+      if (!folders.length) {
+        hits.textContent = "No folders matched. Create one in Drive named like SmartPoster, then Find again.";
+        return;
+      }
+      hits.innerHTML = folders.map(function(f){
+        return '<button type="button" class="btn" data-fid="' + esc(f.id) + '" data-fname="' + esc(f.name) + '" style="margin:0 6px 6px 0">' + esc(f.name) + '</button>';
+      }).join("");
+      hits.querySelectorAll("[data-fid]").forEach(function(btn){
+        btn.onclick = function(){
+          pickedId = btn.getAttribute("data-fid") || "";
+          document.getElementById("setFolderName").value = btn.getAttribute("data-fname") || "";
+          hits.innerHTML = 'Selected <b>' + esc(btn.getAttribute("data-fname") || "") + '</b> — Save settings to keep it.';
+        };
+      });
+    } catch (err) {
+      hits.textContent = err.message || "Search failed";
+    }
+  };
   document.getElementById("saveSettings").onclick = async function(){
     var slots = document.getElementById("setSlots").value.split(",").map(function(x){ return x.trim(); }).filter(Boolean);
     await api("PATCH", "/api/smartposter/settings", {
-      driveFolderId: document.getElementById("setFolder").value,
       driveFolderName: document.getElementById("setFolderName").value,
+      driveFolderId: pickedId,
       slots: slots,
       timezone: document.getElementById("setTz").value,
       ingestHour: Number(document.getElementById("setHour").value),

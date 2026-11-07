@@ -1,115 +1,95 @@
 /**
- * Google Drive helpers for SmartPoster inbox sync.
- * Uses the same Google OAuth app credentials as Harvey (HARVEY_GOOGLE_*),
- * with tokens stored account-locally in smartPosterStore.
+ * SmartPoster Google Drive via Composio (same managed OAuth as Harvey Plugins).
+ * Operators connect with one click — no Google client IDs or pasted folder IDs.
  */
 import {
-  clearDriveAuth,
-  getDriveAuth,
-  readDriveTokens,
-  saveDriveTokens,
-} from "../../core/smartPosterStore.js";
+  composioReady,
+  connectManaged,
+  connectedToolkit,
+  disconnectManaged,
+  executeToolkit,
+  managedConnections,
+} from "../../harvey/work/composio.js";
 
-const AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
-const TOKEN = "https://oauth2.googleapis.com/token";
-const DRIVE = "https://www.googleapis.com/drive/v3/";
-const SCOPES = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email";
+export const DRIVE_SLUG = "googledrive";
 
-export function googleOAuthConfigured(): boolean {
-  return Boolean(
-    process.env.HARVEY_GOOGLE_CLIENT_ID?.trim()
-      && process.env.HARVEY_GOOGLE_CLIENT_SECRET?.trim()
-      && process.env.HARVEY_PUBLIC_URL?.trim()
-      && process.env.HARVEY_VAULT_KEY?.trim(),
-  );
+export function driveComposioReady(): boolean {
+  return composioReady();
 }
 
-export function driveCallbackUrl(): string {
-  const base = process.env.HARVEY_PUBLIC_URL?.trim();
-  if (!base) throw new Error("HARVEY_PUBLIC_URL is not set");
-  return new URL("/api/smartposter/drive/callback", base).toString();
-}
-
-export function startDriveOAuth(state: string): string {
-  const clientId = process.env.HARVEY_GOOGLE_CLIENT_ID?.trim();
-  if (!clientId) throw new Error("Google OAuth is not configured (HARVEY_GOOGLE_CLIENT_ID)");
-  const url = new URL(AUTH);
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", driveCallbackUrl());
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", SCOPES);
-  url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent");
-  url.searchParams.set("state", state);
-  return url.toString();
-}
-
-async function exchange(params: Record<string, string>): Promise<Record<string, unknown>> {
-  const clientId = process.env.HARVEY_GOOGLE_CLIENT_ID?.trim();
-  const clientSecret = process.env.HARVEY_GOOGLE_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) throw new Error("Google OAuth credentials missing");
-  const res = await fetch(TOKEN, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({
-      ...params,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }).toString(),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const data = (await res.json()) as Record<string, unknown>;
-  if (!res.ok || !data.access_token) {
-    throw new Error(`Google auth failed: ${String(data.error || res.status)}`);
+export async function getComposioDriveStatus(owner: string): Promise<{
+  connected: boolean;
+  email: string | null;
+  updatedAt: string | null;
+  ready: boolean;
+}> {
+  if (!composioReady()) {
+    return { connected: false, email: null, updatedAt: null, ready: false };
   }
-  return {
-    ...data,
-    expiresAt: data.expires_in ? Date.now() + Number(data.expires_in) * 1000 : null,
-  };
-}
-
-export async function finishDriveOAuth(code: string): Promise<{ email: string | null }> {
-  const tokens = await exchange({
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: driveCallbackUrl(),
-  });
-  let email: string | null = null;
   try {
-    const me = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (me.ok) {
-      const body = (await me.json()) as { email?: string };
-      email = body.email || null;
-    }
+    const found = connectedToolkit(await managedConnections(owner), DRIVE_SLUG);
+    if (!found) return { connected: false, email: null, updatedAt: null, ready: true };
+    const email =
+      String(
+        found.connection?.connectedAccount?.meta?.email
+          || found.connection?.connectedAccount?.status
+          || found.name
+          || "",
+      ).trim() || null;
+    return {
+      connected: true,
+      email: email && email.includes("@") ? email : "Google Drive (Composio)",
+      updatedAt: found.connection?.connectedAccount?.updatedAt
+        ? String(found.connection.connectedAccount.updatedAt)
+        : new Date().toISOString(),
+      ready: true,
+    };
   } catch {
-    /* optional */
+    return { connected: false, email: null, updatedAt: null, ready: true };
   }
-  saveDriveTokens(tokens, email);
-  return { email };
 }
 
-export function disconnectDrive(): void {
-  clearDriveAuth();
+export async function startComposioDriveConnect(owner: string): Promise<{ url: string }> {
+  if (!composioReady()) {
+    throw new Error("Composio is not configured (COMPOSIO_API_KEY).");
+  }
+  return connectManaged(owner, null, DRIVE_SLUG, "/smartposter?drive=connected");
 }
 
-async function accessToken(): Promise<string> {
-  let tokens = readDriveTokens();
-  if (!tokens?.access_token && !tokens?.refresh_token) {
-    throw new Error("Google Drive is not connected");
+export async function disconnectComposioDrive(owner: string): Promise<void> {
+  await disconnectManaged(owner, null, DRIVE_SLUG);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function unwrapData(value: unknown): unknown {
+  let cur: unknown = value;
+  for (let i = 0; i < 4; i++) {
+    const rec = asRecord(cur);
+    if (!rec) break;
+    if (rec.data !== undefined) {
+      cur = rec.data;
+      continue;
+    }
+    break;
   }
-  if (tokens.expiresAt && Number(tokens.expiresAt) < Date.now() + 60_000) {
-    if (!tokens.refresh_token) throw new Error("Drive login expired — reconnect Google Drive");
-    const fresh = await exchange({
-      grant_type: "refresh_token",
-      refresh_token: String(tokens.refresh_token),
-    });
-    tokens = { ...tokens, ...fresh, refresh_token: tokens.refresh_token };
-    saveDriveTokens(tokens, getDriveAuth().email);
-  }
-  return String(tokens.access_token);
+  return cur;
+}
+
+function fileRows(value: unknown): Array<Record<string, unknown>> {
+  const root = unwrapData(value);
+  const rec = asRecord(root);
+  const list =
+    (Array.isArray(root) ? root : null)
+    || (Array.isArray(rec?.files) ? rec!.files : null)
+    || (Array.isArray(rec?.items) ? rec!.items : null)
+    || (Array.isArray(rec?.folders) ? rec!.folders : null)
+    || [];
+  return list.filter((x): x is Record<string, unknown> => !!x && typeof x === "object");
 }
 
 export interface DriveFileRow {
@@ -120,90 +100,160 @@ export interface DriveFileRow {
   modifiedTime: string | null;
 }
 
-export async function listFolderVideos(folderId: string): Promise<DriveFileRow[]> {
-  const token = await accessToken();
-  const q = `'${folderId.replace(/'/g, "\\'")}' in parents and trashed = false`;
-  const fields = "nextPageToken,files(id,name,mimeType,size,modifiedTime)";
-  const out: DriveFileRow[] = [];
-  let pageToken: string | undefined;
-  do {
-    const url = new URL("files", DRIVE);
-    url.searchParams.set("q", q);
-    url.searchParams.set("fields", fields);
-    url.searchParams.set("pageSize", "100");
-    url.searchParams.set("supportsAllDrives", "true");
-    url.searchParams.set("includeItemsFromAllDrives", "true");
-    if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(30_000),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`Drive list failed: ${text.slice(0, 300)}`);
-    const json = JSON.parse(text) as {
-      files?: Array<Record<string, unknown>>;
-      nextPageToken?: string;
-    };
-    for (const f of json.files || []) {
-      const name = String(f.name || "");
-      const mime = String(f.mimeType || "");
-      const video =
-        mime.startsWith("video/")
-        || /\.(mp4|mov|m4v|webm|avi|mpeg|mpg)$/i.test(name);
-      if (!video) continue;
-      out.push({
-        id: String(f.id),
-        name,
-        mimeType: mime,
-        size: f.size != null ? Number(f.size) : null,
-        modifiedTime: f.modifiedTime != null ? String(f.modifiedTime) : null,
-      });
-    }
-    pageToken = json.nextPageToken;
-  } while (pageToken);
-  return out;
+export interface DriveFolderRow {
+  id: string;
+  name: string;
 }
 
-export async function downloadDriveFile(fileId: string): Promise<Buffer> {
-  const token = await accessToken();
-  const url = new URL(`files/${encodeURIComponent(fileId)}`, DRIVE);
-  url.searchParams.set("alt", "media");
-  url.searchParams.set("supportsAllDrives", "true");
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(5 * 60_000),
-    redirect: "follow",
+export async function searchDriveFolders(
+  owner: string,
+  query: string,
+): Promise<DriveFolderRow[]> {
+  const q = String(query || "").trim();
+  if (!q) return [];
+  const raw = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FOLDER", {
+    name_contains: q.slice(0, 120),
+    page_size: 25,
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Drive download failed HTTP ${res.status}: ${text.slice(0, 200)}`);
+  return fileRows(raw)
+    .map((f) => ({
+      id: String(f.id || ""),
+      name: String(f.name || ""),
+    }))
+    .filter((f) => f.id && f.name);
+}
+
+export async function resolveFolderByName(
+  owner: string,
+  folderName: string,
+): Promise<DriveFolderRow | null> {
+  const name = String(folderName || "").trim();
+  if (!name) return null;
+  const exact = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FOLDER", {
+    name_exact: name,
+    page_size: 10,
+  });
+  const exactHits = fileRows(exact)
+    .map((f) => ({ id: String(f.id || ""), name: String(f.name || "") }))
+    .filter((f) => f.id);
+  const hit = exactHits.find((f) => f.name === name) || exactHits[0];
+  if (hit) return hit;
+
+  const fuzzy = await searchDriveFolders(owner, name);
+  return fuzzy.find((f) => f.name.toLowerCase() === name.toLowerCase()) || fuzzy[0] || null;
+}
+
+export async function listFolderVideos(
+  owner: string,
+  folderId: string,
+): Promise<DriveFileRow[]> {
+  const raw = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FILE", {
+    folderId,
+    q: "trashed = false",
+    pageSize: 100,
+    fields: "files(id,name,mimeType,size,modifiedTime)",
+  });
+  const out: DriveFileRow[] = [];
+  for (const f of fileRows(raw)) {
+    const name = String(f.name || "");
+    const mime = String(f.mimeType || "");
+    const video =
+      mime.startsWith("video/")
+      || /\.(mp4|mov|m4v|webm|avi|mpeg|mpg)$/i.test(name);
+    if (!video) continue;
+    out.push({
+      id: String(f.id || ""),
+      name,
+      mimeType: mime,
+      size: f.size != null ? Number(f.size) : null,
+      modifiedTime: f.modifiedTime != null ? String(f.modifiedTime) : null,
+    });
   }
-  const ab = await res.arrayBuffer();
-  return Buffer.from(ab);
+  return out.filter((f) => f.id);
+}
+
+function bufferFromDownloadPayload(payload: unknown): Buffer | null {
+  const root = unwrapData(payload);
+  const rec = asRecord(root) || {};
+
+  const candidates: unknown[] = [
+    rec.downloaded_file_content,
+    rec.downloadedFileContent,
+    rec.content,
+    rec.file,
+    rec.bytes,
+    rec.data,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) {
+      /* Prefer base64 when it looks like it; otherwise treat as latin1 bytes. */
+      const cleaned = c.replace(/^data:[^;]+;base64,/, "");
+      if (/^[A-Za-z0-9+/=\r\n]+$/.test(cleaned.slice(0, 200)) && cleaned.length > 64) {
+        try {
+          return Buffer.from(cleaned, "base64");
+        } catch {
+          /* fall through */
+        }
+      }
+      return Buffer.from(c, "binary");
+    }
+    if (c && typeof c === "object") {
+      const nested = asRecord(c);
+      if (nested && typeof nested.s3url === "string") candidates.push(nested.s3url);
+      if (nested && typeof nested.url === "string") candidates.push(nested.url);
+      if (nested && typeof nested.content === "string") candidates.push(nested.content);
+    }
+  }
+
+  const url =
+    (typeof rec.download_url === "string" && rec.download_url)
+    || (typeof rec.downloadUrl === "string" && rec.downloadUrl)
+    || (typeof rec.url === "string" && rec.url)
+    || (typeof rec.s3url === "string" && rec.s3url)
+    || null;
+  return url ? null /* signal fetch below */ : null;
+}
+
+async function fetchUrlBytes(url: string): Promise<Buffer> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(5 * 60_000), redirect: "follow" });
+  if (!res.ok) throw new Error(`Drive download URL failed HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+export async function downloadDriveFile(owner: string, fileId: string): Promise<Buffer> {
+  const raw = await executeToolkit(owner, "GOOGLEDRIVE_DOWNLOAD_FILE", { fileId });
+  const direct = bufferFromDownloadPayload(raw);
+  if (direct && direct.length) return direct;
+
+  const root = asRecord(unwrapData(raw)) || asRecord(raw) || {};
+  const url =
+    (typeof root.download_url === "string" && root.download_url)
+    || (typeof root.downloadUrl === "string" && root.downloadUrl)
+    || (typeof root.url === "string" && root.url)
+    || (typeof root.s3url === "string" && root.s3url)
+    || (typeof asRecord(root.file)?.url === "string" && String(asRecord(root.file)!.url))
+    || null;
+  if (url && /^https?:\/\//i.test(url)) return fetchUrlBytes(url);
+
+  throw new Error("Composio Drive download returned no file bytes");
 }
 
 export async function readSidecarJson(
+  owner: string,
   folderId: string,
   stem: string,
 ): Promise<Record<string, unknown> | null> {
-  const token = await accessToken();
-  const name = `${stem}.json`.replace(/'/g, "\\'");
-  const q = `'${folderId.replace(/'/g, "\\'")}' in parents and name = '${name}' and trashed = false`;
-  const url = new URL("files", DRIVE);
-  url.searchParams.set("q", q);
-  url.searchParams.set("fields", "files(id,name)");
-  url.searchParams.set("pageSize", "1");
-  url.searchParams.set("supportsAllDrives", "true");
-  url.searchParams.set("includeItemsFromAllDrives", "true");
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
+  const name = `${stem}.json`;
+  const raw = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FILE", {
+    folderId,
+    q: `name = '${name.replace(/'/g, "\\'")}' and trashed = false`,
+    pageSize: 1,
+    fields: "files(id,name)",
   });
-  if (!res.ok) return null;
-  const json = (await res.json()) as { files?: Array<{ id: string }> };
-  const id = json.files?.[0]?.id;
+  const id = fileRows(raw)[0] && String(fileRows(raw)[0].id || "");
   if (!id) return null;
-  const bytes = await downloadDriveFile(id);
+  const bytes = await downloadDriveFile(owner, id);
   try {
     return JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
   } catch {
@@ -211,16 +261,22 @@ export async function readSidecarJson(
   }
 }
 
-export async function resolveFolderName(folderId: string): Promise<string | null> {
-  const token = await accessToken();
-  const url = new URL(`files/${encodeURIComponent(folderId)}`, DRIVE);
-  url.searchParams.set("fields", "id,name,mimeType");
-  url.searchParams.set("supportsAllDrives", "true");
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) return null;
-  const json = (await res.json()) as { name?: string };
-  return json.name || null;
+/** Ensure settings.driveFolderId matches the chosen folder name via Composio. */
+export async function ensureFolderId(
+  owner: string,
+  folderName: string,
+  cachedId?: string,
+): Promise<{ id: string; name: string }> {
+  const name = String(folderName || "").trim();
+  if (!name) throw new Error("Pick a Drive folder name in SmartPoster settings.");
+  if (cachedId?.trim()) {
+    return { id: cachedId.trim(), name };
+  }
+  const found = await resolveFolderByName(owner, name);
+  if (!found) {
+    throw new Error(
+      `No Drive folder named "${name}" found. Create it in Google Drive, then pick it here.`,
+    );
+  }
+  return found;
 }

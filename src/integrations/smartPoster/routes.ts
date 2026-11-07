@@ -1,13 +1,13 @@
 /**
  * SmartPoster HTTP routes — mounted from server.ts.
+ * Drive connect uses Composio (same managed OAuth as Harvey Plugins).
  */
-import { randomBytes } from "crypto";
 import type { Express, Request, Response } from "express";
 import express from "express";
 import path from "path";
+import { tenantOwner } from "../../core/tenantData.js";
 import {
   deletePost,
-  getDriveAuth,
   getPost,
   getSettings,
   listPosts,
@@ -15,35 +15,36 @@ import {
   upsertPost,
 } from "../../core/smartPosterStore.js";
 import {
-  disconnectDrive,
-  finishDriveOAuth,
-  googleOAuthConfigured,
-  startDriveOAuth,
+  disconnectComposioDrive,
+  getComposioDriveStatus,
+  searchDriveFolders,
+  startComposioDriveConnect,
 } from "./drive.js";
 import { getSmartPosterOverview, runSmartPosterSync, schedulePostToZernio } from "./sync.js";
 
-const oauthStates = new Map<string, { at: number }>();
+type SessionUser = (req: Request) => { id?: string } | null;
 
-function pruneStates(): void {
-  const cutoff = Date.now() - 15 * 60_000;
-  for (const [k, v] of oauthStates) {
-    if (v.at < cutoff) oauthStates.delete(k);
-  }
+function ownerOf(req: Request, sessionUser?: SessionUser): string {
+  return String(tenantOwner() || sessionUser?.(req)?.id || "operator");
 }
 
 export function registerSmartPosterRoutes(
   app: Express,
-  opts: { publicDir: string; requireAuthPage: (req: Request, res: Response, next: () => void) => void },
+  opts: {
+    publicDir: string;
+    requireAuthPage: (req: Request, res: Response, next: () => void) => void;
+    sessionUser?: SessionUser;
+  },
 ): void {
-  const { publicDir, requireAuthPage } = opts;
+  const { publicDir, requireAuthPage, sessionUser } = opts;
 
   app.get("/smartposter", requireAuthPage, (_req, res) => {
     res.sendFile(path.join(publicDir, "smartposter.html"));
   });
 
-  app.get("/api/smartposter/overview", async (_req, res) => {
+  app.get("/api/smartposter/overview", async (req, res) => {
     try {
-      res.json(await getSmartPosterOverview());
+      res.json(await getSmartPosterOverview(ownerOf(req, sessionUser)));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -103,7 +104,7 @@ export function registerSmartPosterRoutes(
         res.status(404).json({ error: "Post not found" });
         return;
       }
-      const updated = await schedulePostToZernio(post);
+      const updated = await schedulePostToZernio(post, ownerOf(req, sessionUser));
       res.json({ post: updated });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -123,20 +124,29 @@ export function registerSmartPosterRoutes(
     }
   });
 
-  app.get("/api/smartposter/settings", (_req, res) => {
-    res.json({
-      settings: getSettings(),
-      drive: getDriveAuth(),
-      googleOAuthReady: googleOAuthConfigured(),
-    });
+  app.get("/api/smartposter/settings", async (req, res) => {
+    try {
+      const owner = ownerOf(req, sessionUser);
+      res.json({
+        settings: getSettings(),
+        drive: await getComposioDriveStatus(owner),
+        composioReady: (await getComposioDriveStatus(owner)).ready,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   app.patch("/api/smartposter/settings", express.json({ limit: "50kb" }), (req, res) => {
     try {
       const b = (req.body || {}) as Record<string, unknown>;
       const patch: Record<string, unknown> = {};
+      if (b.driveFolderName != null) {
+        patch.driveFolderName = String(b.driveFolderName).trim();
+        /* Changing the name invalidates a prior cached id unless a new id is sent. */
+        if (b.driveFolderId == null) patch.driveFolderId = "";
+      }
       if (b.driveFolderId != null) patch.driveFolderId = String(b.driveFolderId).trim();
-      if (b.driveFolderName != null) patch.driveFolderName = String(b.driveFolderName).trim();
       if (b.timezone != null) patch.timezone = String(b.timezone).trim();
       if (Array.isArray(b.slots)) patch.slots = b.slots.map((s) => String(s));
       if (b.autoSchedule != null) patch.autoSchedule = Boolean(b.autoSchedule);
@@ -154,6 +164,7 @@ export function registerSmartPosterRoutes(
       const result = await runSmartPosterSync({
         date: b.date != null ? String(b.date) : undefined,
         forceSchedule: b.forceSchedule === true,
+        owner: ownerOf(req, sessionUser),
       });
       res.json(result);
     } catch (err) {
@@ -161,54 +172,36 @@ export function registerSmartPosterRoutes(
     }
   });
 
-  app.get("/api/smartposter/drive/connect", (req, res) => {
+  app.get("/api/smartposter/drive/connect", async (req, res) => {
     try {
-      if (!googleOAuthConfigured()) {
-        res.status(400).json({
-          error:
-            "Google Drive OAuth needs HARVEY_GOOGLE_CLIENT_ID, HARVEY_GOOGLE_CLIENT_SECRET, HARVEY_PUBLIC_URL, and HARVEY_VAULT_KEY.",
-        });
-        return;
-      }
-      pruneStates();
-      const state = randomBytes(24).toString("hex");
-      oauthStates.set(state, { at: Date.now() });
-      const url = startDriveOAuth(state);
+      const { url } = await startComposioDriveConnect(ownerOf(req, sessionUser));
       if (req.query.redirect === "0") {
         res.json({ url });
         return;
       }
       res.redirect(url);
     } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post("/api/smartposter/drive/disconnect", async (req, res) => {
+    try {
+      const owner = ownerOf(req, sessionUser);
+      await disconnectComposioDrive(owner);
+      res.json({ ok: true, drive: await getComposioDriveStatus(owner) });
+    } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
-  app.get("/api/smartposter/drive/callback", async (req, res) => {
+  app.get("/api/smartposter/drive/folders", async (req, res) => {
     try {
-      const state = String(req.query.state || "");
-      const code = String(req.query.code || "");
-      const pending = oauthStates.get(state);
-      oauthStates.delete(state);
-      if (!code || !state || !pending) {
-        res.status(400).send("Drive sign-in failed. Close this tab and try Connect Drive again.");
-        return;
-      }
-      await finishDriveOAuth(code);
-      res.redirect("/smartposter?drive=connected");
+      const q = typeof req.query.q === "string" ? req.query.q : "";
+      const folders = await searchDriveFolders(ownerOf(req, sessionUser), q);
+      res.json({ folders });
     } catch (err) {
-      res
-        .status(500)
-        .send(`Drive sign-in failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  });
-
-  app.post("/api/smartposter/drive/disconnect", (_req, res) => {
-    try {
-      disconnectDrive();
-      res.json({ ok: true, drive: getDriveAuth() });
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
