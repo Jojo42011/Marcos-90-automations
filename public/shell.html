@@ -342,7 +342,7 @@ function initShell(){
    if(TAB_ALIASES[key]) key = TAB_ALIASES[key];
    if(!byKey[key]) return;
    var f = document.getElementById("frame-"+key);
-   if(f && !f.src) f.src = f.getAttribute("data-src");  // lazy-load on first visit
+   if(f && !f.getAttribute("src")) f.src = f.getAttribute("data-src");  // lazy-load on first visit
    TABS.forEach(function(t){
      document.getElementById("frame-"+t.key).classList.toggle("active", t.key===key);
      var ni = nav.querySelector('.nav-item[data-key="'+t.key+'"]'); if(ni) ni.classList.toggle("active", t.key===key);
@@ -350,6 +350,19 @@ function initShell(){
    current = key;
    if(programmatic && key!==home) toast('Opened <b>'+byKey[key].label+'</b>');
  }
+
+ /* Warm the other tabs in the background so CRM / Analytics / Tasks open
+    without a blank→"Loading…" flash on first click. Home stays the only
+    eager src; the rest fill in once the browser is idle. */
+ function warmTabs(){
+   TABS.forEach(function(t){
+     if(t.key===home) return;
+     var f = document.getElementById("frame-"+t.key);
+     if(f && !f.getAttribute("src")) f.src = f.getAttribute("data-src");
+   });
+ }
+ if(typeof requestIdleCallback === "function") requestIdleCallback(warmTabs, {timeout:1800});
+ else setTimeout(warmTabs, 500);
 
 
  /* Collapse → current tab goes full-screen. Persisted. */
