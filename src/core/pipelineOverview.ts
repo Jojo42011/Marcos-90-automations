@@ -1,3 +1,4 @@
+import { hasDmPhoneCapture } from "./dmMetrics.js";
 /**
  * CRM Overview funnels: buyers Views → Close, sellers Call → Close.
  *
@@ -15,7 +16,7 @@
  * Views/Comments are account-level social totals and only appear when the filter
  * is All or includes Marco; Wesley-only must not keep showing Marco's social.
  */
-import { getInboundDmCount, listAllLeads } from "./db.js";
+import { getConversation, getInboundDmCount, listAllLeads } from "./db.js";
 import { getSocialAnalytics } from "./socialAnalytics.js";
 import { listTrackerRecords } from "./trackerStore.js";
 import type { Lead, SellerStage, TrackerRecord } from "./types.js";
@@ -420,7 +421,6 @@ function countBuyerPeopleSteps(
 
   for (const l of buyerLeads) {
     if (getInboundDmCount(l.id) > 0) dms += 1;
-    if (leadHasPhone(l)) numbers += 1;
     const rank = buyerLeadRank(l, trackerByLead);
     if (rank >= 0) ranks.push(rank);
   }
@@ -482,6 +482,10 @@ export async function buildPipelineOverview(opts: {
   const calls = countCalls(leads, filter);
 
   const buyer = countBuyerPeopleSteps(leads, tracker, filter);
+  // Match DM Agent analytics, excluding imported CRM-only phone numbers.
+  const captureFlags = await Promise.all(leads.filter(l => matchesAgentFilter(leadAssignee(l), filter))
+    .map(async l => hasDmPhoneCapture(l, await getConversation(l.id))));
+  buyer.numbers = captureFlags.filter(Boolean).length;
   const seller = countInBuckets(tracker, "seller", SELLER_BUCKETS, SELLER_ORDER);
 
   const buyerStepsRaw: Array<{ key: string; label: string; kind: FunnelStepKind; count: number }> = [];
@@ -492,7 +496,7 @@ export async function buildPipelineOverview(opts: {
     buyerStepsRaw.push({ key: "comments", label: "Comments", kind: "metric", count: social.comments });
   }
   buyerStepsRaw.push({ key: "dms", label: "DMs", kind: "metric", count: buyer.dms });
-  buyerStepsRaw.push({ key: "number", label: "Number", kind: "metric", count: buyer.numbers });
+  buyerStepsRaw.push({ key: "number", label: "Numbers collected", kind: "metric", count: buyer.numbers });
   for (const s of buyer.steps) {
     buyerStepsRaw.push({ key: s.key, label: s.label, kind: "people", count: s.count });
   }
@@ -508,6 +512,7 @@ export async function buildPipelineOverview(opts: {
   const notes: string[] = [];
   if (social.note) notes.push(social.note);
   notes.push(
+    "Numbers collected matches DM Agent analytics: conversations with a non-empty captured phone, filtered by assigned agent when selected.",
     "Buyer funnel: Views → Comments → DMs → Number → Appt set → Appt show → Showing → U/C → Closed (no Call). People steps are cumulative from CRM stages + Tracker.",
   );
   notes.push(

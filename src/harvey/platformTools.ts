@@ -663,7 +663,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_smartposter",
     description:
-      "SmartPoster status for this account — Drive connection, schedule slots, Zernio social targets, and the video queue (draft / ready / scheduled / failed). Use when someone asks what is queued to post, whether Drive is connected, or about SmartPoster / SmartPosting. Read-only; sync and schedule happen in the SmartPoster tab.",
+      "SmartPoster status for this account — Drive connection, schedule slots, Zernio social targets, and the video queue (draft / ready / scheduled / failed). Use when someone asks what is queued to post, whether Drive is connected, or about SmartPoster / SmartPosting. Read-only overview. To import, plan, or explicitly schedule, use crm_api after crm_api_index: POST /api/smartposter/sync imports only; PATCH /api/smartposter/posts/:id accepts title, caption, accountIds, localDate, localTime, timezone; POST /api/smartposter/posts/:id/schedule saves those fields and schedules. Never pick every account by default.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {
@@ -1540,7 +1540,7 @@ export async function executePlatformTool(
           scheduledFor: p.scheduledFor,
           error: p.error,
         })),
-        note: "SmartPoster lives under Growth in the sidebar. Editors drop videos in Drive as YYYY-MM-DD__platform__slug.mp4; sync captions and schedules through Zernio.",
+        note: "SmartPoster lives under Growth in the sidebar. Editors drop finished videos in the selected Drive folder. Morning sync imports new files into an inbox without scheduling. Use SmartPoster to choose day, time, and exact social accounts per video; publishing requires an explicit schedule action. Existing plans survive sync.",
       };
     }
 

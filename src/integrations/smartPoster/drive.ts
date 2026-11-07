@@ -147,14 +147,25 @@ export async function listFolderVideos(
   owner: string,
   folderId: string,
 ): Promise<DriveFileRow[]> {
-  const raw = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FILE", {
-    folderId,
-    q: "trashed = false",
-    pageSize: 100,
-    fields: "files(id,name,mimeType,size,modifiedTime)",
-  });
+  const rows: Array<Record<string, unknown>> = [];
+  const seenTokens = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const raw = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FILE", {
+      folderId, q: "trashed = false", pageSize: 100,
+      fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime)",
+      ...(pageToken ? {pageToken} : {}),
+    });
+    rows.push(...fileRows(raw));
+    const next = asRecord(unwrapData(raw))?.nextPageToken;
+    pageToken = typeof next === "string" && next ? next : undefined;
+    if (pageToken) {
+      if (seenTokens.has(pageToken)) throw new Error("Drive returned a repeated page token. Retry the import.");
+      seenTokens.add(pageToken);
+    }
+  } while (pageToken);
   const out: DriveFileRow[] = [];
-  for (const f of fileRows(raw)) {
+  for (const f of rows) {
     const name = String(f.name || "");
     const mime = String(f.mimeType || "");
     const video =

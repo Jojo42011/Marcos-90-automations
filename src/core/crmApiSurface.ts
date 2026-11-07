@@ -23,6 +23,10 @@
 /** Path prefixes Harvey may call. Order does not matter; any match allows. */
 export const CRM_API_ALLOW: readonly string[] = [
   "/api/deals",
+  "/api/smartposter/posts", // manual plans and explicit scheduling; same validation as UI
+  "/api/smartposter/overview",
+  "/api/smartposter/sync", // imports only; never publishes
+  "/api/smartposter/settings",
   "/api/finance/",
   "/api/tracker/",
   "/api/marco-tasks",

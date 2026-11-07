@@ -1,0 +1,33 @@
+/* Scoped to the CRM calling workspace; shares the CRM theme tokens. */
+#view-followup{background:var(--bg)}
+#view-followup.on{height:auto;min-height:calc(100vh - var(--topbar));overflow:visible}
+#view-followup .dl-top{padding:28px 28px 20px;display:grid;grid-template-columns:1fr auto;gap:20px;border-bottom:0;background:radial-gradient(ellipse at top left,rgba(89,196,196,.12),transparent 70%)}
+#view-followup .dl-title h1{font-size:28px;letter-spacing:-.045em;font-weight:750;margin:8px 0}
+#view-followup .dl-eyebrow{display:block;font-size:10px;letter-spacing:.15em;font-weight:700;color:var(--text-3);margin-bottom:8px}
+#view-followup .dl-queues{align-self:center;flex-wrap:wrap;gap:5px;padding:5px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+#view-followup .dl-queues button{border-radius:8px;padding:10px 12px}
+#view-followup .dl-stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,1fr);margin:0;gap:12px}
+#view-followup .dl-stats div{padding:16px 20px;text-align:left;border-radius:14px;background:var(--card)}
+#view-followup .dl-stats b{font-size:27px;letter-spacing:-.04em;margin-bottom:6px}
+#view-followup .dl-body{padding:0 28px 28px;grid-template-columns:270px minmax(300px,1fr) 240px;gap:18px;overflow:visible;align-items:start}
+#view-followup .dl-queue,#view-followup .dl-side{border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden}
+#view-followup .dl-qhead{padding:18px;display:block}#view-followup #dlQMeta{display:block;margin-top:12px;font-size:11px;color:var(--text-3)}
+#view-followup .dl-qlist{max-height:65vh;padding:8px;overflow:auto}
+#view-followup .dl-qi{font:inherit;width:100%;text-align:left;color:var(--text-1);background:transparent;border:1px solid transparent;border-radius:10px;padding:12px 8px;margin-bottom:4px}
+#view-followup .dl-qi.on{background:rgba(89,196,196,.1);border-color:rgba(89,196,196,.4)}
+#view-followup .dl-stage{padding:0;overflow:visible;background:transparent}
+#view-followup .dl-card{width:100%;max-width:none;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card);box-shadow:0 12px 38px rgba(0,0,0,.04)}
+#view-followup .dl-hero{padding:40px 24px 20px;background:linear-gradient(140deg,rgba(89,196,196,.11),transparent)}
+#view-followup .dl-name{font-size:28px;letter-spacing:-.04em}
+#view-followup .dl-ava{width:64px;height:64px;font-size:23px}
+#view-followup .dl-ctrl{padding-top:16px}#view-followup .dl-ctrlcap{font-size:11px;padding:12px 16px 20px;line-height:1.6}
+#view-followup .dl-facts{padding:18px 24px;background:rgba(89,196,196,.035);gap:16px}
+#view-followup .dl-wrap{padding:24px}#view-followup .dl-lbl{display:block;margin:0 0 12px}
+#view-followup .dl-outs{gap:8px;margin-bottom:20px}#view-followup .dl-outs button{padding:12px;border-radius:10px}
+#view-followup .dl-notes{min-height:100px;border-radius:10px;line-height:1.6}#view-followup .dl-save{gap:12px;margin-top:14px}
+#view-followup .dl-side{padding:16px}#view-followup .dl-log{margin-top:24px}#view-followup .dl-loghead{font-size:12px}
+#view-followup :is(button,a,input,textarea):focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+@media(max-width:1250px){#view-followup .dl-body{grid-template-columns:250px minmax(0,1fr)}#view-followup .dl-side{display:block;grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:20px}#view-followup .dl-top{grid-template-columns:1fr}}
+@media(max-width:760px){#view-followup .dl-top{padding:20px 14px}#view-followup .dl-body{padding:0 14px 24px;grid-template-columns:1fr}#view-followup .dl-stats{grid-template-columns:repeat(3,1fr)}#view-followup .dl-stats div{padding:12px}#view-followup .dl-stats b{font-size:22px}#view-followup .dl-qlist{max-height:240px}#view-followup .dl-side{grid-template-columns:1fr}#view-followup .dl-title h1{font-size:25px}}
+#view-followup .dl-body>*{min-width:0}#view-followup .dl-qhead input{width:100%;min-width:0}
+@media(max-width:760px){#view-followup .dl-body{grid-template-columns:minmax(0,1fr)}#view-followup .dl-outs{grid-template-columns:repeat(2,minmax(0,1fr))}#view-followup .dl-outs button{font-size:11px;padding:10px 8px}#view-followup .dl-outs kbd{display:none}#view-followup .dl-facts{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}#view-followup .dl-wrap{padding:16px}#view-followup .dl-save{flex-wrap:wrap}#view-followup .dl-save .pill-btn{width:100%}}

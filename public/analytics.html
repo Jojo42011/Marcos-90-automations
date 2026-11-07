@@ -181,21 +181,41 @@ function mixBar(mix){
 function safePostURL(url){
   try { var u=new URL(url); return /^https?:$/.test(u.protocol)?u.href:""; } catch(_){ return ""; }
 }
-var POST_SORT="views", POST_QUERY="";
+var POST_SORT="views", POST_QUERY="", GROWTH_GOAL="comments";
 function postLink(post,label,cls){
   var url=safePostURL(post.url);
   return url?'<a class="'+(cls||'top')+'" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>':'<span class="'+(cls||'')+'">'+esc(label)+'</span>';
+}
+function growthCandidates(channels,goal){
+  var found=[];
+  channels.filter(function(c){return c.status==='live';}).forEach(function(c){
+    var eligible=(c.recentPosts||[]).filter(function(p){return p.caption&&p.views>=100&&p[goal]!=null&&(!p.availableMetrics||p.availableMetrics.includes(goal));});
+    if(eligible.length<4)return;
+    eligible.forEach(function(post){
+      var others=eligible.filter(function(x){return x!==post;}).map(function(x){return goal==='views'?x.views:x[goal]/x.views*1000;}).sort(function(a,b){return a-b;});
+      var mid=Math.floor(others.length/2),baseline=others.length%2?others[mid]:(others[mid-1]+others[mid])/2;
+      var score=goal==='views'?post.views:post[goal]/post.views*1000;
+      if(score<=baseline||score===0)return;
+      found.push({post:post,label:c.label,score:score,baseline:baseline,sample:eligible.length,lift:baseline?score/baseline:null});
+    });
+  });
+  return found.sort(function(a,b){return (b.lift||0)-(a.lift||0)||b.score-a.score;}).slice(0,3);
+}
+function growthActions(channels){
+  var goal=GROWTH_GOAL,items=growthCandidates(channels,goal);
+  var labels={comments:'Start conversations',shares:'Earn referrals & shares',saves:'Be worth saving',views:'Reach more people'};
+  var test={comments:'Make a follow-up answering the question in this caption. End with one specific question viewers can answer.',shares:'Create a companion tip for the same audience. Give viewers a useful reason to send it to a friend.',saves:'Turn the topic into a short checklist or step-by-step guide people can revisit.',views:'Test a second opening for the same topic. Keep the format and length similar so the hook is the main change.'};
+  return '<section class="panel growth-lab"><div class="panel-head"><div><div class="eyebrow">Your next move</div><h2>Turn a strong signal into a weekly experiment</h2></div><select id="growthGoal" aria-label="Content growth goal">'+Object.keys(labels).map(function(k){return '<option value="'+k+'"'+(goal===k?' selected':'')+'>'+labels[k]+'</option>';}).join('')+'</select></div><div class="experiment-grid">'+(items.length?items.map(function(x,i){return '<article class="experiment"><span class="eyebrow">Experiment 0'+(i+1)+' · '+esc(x.label)+'</span><h3>'+esc(x.lift?x.lift.toFixed(1)+'× the account median':'Above the account median')+'</h3><p class="sub">'+esc(goal==='views'?full(x.score)+' views':x.score.toFixed(1)+' '+goal+' per 1,000 views')+' · compared with '+(x.sample-1)+' other eligible posts</p><blockquote>'+esc(shortCaption(x.post.caption))+'</blockquote><p>'+esc(test[goal])+'</p><div class="experiment-links">'+postLink(x.post,'Study the original ↗')+'<a class="top" href="/smartposter">Plan the follow-up →</a></div></article>';}).join(''):'<div class="empty">No reliable comparison yet. We need at least four captioned posts with 100+ views on the same account and a reported '+esc(goal)+' metric. Keep publishing and check back.</div>')+'</div><div class="src">Based on the available source sample, not every historical post. Benchmarks compare the same account; posts can have different ages. These are experiments, not proven causes or attributed leads. After seven days, compare the new post’s '+esc(goal==='views'?'views':goal+' per 1,000 views')+' and record what you learned.</div></section>';
 }
 function dashboardBody(p,combined){
   var posts=p.recentPosts||[];
   var html='<section class="hero"><div><div class="eyebrow">Content intelligence / '+esc(combined?'All channels':p.label)+'</div><h2>Find what moves your audience.</h2><p>See what earns attention, learn from your strongest posts, and bring that insight into your next piece of content.</p></div><div class="hero-mark" aria-hidden="true">↗</div></section>';
   if(combined){
-    html+='<div class="banner info"><b>Reporting: '+esc((p.included||[]).join(', ')||'No platforms yet')+'.</b> Totals reflect the available source data, not a selected date range.'+
-      ((p.excluded||[]).length?' Not included: '+esc(p.excluded.map(function(x){return x.label+' ('+x.reason+')';}).join('; '))+'.':'')+'</div>';
     html+=DATA.platforms.filter(function(x){return x.status==='live';}).map(statusBanner).join('');
   }else html+=statusBanner(p);
   if((combined&&!(p.included||[]).length)||(!combined&&p.status!=='live')) return html+'<div class="panel empty"><div class="big">Your next insight starts with connected data.</div>'+esc(p.note||'Connect a social account to begin seeing performance here.')+'</div>';
   html+='<div class="cards">'+card('Audience',p.followers,'Reported followers across selected channels')+card('Content views',p.views,'Reported views · not unique people')+card('Engagement',p.engagementRate,'Interactions as a share of views','%')+card('Average views',p.avgViews,'Per post in the source data')+'</div>';
+  html+=growthActions(combined?DATA.platforms:[p]);
   var ranked=posts.filter(function(x){return x.views!=null;}).slice().sort(function(a,b){return b.views-a.views;}).slice(0,7);
   var max=Math.max.apply(null,[1].concat(ranked.map(function(x){return x.views;})));
   html+='<div class="analytics-grid"><section class="panel"><div class="panel-head"><div><div class="eyebrow">The content signal</div><h2>What earns attention</h2><div class="sub">Most-viewed recent posts · limited to available data</div></div><span class="sub">'+posts.length+' posts available</span></div>';
@@ -218,7 +238,7 @@ function postRows(p){
     return (b[POST_SORT]==null?-1:b[POST_SORT])-(a[POST_SORT]==null?-1:a[POST_SORT]);
   });
   if(!posts.length)return '<div class="empty">'+(POST_QUERY?'No captions match your search.':'No recent posts have been reported yet.')+'</div>';
-  return '<div class="table-scroll"><table class="post-table"><thead><tr><th scope="col">Content</th><th scope="col">Views</th><th scope="col">Likes</th><th scope="col">Comments</th><th scope="col">Shares</th><th scope="col">Saves</th></tr></thead><tbody>'+posts.map(function(x,i){return '<tr><td><div class="rank">'+String(i+1).padStart(2,'0')+' · '+esc(x.platform||p.label)+(x.publishedAt?' · '+esc(new Date(x.publishedAt).toLocaleDateString()):'')+'</div>'+postLink(x,shortCaption(x.caption)||'Untitled post','post-title')+'</td>'+['views','likes','comments','shares','saves'].map(function(k){return '<td>'+full(x[k])+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+  return '<div class="table-scroll"><table class="post-table"><thead><tr><th scope="col">Content</th><th scope="col">Views</th><th scope="col">Likes</th><th scope="col">Comments</th><th scope="col">Shares</th><th scope="col">Saves</th></tr></thead><tbody>'+posts.map(function(x,i){return '<tr><td><div class="rank">'+String(i+1).padStart(2,'0')+' · '+esc(x.accountLabel||x.platform||p.label)+(x.publishedAt?' · '+esc(new Date(x.publishedAt).toLocaleDateString()):'')+'</div>'+postLink(x,shortCaption(x.caption)||'Caption unavailable — open original post','post-title')+'</td>'+['views','likes','comments','shares','saves'].map(function(k){return '<td>'+full(x[k])+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
 }
 function metricsBody(p){return dashboardBody(p,false);}
 function combinedBody(p){return dashboardBody(p,true);}
@@ -268,7 +288,7 @@ function render(){
 
 document.getElementById("view").addEventListener("click",function(e){var b=e.target.closest("[data-channel]");if(b){CURRENT=b.dataset.channel;render();}});
 document.getElementById("view").addEventListener("input",function(e){if(e.target.id!=="postSearch")return;POST_QUERY=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
-document.getElementById("view").addEventListener("change",function(e){if(e.target.id!=="postSort")return;POST_SORT=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
+document.getElementById("view").addEventListener("change",function(e){if(e.target.id==="growthGoal"){GROWTH_GOAL=e.target.value;render();return;}if(e.target.id!=="postSort")return;POST_SORT=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
 async function load(){
   var btn = document.getElementById("refresh");
   btn.disabled = true; btn.textContent = "Loading…";

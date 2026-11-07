@@ -1410,6 +1410,7 @@
   [data-theme="dark"] .me .av{background:var(--surface-2);color:var(--text-2)}
   [data-theme="dark"] #brvBanner>div{border-color:var(--warn-line)!important}
 </style>
+<link rel="stylesheet" href="/growth-dialer.css">
 
 <header class="topbar">
   <div class="brand">
@@ -1633,7 +1634,7 @@
        From-line chips are this account's Quo numbers (same list Messages uses). Mojo expired is Mojo + Expired/Canceled tags. -->
   <section class="view" id="view-followup">
     <div class="dl-top">
-      <div class="dl-title"><h1>Dialer</h1><span class="dl-sub" id="dlSub">Power dialing through Quo · <span id="fuCount">0</span> in queue</span></div>
+      <div class="dl-title"><div class="dl-eyebrow">CONVERSATIONS → RELATIONSHIPS</div><h1>Make the next call count.</h1><span class="dl-sub" id="dlSub">Open your phone app · <span id="fuCount">0</span> in queue</span></div>
       <div class="dl-queues" id="dlQueues">
         <button data-dq="due" class="on">Due today</button>
         <button data-dq="mojo">Mojo expired</button>
@@ -1642,16 +1643,16 @@
         <button data-dq="all">Everyone</button>
       </div>
       <div class="dl-stats">
-        <div><b id="dlDials">0</b><span>Dials</span></div>
+        <div><b id="dlDials">0</b><span>Outcomes logged</span></div>
         <div><b id="dlTalked">0</b><span>Talked</span></div>
         <div><b id="dlVm">0</b><span>Voicemail</span></div>
-        <div><b id="dlRate">0%</b><span>Connect</span></div>
-        <div><b id="dlTalk">0:00</b><span>Talk time</span></div>
+        <div><b id="dlRate">0%</b><span>Reached</span></div>
+        <div><b id="dlTalk">0:00</b><span>Time tracked</span></div>
       </div>
     </div>
     <div class="dl-body">
       <aside class="dl-queue">
-        <div class="dl-qhead"><input id="dlSearch" placeholder="Search queue…" autocomplete="off"><span id="dlQMeta"></span></div>
+        <div class="dl-qhead"><label class="dl-eyebrow" for="dlSearch">YOUR CALL QUEUE</label><input id="dlSearch" placeholder="Search queue…" autocomplete="off"><span id="dlQMeta"></span></div>
         <div class="dl-addq">
           <button type="button" class="pill-btn" id="dlAddLeadBtn">+ Add lead</button>
           <button type="button" class="pill-btn ghost" id="dlMojoHint" title="Mojo has no bulk API — expired contacts land via webhook/import or Add lead">Mojo tips</button>
@@ -1673,11 +1674,11 @@
         </div>
         <div class="dl-qlist" id="fuList"></div>
       </aside>
-      <main class="dl-stage" id="dlStage"></main>
+      <main aria-label="Current contact and call outcome" class="dl-stage" id="dlStage"></main>
       <aside class="dl-side">
         <div class="dl-from quo-line-bar" id="dlFromBar" style="display:none" aria-label="Call from Quo line"></div>
         <div class="dl-pad">
-          <div class="dl-padnum"><input id="dlPadNum" placeholder="Enter a number" inputmode="tel" autocomplete="off"><button id="dlPadDel" aria-label="Delete digit">⌫</button></div>
+          <div class="dl-padnum"><input id="dlPadNum" aria-label="Phone number" placeholder="Enter a number" inputmode="tel" autocomplete="off"><button id="dlPadDel" aria-label="Delete digit">⌫</button></div>
           <div class="dl-keys" id="dlKeys"></div>
           <a class="dl-padcall" id="dlPadCall" href="#">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z"/></svg>Call</a>
@@ -1686,7 +1687,7 @@
           <div class="dl-loghead">This session<button id="dlReset" title="Clear this session's stats">Reset</button></div>
           <div id="dlLog"></div>
         </div>
-        <div class="dl-keyhelp"><b>Keys</b> Enter call · E end · 1–6 outcome · N next · S skip</div>
+        <div class="dl-keyhelp"><b>Keys</b> Enter opens phone app · E stops timer · 1–6 outcome · N next · S skip</div>
       </aside>
     </div>
   </section>
@@ -11260,7 +11261,7 @@ function paintDialFromBar(){
   }
   bar.style.display="flex";
   var active=quoActiveId();
-  bar.innerHTML='<span class="quo-line-lbl">From</span>'+QUO.numbers.map(function(n){
+  bar.innerHTML='<span class="quo-line-lbl">Log to</span>'+QUO.numbers.map(function(n){
     var on=n.id===active?" on":"";
     return '<button type="button" class="quo-line-chip'+on+'" data-dlqid="'+esc(n.id)+'">'+esc(quoLineLabel(n))+'</button>';
   }).join("");
@@ -11278,10 +11279,10 @@ function dialPaintSub(){
   var sub=document.getElementById("dlSub");
   if(!sub) return;
   var line=dialFromLine();
-  var from=line?(" · From "+quoLineLabel(line)):"";
+  var from=line?(" · Log to "+quoLineLabel(line)):"";
   var n=document.getElementById("fuCount");
   var count=n?n.textContent:"0";
-  sub.innerHTML=(QUO.configured?"Power dialing through Quo":"Device dialer")+esc(from)+' · <span id="fuCount">'+esc(count)+'</span> in queue';
+  sub.innerHTML="Opens your phone app"+esc(from)+' · <span id="fuCount">'+esc(count)+'</span> in queue';
 }
 function dialQueueRows(){
   var q=DIAL.queue, rows=(LEADS||[]).filter(function(l){ return l.phone&&String(l.phone).trim(); });
@@ -11310,20 +11311,20 @@ function renderFollowUp(){
   var count=document.getElementById("fuCount"); if(count)count.textContent=String(pend);
   dialPaintSub();
   count=document.getElementById("fuCount"); if(count)count.textContent=String(pend);
-  var meta=document.getElementById("dlQMeta"); if(meta)meta.textContent=(rows.length-pend)+"/"+rows.length+" done";
+  var meta=document.getElementById("dlQMeta"); if(meta)meta.textContent=Object.keys(DIAL.session.done).filter(function(id){return rows.some(function(l){return l.id===id;});}).length+" logged · "+pend+" remaining";
   el.innerHTML=rows.length?rows.map(function(l,i){
     var done=DIAL.session.done[l.id], oc=done?(DIAL_OUTCOMES.find(function(x){return x.o===done;})||{}).c:"";
-    return '<div class="dl-qi'+(cur&&l.id===cur.id?" on":"")+(done||DIAL.skipped[l.id]?" done":"")+(dialDnc(l)?" dnc":"")+'" data-dlid="'+esc(l.id)+'">'+
+    return '<button type="button" class="dl-qi'+(cur&&l.id===cur.id?" on":"")+(done||DIAL.skipped[l.id]?" done":"")+(dialDnc(l)?" dnc":"")+'" data-dlid="'+esc(l.id)+'">'+
       '<span class="n">'+(i+1)+'</span>'+
       '<span class="av" style="background:'+dialHue(l.name)+'">'+esc(initials(l.name))+'</span>'+
       '<span class="t"><b>'+esc(l.name)+'</b><span>'+(dialDnc(l)?"Do not call":esc(fmtPhone(l.phone)))+'</span></span>'+
       (done?'<span class="dl-dot '+oc+'" title="'+esc(done)+'"></span>':DIAL.skipped[l.id]?'<span class="dl-dot" title="Skipped"></span>':'')+
-    '</div>';
+    '</button>';
   }).join(""):'<div class="dl-hint" style="padding:18px 10px;text-align:center">No callable leads in this queue.</div>';
   dialStats(); dialRenderStage(cur,rows); dialRenderLog();
 }
 function dialStats(){
-  var log=DIAL.session.log, talked=log.filter(function(x){return x.o==="Talked";}).length,
+  var log=DIAL.session.log, talked=log.filter(function(x){return x.o==="Talked"||x.o==="Appointment Set";}).length,
       vm=log.filter(function(x){return x.o==="Left Message";}).length, talk=log.reduce(function(a,x){return a+(x.d||0);},0);
   var set=function(id,v){ var n=document.getElementById(id); if(n)n.textContent=v; };
   set("dlDials",log.length); set("dlTalked",talked); set("dlVm",vm);
@@ -11347,7 +11348,7 @@ function dialRenderStage(l,rows){
         ?'No Mojo expired listings with a phone in this account yet. Import/webhook Mojo contacts tagged Expired, or + Add lead and tag them Expired.'
         :'No leads with a phone number match this queue. Use + Add lead to put someone in the dialer and Tracker.';
     st.innerHTML='<div class="dl-empty"><div class="ic">'+DIAL_PHONE_SVG+'</div><b>'+(rows.length?"Queue complete":"Nothing to dial")+'</b>'+
-      (rows.length?'Every lead in this queue has been called or skipped. Pick another queue, or <a href="#" id="dlRequeue">bring back skipped leads</a>.'
+      (rows.length?'Every lead in this queue has a logged outcome or was skipped. Pick another queue, or <a href="#" id="dlRequeue">bring back skipped leads</a>.'
         :emptyHint)+'</div>';
     var rq=document.getElementById("dlRequeue"); if(rq)rq.onclick=function(e){ e.preventDefault(); DIAL.skipped={}; renderFollowUp(); };
     return;
@@ -11362,16 +11363,16 @@ function dialRenderStage(l,rows){
         '<span class="dl-tag">'+esc(l.statusDisp||"lead")+'</span><span class="dl-tag">'+esc(l.stageLabel||"")+'</span>'+
         (l.source?'<span class="dl-tag">'+esc(l.source)+'</span>':'')+'</div></div>'+
     '<div class="dl-ctrl"><button class="dl-round" id="dlPrev" title="Previous">PREV</button>'+
-      (live?'<button class="dl-call end" id="dlEnd" title="End call (E)">'+DIAL_PHONE_SVG+'</button>'
-           :'<a class="dl-call'+(dnc?" off":"")+'" id="dlCall" href="'+(dnc?"#":dialTel(l.phone))+'" title="Call (Enter)">'+DIAL_PHONE_SVG+'</a>')+
+      (live?'<button class="dl-call end" id="dlEnd" aria-label="Stop call timer" title="Stop timer (E)">'+DIAL_PHONE_SVG+'</button>'
+           :'<a class="dl-call'+(dnc?" off":"")+'" id="dlCall" href="'+(dnc?"#":dialTel(l.phone))+'" aria-label="Open phone app to call" title="Open phone app (Enter)">'+DIAL_PHONE_SVG+'</a>')+
       '<button class="dl-round" id="dlSkip" title="Skip (S)">SKIP</button></div>'+
-    '<div class="dl-ctrlcap" id="dlCap">'+(live?'<b>● On call</b> · <span id="dlTimer">'+dialDur(Date.now()-DIAL.callStart)+'</span>'
-      :dnc?'This number is marked Do Not Call':DIAL.lastDur?'Last call '+dialDur(DIAL.lastDur)+' · log the outcome below':'Press Enter or tap to call')+'</div>'+
+    '<div class="dl-ctrlcap" id="dlCap">'+(live?'<b>● Timer running</b> · <span id="dlTimer">'+dialDur(Date.now()-DIAL.callStart)+'</span>'
+      :dnc?'This number is marked Do Not Call':DIAL.lastDur?'Last call '+dialDur(DIAL.lastDur)+' · log the outcome below':'Open your phone app to call · timer is manually tracked')+'</div>'+
     '<div class="dl-facts">'+fact("Last touch",relTime(l.lastActivity))+fact("Intent",l.intent)+fact("Email",l.email)+
       fact("Address",l.address)+fact("Assigned",l.assignedUserName)+fact("Created",l.createdAt?new Date(l.createdAt).toLocaleDateString():"")+'</div>'+
     '<div class="dl-wrap"><div class="dl-lbl">Call outcome</div><div class="dl-outs" id="dlOuts">'+
       DIAL_OUTCOMES.map(function(x,i){ return '<button data-dlo="'+esc(x.o)+'"'+(DIAL.outcome===x.o?' class="on"':'')+'><span class="dl-dot '+x.c+'"></span>'+esc(x.o)+'<kbd>'+(i+1)+'</kbd></button>'; }).join("")+'</div>'+
-      '<textarea class="dl-notes" id="dlNotes" placeholder="Notes from the call…">'+esc(DIAL.notes)+'</textarea>'+
+      '<label class="dl-lbl" for="dlNotes">What did you learn? What happens next?</label><textarea class="dl-notes" id="dlNotes" placeholder="Motivation, timeline, and the next step you agreed on…">'+esc(DIAL.notes)+'</textarea>'+
       '<div class="dl-save"><span class="dl-hint">Saved to '+esc(String(l.name).split(" ")[0])+'\'s activity feed as a call.</span>'+
       '<button class="pill-btn" id="dlSave"'+(DIAL.outcome?"":" disabled")+'>SAVE &amp; NEXT</button></div></div>'+
   '</div>';
@@ -11521,6 +11522,7 @@ function dialBind(){
     if(e.metaKey||e.ctrlKey||e.altKey||/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||""))return;
     if(document.querySelector(".crm-modal.on,.oa-modal.on,dialog[open],#dlAddForm.on"))return;
     var k=e.key.toLowerCase();
+    if(k==="enter" && /^(BUTTON|A)$/.test((e.target||{}).tagName||""))return;
     if(k==="enter"){ var c=document.getElementById("dlCall"); if(c&&!c.classList.contains("off")){ e.preventDefault(); c.click(); } else if(DIAL.outcome){ e.preventDefault(); dialSave(); } }
     else if(k==="e"){ e.preventDefault(); dialEndCall(); }
     else if(/^[1-6]$/.test(k)){ e.preventDefault(); dialPick(DIAL_OUTCOMES[+k-1].o); }

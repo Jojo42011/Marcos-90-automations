@@ -1,19 +1,20 @@
+import { planPatch, requireFutureSchedule, selectedTargets } from "../../core/smartPosterPlanning.js";
 /**
- * SmartPoster daily Drive pull → caption → slot → Zernio schedule.
+ * SmartPoster daily Drive pull → review inbox → explicit per-account Zernio schedule.
  */
 import { tenantOwner } from "../../core/tenantData.js";
 import {
   findByDriveFileId,
+  getPost,
   getSettings,
   listPosts,
   localDateISO,
-  nextOpenSlot,
   saveSettings,
   upsertPost,
   type SmartPosterPost,
 } from "../../core/smartPosterStore.js";
-import { listZernioAccounts, type ZernioAccountRef } from "../zernio/index.js";
-import { createZernioPost, uploadBufferToZernio } from "../zernio/posts.js";
+import { listZernioAccounts } from "../zernio/index.js";
+import { createZernioPost, updateZernioPost, uploadBufferToZernio } from "../zernio/posts.js";
 import { draftCaption, parseVideoFileName } from "./captions.js";
 import {
   downloadDriveFile,
@@ -38,28 +39,52 @@ export interface SyncResult {
   posts: SmartPosterPost[];
 }
 
-function resolveAccounts(
-  platforms: string[],
-  accounts: ZernioAccountRef[],
-): { platforms: string[]; accountIds: string[]; targets: Array<{ platform: string; accountId: string }> } {
-  const active = accounts.filter((a) => a.active);
-  const wantAll = platforms.includes("all") || !platforms.length;
-  const want = wantAll
-    ? active
-    : active.filter((a) => platforms.includes(a.platform));
-  const targets = want.map((a) => ({ platform: a.platform, accountId: a.id }));
-  return {
-    platforms: [...new Set(targets.map((t) => t.platform))],
-    accountIds: targets.map((t) => t.accountId),
-    targets,
-  };
+const publishing = new Set<string>();
+export function isPostBusy(id: string): boolean { return publishing.has(id); }
+
+export async function updateSmartPosterPost(id: string, body: Record<string, unknown>, publish = false, owner = smartPosterOwner()): Promise<SmartPosterPost> {
+  if (publishing.has(id)) throw new Error("This post is already being saved. Wait for it to finish.");
+  publishing.add(id);
+  try {
+    const current = getPost(id);
+    if (!current) throw new Error("Post not found");
+    const next = planPatch(current, body);
+    if (body.accountIds !== undefined || publish || current.zernioPostId) {
+      const accounts = await listZernioAccounts();
+      if (!accounts.ok) throw new Error(accounts.error || "Could not check social accounts");
+      if (publish) { requireFutureSchedule(next); selectedTargets(next.accountIds, accounts.accounts); }
+      if (next.accountIds.length) next.platforms = [...new Set(selectedTargets(next.accountIds, accounts.accounts).map(a => a.platform))];
+      else next.platforms = [];
+    }
+    if (current.zernioPostId || current.status === "scheduled") {
+      if (!current.zernioPostId) throw new Error("This scheduled post has no provider ID. Check it in Zernio before editing.");
+      requireFutureSchedule(next);
+      const accounts = await listZernioAccounts();
+      if (!accounts.ok) throw new Error(accounts.error || "Could not check social accounts");
+      const targets = selectedTargets(next.accountIds, accounts.accounts);
+      const result = await updateZernioPost(current.zernioPostId, {
+        content: next.caption || next.title, scheduledFor: next.scheduledFor!, timezone: "UTC",
+        platforms: targets.map(t => ({...t, ...(t.platform === "youtube" ? {platformSpecificData:{title:next.title.slice(0,100),visibility:"public"}} : {})})),
+      });
+      if (!result.ok) throw new Error(result.error || "Zernio could not update this schedule; your existing schedule is unchanged locally.");
+      return upsertPost({...next, status:"scheduled", error:null});
+    }
+    const saved = upsertPost(next);
+    return publish ? await publishPost(saved, owner) : saved;
+  } finally { publishing.delete(id); }
 }
 
-export async function schedulePostToZernio(
+export async function schedulePostToZernio(post: SmartPosterPost, owner = smartPosterOwner()): Promise<SmartPosterPost> {
+  // Re-read and serialize: double-clicks cannot upload/publish the same draft twice.
+  if (post.zernioPostId || post.status === "scheduled" || post.status === "published") return post;
+  return updateSmartPosterPost(post.id, {}, true, owner);
+}
+
+async function publishPost(
   post: SmartPosterPost,
   owner = smartPosterOwner(),
 ): Promise<SmartPosterPost> {
-  const settings = getSettings();
+  requireFutureSchedule(post);
   if (!post.driveFileId) {
     return upsertPost({
       ...post,
@@ -83,7 +108,8 @@ export async function schedulePostToZernio(
       error: accounts.error || "Could not list Zernio accounts",
     });
   }
-  const resolved = resolveAccounts(post.platforms, accounts.accounts);
+  const targets = selectedTargets(post.accountIds, accounts.accounts);
+  const resolved = {targets, accountIds:targets.map(t => t.accountId), platforms:[...new Set(targets.map(t => t.platform))]};
   if (!resolved.targets.length) {
     return upsertPost({
       ...post,
@@ -118,28 +144,13 @@ export async function schedulePostToZernio(
       return entry;
     });
 
-    /* Zernio reads scheduledFor in `timezone` — pass wall-clock local, not UTC. */
-    const tz = post.timezone || settings.timezone;
-    const wall = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(new Date(post.scheduledFor));
-    const part = (t: string) => wall.find((p) => p.type === t)?.value || "00";
-    const scheduledLocal = `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}:${part("second")}`;
-
     const created = await createZernioPost({
       content: post.caption || post.title || post.fileName,
       mediaUrl: uploaded.publicUrl,
       mediaType: "video",
       platforms,
-      scheduledFor: scheduledLocal,
-      timezone: tz,
+      scheduledFor: post.scheduledFor,
+      timezone: "UTC",
       title: post.title || undefined,
     });
 
@@ -162,7 +173,7 @@ export async function schedulePostToZernio(
       status: "scheduled",
       zernioPostId: created.postId || null,
       platformPostUrl: created.platformPostUrl || null,
-      error: null,
+      error: created.postId ? null : "Zernio accepted the schedule without a post ID. Check Zernio before making further changes.",
     });
   } catch (err) {
     return upsertPost({
@@ -173,7 +184,7 @@ export async function schedulePostToZernio(
   }
 }
 
-export async function runSmartPosterSync(opts?: {
+async function syncInbox(opts?: {
   date?: string;
   forceSchedule?: boolean;
   owner?: string;
@@ -181,7 +192,6 @@ export async function runSmartPosterSync(opts?: {
   const owner = smartPosterOwner(opts?.owner);
   const settings = getSettings();
   const drive = await getComposioDriveStatus(owner);
-  const today = opts?.date || localDateISO(settings.timezone);
 
   if (!drive.connected) {
     const note = "Connect Google Drive in SmartPoster settings (Composio) first.";
@@ -214,31 +224,11 @@ export async function runSmartPosterSync(opts?: {
     const files = await listFolderVideos(owner, folder.id);
     scanned = files.length;
 
-    const accounts = await listZernioAccounts();
-    const zAccounts = accounts.ok ? accounts.accounts : [];
-
-    const occupied = listPosts()
-      .filter((p) => p.scheduledFor && ["ready", "scheduled", "published"].includes(p.status))
-      .map((p) => p.scheduledFor!) ;
-
     for (const file of files) {
       const parsed = parseVideoFileName(file.name);
-      const targetDate = parsed.targetDate || today;
-      /* Only auto-ingest today's dated files (or undated → today). Future dates wait. */
-      if (parsed.targetDate && parsed.targetDate !== today && !opts?.date) {
-        skipped += 1;
-        continue;
-      }
-      if (opts?.date && parsed.targetDate && parsed.targetDate !== opts.date) {
-        skipped += 1;
-        continue;
-      }
-
+      // A finished-video folder is an inbox, not a date filter. Never overwrite an editor's plan.
       const existing = findByDriveFileId(file.id);
-      if (existing && ["scheduled", "published"].includes(existing.status)) {
-        skipped += 1;
-        continue;
-      }
+      if (existing) { skipped += 1; continue; }
 
       const stem = file.name.replace(/\.[^.]+$/, "");
       const sidecar = await readSidecarJson(owner, folder.id, stem).catch(() => null);
@@ -258,38 +248,18 @@ export async function runSmartPosterSync(opts?: {
         platforms,
         sidecarCaption,
       });
-      const resolved = resolveAccounts(platforms, zAccounts);
-      const slot =
-        existing?.scheduledFor
-        || nextOpenSlot(targetDate, occupied, settings.slots, settings.timezone);
-      if (slot) occupied.push(slot);
-
-      let post = upsertPost({
-        id: existing?.id,
-        driveFileId: file.id,
-        fileName: file.name,
-        title: sidecarTitle || parsed.slug || file.name,
-        caption,
-        platforms: resolved.platforms.length ? resolved.platforms : platforms,
-        accountIds: resolved.accountIds,
-        status: settings.autoSchedule || opts?.forceSchedule ? "ready" : "draft",
-        targetDate,
-        scheduledFor: slot,
-        timezone: settings.timezone,
-        error: null,
+      const post = upsertPost({
+        driveFileId: file.id, fileName: file.name,
+        title: sidecarTitle || parsed.slug || file.name, caption,
+        platforms: [], accountIds: [], status: "inbox", targetDate: null, scheduledFor: null,
+        timezone: settings.timezone, error: null,
       });
-      if (!existing) created += 1;
-
-      if ((settings.autoSchedule || opts?.forceSchedule) && post.scheduledFor) {
-        post = await schedulePostToZernio(post, owner);
-        if (post.status === "scheduled") scheduled += 1;
-        else if (post.status === "failed") failed += 1;
-      }
+      created += 1;
       touched.push(post);
     }
 
     const note =
-      `Synced ${scanned} video(s) for ${today}: ${created} new, ${scheduled} scheduled, `
+      `Checked ${scanned} finished video(s): ${created} added to inbox, ${scheduled} scheduled, `
       + `${skipped} skipped, ${failed} failed.`;
     saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: failed === 0, scanned, created, scheduled, skipped, failed, note, posts: touched };
@@ -298,6 +268,13 @@ export async function runSmartPosterSync(opts?: {
     saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: false, scanned, created, scheduled, skipped, failed: failed + 1, note, posts: touched };
   }
+}
+
+let syncInFlight: Promise<SyncResult> | null = null;
+export function runSmartPosterSync(opts?: {date?:string;forceSchedule?:boolean;owner?:string}): Promise<SyncResult> {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = syncInbox(opts).finally(() => { syncInFlight = null; });
+  return syncInFlight;
 }
 
 /** Tick used by the server interval — runs once in the ingest hour window. */
@@ -317,7 +294,8 @@ export async function maybeAutoSync(): Promise<void> {
       hourCycle: "h23",
     }).format(now),
   );
-  if (hour !== settings.ingestHour) return;
+  if (hour < settings.ingestHour) return;
+  if (settings.lastSyncAt && localDateISO(settings.timezone, new Date(settings.lastSyncAt)) === today) return;
   if (lastAutoDate === today) return;
   lastAutoDate = today;
   await runSmartPosterSync({ date: today, owner });
@@ -327,7 +305,7 @@ export async function getSmartPosterOverview(owner = smartPosterOwner()) {
   const settings = getSettings();
   const drive = await getComposioDriveStatus(owner);
   const accounts = await listZernioAccounts();
-  const posts = listPosts({ limit: 300 });
+  const posts = listPosts({ limit: 0 });
   const today = localDateISO(settings.timezone);
   return {
     settings: {

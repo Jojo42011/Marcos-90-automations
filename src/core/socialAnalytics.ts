@@ -40,7 +40,11 @@ export interface PlatformMetrics {
   topPost: { url: string | null; caption: string | null; views: number | null } | null;
   mix: { viral: number; hot: number; average: number; cold: number } | null;
   recentPosts: Array<{
+    availableMetrics?: string[];
     id: string;
+    accountId: string;
+    accountLabel: string;
+    platform: string;
     url: string | null;
     caption: string | null;
     publishedAt: string | null;
@@ -181,8 +185,12 @@ function fromFetch(
     engagementRate: engagement(st.likes, st.comments, st.shares, st.views),
     topPost: st.topPost,
     mix: mixFromPosts(st.postsDetail),
-    recentPosts: st.postsDetail.slice(0, 25).map((p) => ({
+    recentPosts: st.postsDetail.map((p) => ({
+      availableMetrics: p.availableMetrics,
       id: p.id,
+      accountId: account.id,
+      accountLabel: label,
+      platform: account.platform,
       url: p.url,
       caption: p.caption,
       publishedAt: p.publishedAt,
@@ -254,7 +262,7 @@ function combine(platforms: PlatformMetrics[]): CombinedMetrics {
     included: live.map((p) => p.label),
     excluded,
     topPost: top,
-    recentPosts: live.flatMap((p) => p.recentPosts).sort((a, b) => b.views - a.views).slice(0, 25),
+    recentPosts: live.flatMap((p) => p.recentPosts).sort((a, b) => b.views - a.views),
   };
 }
 

@@ -1,3 +1,4 @@
+import { hasDmPhoneCapture } from "./core/dmMetrics.js";
 import { accountBridgeUser } from "./core/accountBridge.js";
 import { canViewWorkspace } from "./core/workspaceAccess.js";
 import { dataPath } from "./core/tenantData.js";
@@ -8808,7 +8809,7 @@ app.get("/api/dm/stats", async (req, res) => {
       }
       if (touchedToday) activeToday++;
       if (String(lead.createdAt || "").slice(0, 10) === today) newLeadsToday++;
-      if (lead.phone?.trim()) phonesCaptured++;
+      if (hasDmPhoneCapture(lead, conv)) phonesCaptured++;
       if (String(lead.state) === "flag_for_call") flaggedForCall++;
       if (lead.automationPaused) paused++;
     }

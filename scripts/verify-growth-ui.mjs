@@ -49,7 +49,7 @@ assert.equal(error,'Try again');assert.equal(button.disabled,false);
 
 // Scheduling from the drawer must save the current form before sending the post.
 const elements=new Map();
-smart.document={getElementById:id=>{
+smart.document={querySelectorAll:()=>[{value:"a"}],getElementById:id=>{
   if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',checkValidity:()=>true,classList:{contains:()=>true}});
   return elements.get(id);
 }};
@@ -60,14 +60,34 @@ smart.openPostDrawer('draft-1');
 elements.get('savePost');
 smart.document.getElementById('editCaption').value='Edited before scheduling';
 smart.document.getElementById('editTitle').value='New title';
-smart.document.getElementById('editWhen').value=smart.localInputTime('2026-11-07T16:00:00Z');
+smart.document.getElementById('editDate').value='2026-11-09';
+smart.document.getElementById('editTime').value='10:00';
 await elements.get('schedPost').onclick();
-assert.equal(requests.length,2);
-assert.equal(requests[0].method,'PATCH');
+assert.equal(requests.length,1);
+assert.equal(requests[0].method,'POST');
 assert.equal(requests[0].body.caption,'Edited before scheduling');
-assert.equal(requests[0].body.scheduledFor,'2026-11-07T16:00:00.000Z');
-assert.equal(requests[1].method,'POST');
-assert.match(requests[1].path,/draft-1\/schedule$/);
+assert.equal(requests[0].body.localDate,'2026-11-09');
+assert.equal(requests[0].body.localTime,'10:00');
+assert.equal(requests[0].body.accountIds.join(','),'a');
+assert.match(requests[0].path,/draft-1\/schedule$/);
+
+// A drop opens the date/time review; it never publishes automatically.
+const dragHandlers={},dayHandlers={};
+const dragCard={dataset:{id:'draft-1'},classList:{add(){},remove(){}},addEventListener:(k,v)=>dragHandlers[k]=v};
+const day={dataset:{day:'2026-11-12'},classList:{add(){},remove(){}},contains:()=>false,addEventListener:(k,v)=>dayHandlers[k]=v};
+const fakeView={innerHTML:'',querySelectorAll:selector=>selector==='[draggable="true"]'?[dragCard]:selector==='[data-day]'?[day]:[]};
+smart.document={getElementById:id=>id==='view'?fakeView:id==='sub'?{}:null,querySelectorAll:()=>[]};
+smart.renderBanner=smart.renderSummary=smart.renderProfiles=()=>{};smart.renderCalendar=()=>'';
+smart.VIEW='calendar';let dropped=null;smart.openPostDrawer=(id,date)=>dropped={id,date};
+smart.render();
+let payload;const transfer={setData:(_,value)=>payload=value,getData:()=>payload};
+dragHandlers.dragstart({dataTransfer:transfer});dayHandlers.drop({preventDefault(){},dataTransfer:transfer});
+assert.deepEqual(dropped,{id:'draft-1',date:'2026-11-12'});
+assert.equal(requests.length,1,'Dropping must not send a publish request');
+const sample=[{status:'live',label:'Account A',recentPosts:[1,2,3,9].map((n,i)=>({id:i,caption:'Caption',views:1000,comments:n}))}];
+assert.equal(analytics.growthCandidates(sample,'comments')[0].score,9);
+assert.equal(analytics.growthCandidates(sample,'comments')[0].baseline,2);
+assert.equal(analytics.growthCandidates([{...sample[0],recentPosts:sample[0].recentPosts.slice(0,3)}],'comments').length,0);
 
 // A slower response for a previous agent filter must never overwrite the latest filter.
 const crmSource=read('crm-brivity');

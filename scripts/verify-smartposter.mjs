@@ -62,7 +62,7 @@ check("settings persist slots and autoSchedule", () => {
   });
   assert.equal(s.driveFolderId, "folder123");
   assert.deepEqual(s.slots, ["10:00", "14:00"]);
-  assert.equal(store.getSettings().autoSchedule, true);
+  assert.equal(store.getSettings().autoSchedule, false);
 });
 
 check("shell Growth tab includes SmartPoster under analytics", () => {
@@ -101,6 +101,7 @@ check("Harvey get_smartposter ships with the surface", () => {
   assert(/get_smartposter/.test(read("src/harvey/work/capabilities.ts")));
 });
 
+store.getSmartPosterDb().close();
 rmSync(root, { recursive: true, force: true });
 
 console.log(`${passed} passed, ${failed} failed`);

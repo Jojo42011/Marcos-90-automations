@@ -126,7 +126,7 @@ function defaultSettings(): SmartPosterSettings {
     driveFolderName: "SmartPoster",
     timezone: "America/Chicago",
     slots: [...DEFAULT_SLOTS],
-    autoSchedule: true,
+    autoSchedule: false,
     ingestHour: 7,
     lastSyncAt: null,
     lastSyncNote: null,
@@ -148,7 +148,7 @@ export function getSettings(): SmartPosterSettings {
         ? parsed.slots.map((s) => String(s)).filter(Boolean)
         : base.slots,
       timezone: String(parsed.timezone || base.timezone),
-      autoSchedule: parsed.autoSchedule !== false,
+      autoSchedule: false, // Imports are review-only; never auto-publish existing settings.
       ingestHour: Number.isFinite(Number(parsed.ingestHour))
         ? Math.min(23, Math.max(0, Math.floor(Number(parsed.ingestHour))))
         : base.ingestHour,
@@ -163,10 +163,13 @@ export function saveSettings(patch: Partial<SmartPosterSettings>): SmartPosterSe
   const next: SmartPosterSettings = {
     ...current,
     ...patch,
+    autoSchedule: false,
     slots: Array.isArray(patch.slots)
       ? patch.slots.map((s) => String(s).trim()).filter((s) => /^\d{1,2}:\d{2}$/.test(s))
       : current.slots,
   };
+  new Intl.DateTimeFormat("en-US", {timeZone:next.timezone}).format(new Date());
+  if (!Number.isInteger(next.ingestHour) || next.ingestHour < 0 || next.ingestHour > 23) throw new Error("Import hour must be a whole number from 0 to 23.");
   if (!next.slots.length) next.slots = [...DEFAULT_SLOTS];
   getSmartPosterDb()
     .prepare(
@@ -262,14 +265,13 @@ export function listPosts(opts?: {
   to?: string;
   limit?: number;
 }): SmartPosterPost[] {
-  const limit = Math.min(500, Math.max(1, opts?.limit || 200));
+  const limit = opts?.limit === 0 ? Infinity : Math.min(500, Math.max(1, opts?.limit || 200));
   const rows = getSmartPosterDb()
     .prepare(
       `SELECT * FROM smart_poster_posts
-       ORDER BY COALESCE(scheduled_for, target_date, created_at) ASC
-       LIMIT ?`,
+       ORDER BY COALESCE(scheduled_for, target_date, created_at) ASC`,
     )
-    .all(limit) as Record<string, unknown>[];
+    .all() as Record<string, unknown>[];
   let posts = rows.map(mapPost);
   if (opts?.status) {
     const set = new Set(Array.isArray(opts.status) ? opts.status : [opts.status]);
@@ -277,7 +279,7 @@ export function listPosts(opts?: {
   }
   if (opts?.from) posts = posts.filter((p) => (p.scheduledFor || p.targetDate || "") >= opts.from!);
   if (opts?.to) posts = posts.filter((p) => (p.scheduledFor || p.targetDate || "") <= opts.to!);
-  return posts;
+  return posts.slice(0, limit);
 }
 
 export function getPost(id: string): SmartPosterPost | null {

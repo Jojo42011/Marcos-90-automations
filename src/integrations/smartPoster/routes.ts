@@ -12,7 +12,6 @@ import {
   getSettings,
   listPosts,
   saveSettings,
-  upsertPost,
 } from "../../core/smartPosterStore.js";
 import {
   disconnectComposioDrive,
@@ -20,7 +19,7 @@ import {
   searchDriveFolders,
   startComposioDriveConnect,
 } from "./drive.js";
-import { getSmartPosterOverview, runSmartPosterSync, schedulePostToZernio } from "./sync.js";
+import { getSmartPosterOverview, runSmartPosterSync, updateSmartPosterPost, isPostBusy } from "./sync.js";
 
 type SessionUser = (req: Request) => { id?: string } | null;
 
@@ -68,51 +67,28 @@ export function registerSmartPosterRoutes(
     }
   });
 
-  app.patch("/api/smartposter/posts/:id", express.json({ limit: "200kb" }), (req, res) => {
+  app.patch("/api/smartposter/posts/:id", express.json({ limit: "200kb" }), async (req, res) => {
     try {
-      const post = getPost(String(req.params.id));
-      if (!post) {
-        res.status(404).json({ error: "Post not found" });
-        return;
-      }
-      const b = (req.body || {}) as Record<string, unknown>;
-      const next = upsertPost({
-        ...post,
-        title: b.title != null ? String(b.title) : post.title,
-        caption: b.caption != null ? String(b.caption) : post.caption,
-        scheduledFor:
-          b.scheduledFor !== undefined
-            ? b.scheduledFor
-              ? String(b.scheduledFor)
-              : null
-            : post.scheduledFor,
-        platforms: Array.isArray(b.platforms)
-          ? (b.platforms as unknown[]).map((p) => String(p).toLowerCase())
-          : post.platforms,
-        status: b.status != null ? (String(b.status) as typeof post.status) : post.status,
-      });
-      res.json({ post: next });
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
+      if (!getPost(String(req.params.id))) { res.status(404).json({error:"Post not found"}); return; }
+      res.json({post: await updateSmartPosterPost(String(req.params.id), req.body || {})});
+    } catch (err) { res.status(400).json({error:err instanceof Error ? err.message : String(err)}); }
   });
 
-  app.post("/api/smartposter/posts/:id/schedule", async (req, res) => {
+  app.post("/api/smartposter/posts/:id/schedule", express.json({ limit: "200kb" }), async (req, res) => {
     try {
-      const post = getPost(String(req.params.id));
-      if (!post) {
-        res.status(404).json({ error: "Post not found" });
-        return;
-      }
-      const updated = await schedulePostToZernio(post, ownerOf(req, sessionUser));
-      res.json({ post: updated });
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
+      if (!getPost(String(req.params.id))) { res.status(404).json({error:"Post not found"}); return; }
+      const post = await updateSmartPosterPost(String(req.params.id), req.body || {}, true, ownerOf(req, sessionUser));
+      if (post.status === "failed") { res.status(400).json({error:post.error,post}); return; }
+      res.json({post});
+    } catch (err) { res.status(400).json({error:err instanceof Error ? err.message : String(err)}); }
   });
 
   app.delete("/api/smartposter/posts/:id", (req, res) => {
     try {
+      const existing = getPost(String(req.params.id));
+      if (isPostBusy(String(req.params.id)) || existing?.zernioPostId || existing?.status === "scheduled" || existing?.status === "published") {
+        res.status(409).json({error:"Manage scheduled or published posts in Zernio before removing their local records."}); return;
+      }
       const ok = deletePost(String(req.params.id));
       if (!ok) {
         res.status(404).json({ error: "Post not found" });

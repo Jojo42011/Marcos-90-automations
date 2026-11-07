@@ -160,7 +160,7 @@
 <div class="head">
   <div class="grow">
     <div class="eyebrow">Your publishing workspace</div><h1>SmartPoster</h1>
-    <div class="sub" id="sub">Drive inbox → AI captions → spaced schedule across your Zernio accounts.</div>
+    <div class="sub" id="sub">Finished videos → weekly plan → selected social accounts.</div>
   </div>
   <div class="actions">
     <button class="btn" id="btnSettings" type="button">Settings</button>
@@ -259,7 +259,7 @@ function postMatchesFilter(p){
 }
 function renderSummary(){
   var n=DATA.counts||{};
-  document.getElementById("publishSummary").innerHTML='<div><div class="eyebrow">From idea to published</div><h2>Make room for your next great post.</h2><small>'+(DATA.settings.autoSchedule!==false?'Auto-scheduling on · Sync may publish to your schedule':'Manual review · You choose when to schedule')+'</small></div>'+
+  document.getElementById("publishSummary").innerHTML='<div><div class="eyebrow">From idea to published</div><h2>Your week. Your content. Your call.</h2><small>'+'Morning import at '+String(DATA.settings.ingestHour).padStart(2,'0')+':00 · '+esc(DATA.settings.timezone)+' · Nothing publishes until you schedule'+'</small></div>'+
     [['ready','Ready to schedule',n.ready||0],['scheduled','On the calendar',n.scheduled||0],['failed','Needs attention',n.failed||0]].map(function(x){return '<button data-summary="'+x[0]+'"><div class="eyebrow">'+x[1]+'</div><strong>'+x[2]+'</strong><small>Review content →</small></button>';}).join('');
   document.getElementById("publishSummary").querySelectorAll('[data-summary]').forEach(function(b){b.onclick=function(){STATUS_FILTER=b.dataset.summary;FILTER.clear();VIEW='queue';document.getElementById('statusFilter').value=STATUS_FILTER;render();};});
 }
@@ -343,7 +343,7 @@ function renderProfiles(){
 
 function libraryPosts(){
   return ((DATA && DATA.posts) || []).filter(function(p){
-    return ["inbox","draft","ready","failed"].indexOf(p.status) >= 0 && postMatchesFilter(p);
+    return !p.scheduledFor && ["inbox","draft","ready","failed"].indexOf(p.status) >= 0 && postMatchesFilter(p);
   });
 }
 
@@ -353,9 +353,9 @@ function renderLibrary(){
     return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">Review a caption, then send it to your schedule.</div>'
       + '<div class="empty"><div class="big">No pending content here</div>Try another filter, or add dated videos to your Drive folder and sync.</div></div>';
   }
-  return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">' + items.length + ' pending</div>'
+  return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">' + items.length + ' to plan · Drag onto a day, or open to choose.</div>'
     + items.map(function(p){
-      return '<button type="button" data-act="edit" class="media-item' + (SELECTED === p.id ? ' on' : '') + '" data-id="' + esc(p.id) + '">'
+      return '<button type="button" draggable="true" data-act="edit" class="media-item' + (SELECTED === p.id ? ' on' : '') + '" data-id="' + esc(p.id) + '">'
         + '<div class="media-cover" aria-hidden="true">▷ <span>Video / Drive</span></div><div class="name">' + esc(p.title || p.fileName) + '</div>'
         + '<div class="meta"><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span> · '
         + esc((p.platforms || []).join(", ") || "all") + '</div></button>';
@@ -384,15 +384,15 @@ function renderCalendar(){
     var wd = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(label);
     var dayNum = ymd.slice(8);
     var posts = postsForDay(ymd);
-    return '<div class="day' + (isToday ? ' today' : '') + '">'
+    return '<div class="day' + (isToday ? ' today' : '') + '" data-day="' + esc(ymd) + '">'
       + '<div class="dh"><span class="d">' + esc(dayNum) + '</span><span class="w">' + esc(wd) + '</span></div>'
       + '<div class="slots">'
       + (posts.length ? posts.map(function(p){
-          return '<button type="button" data-act="edit" class="post-block ' + esc(p.status) + '" data-id="' + esc(p.id) + '">'
+          return '<button type="button" draggable="' + (p.status!=='published') + '" data-act="edit" class="post-block ' + esc(p.status) + '" data-id="' + esc(p.id) + '">'
             + '<div class="t">' + esc(fmtHM(p.scheduledFor, tz) || "unscheduled") + '</div>'
             + '<div class="c">' + esc(p.title || p.fileName) + '</div>'
-            + '<div class="p">' + esc((p.platforms || []).join(" · ")) + '</div><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></button>';
-        }).join("") : '<div class="slot-hint">' + (FILTER.size || STATUS_FILTER!=='all'?'No matching posts<br>':'No content planned<br>') + esc(slots.join(" · ") || "Set slots in Settings") + '</div>')
+            + '<div class="p">' + esc(postAccountsLabel(p)) + '</div><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></button>';
+        }).join("") : '<div class="slot-hint">' + (FILTER.size || STATUS_FILTER!=='all'?'No matching posts<br>':'Drop a video here<br>') + esc(slots.join(" · ") || "Set slots in Settings") + '</div>')
       + '</div></div>';
   }).join("") + '</div>';
 
@@ -402,7 +402,7 @@ function renderCalendar(){
     + '<button class="btn" type="button" id="weekToday">This week</button>'
     + '<button class="btn" type="button" id="weekNext">Week →</button>'
     + '</div>'
-    + '<div class="sub">Slots: ' + esc((DATA.settings.slots || []).join(", ")) + ' · ' + esc(tz) + '</div>'
+    + '<div class="sub">Plan in ' + esc(tz) + '</div>'
     + '</div>'
     + '<div class="layout">' + renderLibrary() + '<div class="calendar-scroll" tabindex="0" aria-label="Weekly publishing calendar, scroll horizontally to see all days">' + weekHtml + '</div></div>';
 }
@@ -420,7 +420,7 @@ function renderQueue(){
       + '<div class="when">' + esc(fmtTime(p.scheduledFor, DATA.settings.timezone)) + '</div>'
       + '<div class="plats">' + esc((p.platforms || []).join(", ")) + '</div>'
       + '<div class="qacts">'
-      + (p.status === "draft" || p.status === "ready" || p.status === "failed"
+      + (p.status === "inbox" || p.status === "draft" || p.status === "ready" || p.status === "failed"
           ? '<button class="btn primary" data-act="schedule" data-id="' + esc(p.id) + '" type="button">Schedule</button>' : '')
       + '<button class="btn" data-act="edit" data-id="' + esc(p.id) + '" type="button">Review</button>'
       + '</div></div>';
@@ -432,34 +432,46 @@ function localInputTime(iso){
   var d=new Date(iso);if(!isFinite(d.getTime()))return '';
   return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
 }
-function postEdits(){
-  var field=document.getElementById('editWhen'),value=field.value;
-  if(!field.checkValidity())throw new Error('Choose a valid date and time.');
-  return {caption:document.getElementById('editCaption').value,title:document.getElementById('editTitle').value,scheduledFor:value?new Date(value).toISOString():null};
+function postAccountsLabel(p){
+  return (p.accountIds||[]).map(function(id){var a=DATA.accounts.find(function(x){return x.id===id;});return a?((a.username?'@'+a.username:a.platform)+' · '+a.platform):'Unavailable account';}).join(', ') || 'Choose accounts';
 }
-function openPostDrawer(id){
+function postEdits(){
+  var date=document.getElementById('editDate').value,time=document.getElementById('editTime').value;
+  var body={caption:document.getElementById('editCaption').value,title:document.getElementById('editTitle').value,
+    accountIds:Array.from(document.querySelectorAll('#editAccounts input:checked')).map(function(i){return i.value;}),timezone:DATA.settings.timezone};
+  if(date||time){if(!date||!time)throw new Error('Choose both a day and a time.');body.localDate=date;body.localTime=time;}
+  else body.scheduledFor=null;
+  return body;
+}
+function plannerDateParts(iso){
+  if(!iso)return {date:'',time:''};
+  var parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:DATA.settings.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(iso)).map(function(x){return [x.type,x.value];}));
+  return {date:parts.year+'-'+parts.month+'-'+parts.day,time:parts.hour+':'+parts.minute};
+}
+function openPostDrawer(id,dropDay){
   var p = ((DATA && DATA.posts) || []).find(function(x){ return x.id === id; });
   if (!p) return;
-  var deviceTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+  var planned=plannerDateParts(p.scheduledFor);
+  if(dropDay)planned.date=dropDay;
   SELECTED = id;
   var remote=!!p.zernioPostId || p.status==="scheduled" || p.status==="published";
   var body = document.getElementById("drawerBody");
   body.innerHTML = '<h3>' + esc(p.title || p.fileName) + '</h3>'
     + '<div class="sub" style="margin-bottom:14px">' + esc(p.fileName) + ' · <span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></div>'
     + (p.error ? '<div class="banner bad" style="margin-bottom:12px">' + esc(p.error) + '</div>' : '')
-    + (remote?'<div class="banner info">This post has been sent to Zernio. Changes here update the local record only. Manage the live post or cancel its schedule in Zernio.</div>':'')
+    + (p.status==='published'?'<div class="banner info">Published. Manage this post in Zernio.</div>':remote?'<div class="banner info">Changes update this existing Zernio schedule. Your video will not be uploaded again.</div>':'<div class="hint" style="margin:12px 0 20px">Choose when and where this video goes. Save a plan now, or schedule it to publish.</div>')
     + '<div class="field"><label>Caption</label><textarea id="editCaption">' + esc(p.caption) + '</textarea></div>'
     + '<div class="field"><label>Title</label><input id="editTitle" value="' + esc(p.title) + '" /></div>'
-    + '<div class="field"><label>Schedule · ' + esc(deviceTimezone) + '</label><input type="datetime-local" id="editWhen" value="' + esc(localInputTime(p.scheduledFor)) + '" /><div class="hint">Choose a time in your device timezone. The calendar displays ' + esc(DATA.settings.timezone) + '.</div></div>'
-    + '<div class="hint" style="margin-bottom:12px">Platforms: ' + esc((p.platforms || []).join(", ") || "—")
-    + '</div>'
+    + '<div class="schedule-fields"><div class="field"><label for="editDate">Day</label><input type="date" id="editDate" value="'+esc(planned.date)+'"></div><div class="field"><label for="editTime">Time</label><input type="time" id="editTime" value="'+esc(planned.time)+'"></div></div><div class="hint" style="margin:-8px 0 20px">All times in '+esc(DATA.settings.timezone)+'.</div>'
+    + '<fieldset class="account-picker" id="editAccounts"><legend>Publish to</legend><p class="hint">Select one or more accounts for this video.</p>'+(DATA.accounts||[]).map(function(a){return '<label><input type="checkbox" value="'+esc(a.id)+'"'+((p.accountIds||[]).includes(a.id)?' checked':'')+'><span class="av '+platformColor(a.platform)+'">'+esc(initials(a.platform))+'</span><span><b>'+esc(a.username?'@'+a.username:a.platform)+'</b><small>'+esc(a.platform)+'</small></span></label>';}).join('')+(!(DATA.accounts||[]).length?'<div class="hint">Connect a social account in Zernio to schedule.</div>':'')+'</fieldset>'
     + '<div class="actions">'
-    + '<button class="btn primary" type="button" id="savePost">' + (remote?'Save local changes':'Save draft') + '</button>'
-    + ((p.status === "draft" || p.status === "ready" || p.status === "failed")
+    + '<button class="btn primary" type="button" id="savePost">' + (remote?'Update schedule':'Save plan') + '</button>'
+    + ((p.status === "inbox" || p.status === "draft" || p.status === "ready" || p.status === "failed")
         ? '<button class="btn" type="button" id="schedPost">Save & schedule</button>' : '')
-    + '<button class="btn" type="button" id="delPost">Remove</button>'
+    + '<button class="btn" type="button" id="delPost"'+(remote?' disabled':'')+'>Remove</button>'
     + '</div>';
   showDrawer();
+  if(p.status==='published')body.querySelectorAll('input,textarea,button').forEach(function(el){el.disabled=true;});
 
   document.getElementById("savePost").onclick = function(){var btn=this;return runAction(btn,async function(){
     await api("PATCH", "/api/smartposter/posts/" + encodeURIComponent(p.id), postEdits());
@@ -468,8 +480,7 @@ function openPostDrawer(id){
   });};
   var sp = document.getElementById("schedPost");
   if (sp) sp.onclick = function(){return runAction(sp,async function(){
-    await api("PATCH", "/api/smartposter/posts/" + encodeURIComponent(p.id), postEdits());
-    await api("POST", "/api/smartposter/posts/" + encodeURIComponent(p.id) + "/schedule", {});
+    await api("POST", "/api/smartposter/posts/" + encodeURIComponent(p.id) + "/schedule", postEdits());
     await load();
     openPostDrawer(p.id);
   });};
@@ -487,7 +498,7 @@ function openSettings(){
   var body = document.getElementById("drawerBody");
   var composioOk = DATA.composioReady !== false && (DATA.composioReady || DATA.googleOAuthReady);
   body.innerHTML = '<h3>Settings</h3>'
-    + '<div class="sub" style="margin-bottom:16px">Drive naming: <code>YYYY-MM-DD__platform__slug.mp4</code> · platforms: tiktok, instagram, facebook, youtube, all</div>'
+    + '<div class="sub" style="margin-bottom:16px">Choose the folder Carlos uses for finished videos. Ordinary filenames work; optional <code>YYYY-MM-DD__platform__slug.mp4</code> names help describe the content. Imported videos stay in the inbox until planned.</div>'
     + '<div class="field"><label>Google Drive</label>'
     + (drive.connected
         ? '<div class="row-inline"><span class="status scheduled">Connected</span><span class="hint">' + esc(drive.email || "Composio") + '</span>'
@@ -506,10 +517,9 @@ function openSettings(){
         ? 'Using folder <b>' + esc(s.driveFolderName) + '</b>' + (s.driveFolderId ? ' (resolved).' : '. Find to confirm it exists.')
         : 'Search by name after connecting Drive.') + '</div>'
     + '</div>'
-    + '<div class="field"><label>Daily slots (HH:MM, comma-separated)</label><input id="setSlots" value="' + esc((s.slots || []).join(", ")) + '" /></div>'
     + '<div class="field"><label>Timezone</label><input id="setTz" value="' + esc(s.timezone || "America/Chicago") + '" /></div>'
     + '<div class="field"><label>Daily ingest hour (0–23, local)</label><input id="setHour" type="number" min="0" max="23" value="' + esc(s.ingestHour) + '" /></div>'
-    + '<div class="field"><label class="toggle"><input type="checkbox" id="setAuto"' + (s.autoSchedule !== false ? " checked" : "") + ' /> Auto-schedule to Zernio on sync</label></div>'
+    + '<div class="banner info">Morning imports add finished videos to your inbox. You choose the day, time, and accounts before anything is scheduled.</div>'
     + '<div class="actions"><button class="btn primary" type="button" id="saveSettings">Save settings</button></div>';
 
   showDrawer();
@@ -559,14 +569,12 @@ function openSettings(){
     }
   };
   document.getElementById("saveSettings").onclick = function(){var btn=this;return runAction(btn,async function(){
-    var slots = document.getElementById("setSlots").value.split(",").map(function(x){ return x.trim(); }).filter(Boolean);
     await api("PATCH", "/api/smartposter/settings", {
       driveFolderName: document.getElementById("setFolderName").value,
       driveFolderId: pickedId,
-      slots: slots,
       timezone: document.getElementById("setTz").value,
       ingestHour: Number(document.getElementById("setHour").value),
-      autoSchedule: document.getElementById("setAuto").checked
+      autoSchedule: false
     });
     await load();
     openSettings();
@@ -608,6 +616,15 @@ function render(){
       var id = el.getAttribute("data-id");
       if (id) openPostDrawer(id);
     });
+  });
+  view.querySelectorAll('[draggable="true"]').forEach(function(card){
+    card.addEventListener('dragstart',function(e){e.dataTransfer.setData('text/plain',card.dataset.id);e.dataTransfer.effectAllowed='move';card.classList.add('dragging');});
+    card.addEventListener('dragend',function(){card.classList.remove('dragging');view.querySelectorAll('.drag-over').forEach(function(d){d.classList.remove('drag-over');});});
+  });
+  view.querySelectorAll('[data-day]').forEach(function(day){
+    day.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';day.classList.add('drag-over');});
+    day.addEventListener('dragleave',function(e){if(!day.contains(e.relatedTarget))day.classList.remove('drag-over');});
+    day.addEventListener('drop',function(e){e.preventDefault();day.classList.remove('drag-over');var id=e.dataTransfer.getData('text/plain');var p=DATA.posts.find(function(x){return x.id===id;});if(p&&p.status!=='published')openPostDrawer(id,day.dataset.day);});
   });
   view.querySelectorAll("[data-act]").forEach(function(btn){
     btn.addEventListener("click", async function(e){

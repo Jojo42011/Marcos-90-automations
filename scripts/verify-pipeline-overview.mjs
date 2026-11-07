@@ -86,7 +86,7 @@ writeFileSync(
   }),
 );
 
-const { createTrackerRecord, listTrackerRecords } = await import("../dist/src/core/trackerStore.js");
+const { createTrackerRecord, listTrackerRecords, getTrackerDb } = await import("../dist/src/core/trackerStore.js");
 const {
   agentKey,
   buildPipelineOverview,
@@ -269,6 +269,7 @@ check("Harvey tool + CRM route + Overview UI exist", () => {
   assert(/Views → Close/.test(tools) || /Views→Close/.test(tools) || /Views→Comments/.test(tools));
 });
 
+getTrackerDb().close();
 rmSync(tmp, { recursive: true, force: true });
 
 console.log(`\n${passed} passed, ${failed} failed`);

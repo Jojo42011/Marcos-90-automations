@@ -7,6 +7,16 @@ import { zernioBaseUrl } from "./index.js";
 
 const TIMEOUT_MS = 60_000;
 
+/** Update a scheduled post in-place; never create a replacement as a fallback. */
+export async function updateZernioPost(postId: string, body: {
+  content: string; scheduledFor: string; timezone: string;
+  platforms: CreateZernioPostInput["platforms"];
+}): Promise<{ok:boolean;error?:string}> {
+  const r = await zernioJson("PUT", `/posts/${encodeURIComponent(postId)}`, {...body, isDraft:false});
+  if (!r.ok) return {ok:false,error:(r.json as {error?:string})?.error || r.text.slice(0,400) || `HTTP ${r.status}`};
+  return {ok:true};
+}
+
 function apiKey(): string {
   return currentZernioSecrets().apiKey;
 }

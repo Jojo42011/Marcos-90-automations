@@ -28,6 +28,7 @@ export interface ZernioPlatformStats {
 }
 
 export interface ZernioPostRow {
+  availableMetrics?: string[];
   id: string;
   url: string | null;
   caption: string | null;
@@ -141,12 +142,13 @@ function analyticsOf(post: Record<string, unknown>): Record<string, unknown> {
   return a && typeof a === "object" && !Array.isArray(a) ? (a as Record<string, unknown>) : {};
 }
 
-function mapPost(post: Record<string, unknown>): ZernioPostRow {
+export function mapPost(post: Record<string, unknown>): ZernioPostRow {
   const a = analyticsOf(post);
   return {
-    id: String(post._id ?? post.id ?? ""),
+    availableMetrics: ["views","likes","comments","shares","saves"].filter(k => num(a[k]) != null),
+    id: String(post._id ?? post.id ?? post.postId ?? ""),
     url: str(post.platformPostUrl) ?? str(post.url),
-    caption: str(post.caption) ?? str(post.title) ?? str(post.text),
+    caption: str(post.content) ?? str(post.caption) ?? str(post.description) ?? str(post.text) ?? str(post.title),
     publishedAt: str(post.publishedAt) ?? str(post.createdAt),
     views: num(a.views) ?? 0,
     likes: num(a.likes) ?? 0,
