@@ -564,31 +564,26 @@
   .fcirc .n{font-size:18px;font-weight:700;color:var(--text-2)}.fcirc .g{font-size:9px;color:var(--teal);font-weight:700;letter-spacing:.04em}
   .fstep .cap{font-size:11px;color:var(--muted);margin-top:7px}
   .fpct{color:var(--text-3);font-size:14px;font-weight:600;padding:0 6px}
-  /* Overview: Views→Close / Call→Close */
-  .po-grid{display:grid;grid-template-columns:1fr;gap:16px}
-  @media(min-width:980px){.po-grid{grid-template-columns:1fr 1fr;gap:18px}}
-  .po-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px 18px;box-shadow:var(--shadow)}
-  .po-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}
-  .po-head h2{margin:0;font-size:18px;font-weight:600;color:var(--title)}
-  .po-sub{font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em}
-  .po-meta{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0 16px;font-size:12.5px;color:var(--muted)}
-  .po-meta b{color:var(--text-2);font-weight:700}
-  .po-funnel{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:4px}
-  .po-step{flex:1 0 auto;min-width:88px;text-align:center;padding:12px 10px;border-radius:10px;background:var(--surface-1);border:1px solid var(--line-2)}
-  .po-step + .po-step{margin-left:8px}
+  /* Overview: Views→Close / Call→Close — compact so both funnels fit without horizontal scroll */
+  .po-grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:900px){.po-grid{grid-template-columns:1fr 1fr;gap:14px}}
+  .po-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 12px 10px;box-shadow:var(--shadow);min-width:0}
+  .po-card[data-side="buyer"]{--po-num:#2fb171}
+  .po-card[data-side="seller"]{--po-num:#e05a45}
+  .po-sub{display:block;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin:0 0 8px}
+  .po-funnel{display:flex;align-items:stretch;gap:0;overflow:hidden;width:100%;min-width:0}
+  .po-step{flex:1 1 0;min-width:0;text-align:center;padding:8px 4px;border-radius:8px;background:var(--surface-1);border:1px solid var(--line-2)}
+  .po-step + .po-step{margin-left:4px}
   .po-step.go{cursor:pointer;transition:background .15s,border-color .15s}
   .po-step.go:hover{background:var(--teal-soft);border-color:var(--teal)}
-  .po-step .n{font-size:22px;font-weight:700;color:var(--teal);line-height:1.1}
-  .po-step.metric .n{color:var(--text-2)}
-  .po-step .l{margin-top:7px;font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.3}
-  .po-step .r{margin-top:6px;font-size:11px;color:var(--text-3);font-weight:600}
-  .po-step .r.ok{color:var(--teal-strong)}
-  .po-arrow{flex:0 0 auto;align-self:center;color:var(--text-3);font-size:14px;padding:0 2px;opacity:.55}
-  .po-note{margin-top:14px;font-size:12px;color:var(--muted);line-height:1.5}
-  .po-empty{padding:28px 8px;text-align:center;color:var(--muted);font-size:13.5px}
+  .po-step .n{font-size:15px;font-weight:700;color:var(--po-num,var(--teal));line-height:1.1;font-variant-numeric:tabular-nums}
+  .po-step .l{margin-top:4px;font-size:9.5px;color:var(--muted);font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .po-step .r{margin-top:3px;font-size:9px;color:var(--text-3);font-weight:600}
+  .po-step .r.ok{color:var(--po-num,var(--teal-strong));opacity:.85}
+  .po-arrow{flex:0 0 auto;align-self:center;color:var(--text-3);font-size:10px;padding:0 1px;opacity:.45}
+  .po-note{margin-top:10px;font-size:11.5px;color:var(--muted);line-height:1.45}
+  .po-empty{padding:20px 8px;text-align:center;color:var(--muted);font-size:13px}
   .po-refresh{display:inline-flex;align-items:center;gap:6px}
-  .po-meta span.go{cursor:pointer;border-bottom:1px dashed var(--line);padding-bottom:1px}
-  .po-meta span.go:hover{color:var(--teal-strong);border-bottom-color:var(--teal)}
   .rep-nav a{display:block;padding:8px 18px;color:var(--text-2);font-size:13px}.rep-nav a:hover{background:var(--surface-1)}.rep-nav a.on{background:var(--teal-soft);color:var(--teal);font-weight:600}
   .rep-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
   .rep-head h1{font-weight:400;color:var(--title);font-size:26px;margin:0}
@@ -2022,7 +2017,7 @@ function fmtPoNum(n){
 }
 function poFunnelHTML(side){
   if(!side||!side.steps||!side.steps.length){
-    return '<div class="po-empty">No '+esc(side&&side.title?side.title.toLowerCase():"pipeline")+' data yet.</div>';
+    return '<div class="po-empty">No pipeline data yet.</div>';
   }
   var parts=[];
   side.steps.forEach(function(s,i){
@@ -2042,16 +2037,13 @@ function poFunnelHTML(side){
       '</div>'
     );
   });
-  return '<div class="po-funnel">'+parts.join("")+'</div>'+
-    '<div class="po-meta">'+
-      '<span class="go" data-po-meta="pipeline">In pipeline <b>'+fmtPoNum(side.inPipeline)+'</b></span>'+
-      '<span class="go" data-po-meta="unstaged">Unstaged <b>'+fmtPoNum(side.unstaged)+'</b></span>'+
-      '<span class="go" data-po-meta="closed">Closed <b>'+fmtPoNum(side.closed)+'</b></span>'+
-    '</div>';
+  return '<div class="po-funnel">'+parts.join("")+'</div>';
 }
 function poCardHTML(side){
-  return '<div class="po-card" data-side="'+esc(side.side)+'">'+
-    '<div class="po-head"><h2>'+esc(side.title)+'</h2><span class="po-sub">'+esc(side.subtitle)+'</span></div>'+
+  var sideKey=side&&side.side==="seller"?"seller":"buyer";
+  var sub=side&&side.subtitle?String(side.subtitle):"";
+  return '<div class="po-card" data-side="'+esc(sideKey)+'" aria-label="'+esc(sideKey==="seller"?"Sellers":"Buyers")+'">'+
+    (sub?'<span class="po-sub">'+esc(sub)+'</span>':'')+
     poFunnelHTML(side)+
   '</div>';
 }
