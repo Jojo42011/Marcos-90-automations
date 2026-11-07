@@ -563,6 +563,27 @@
   .fcirc .n{font-size:18px;font-weight:700;color:var(--text-2)}.fcirc .g{font-size:9px;color:var(--teal);font-weight:700;letter-spacing:.04em}
   .fstep .cap{font-size:11px;color:var(--muted);margin-top:7px}
   .fpct{color:var(--text-3);font-size:14px;font-weight:600;padding:0 6px}
+  /* Overview: Views→Close / Call→Close */
+  .po-grid{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:980px){.po-grid{grid-template-columns:1fr 1fr;gap:18px}}
+  .po-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px 18px;box-shadow:var(--shadow)}
+  .po-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}
+  .po-head h2{margin:0;font-size:18px;font-weight:600;color:var(--title)}
+  .po-sub{font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+  .po-meta{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0 16px;font-size:12.5px;color:var(--muted)}
+  .po-meta b{color:var(--text-2);font-weight:700}
+  .po-funnel{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:4px}
+  .po-step{flex:1 0 auto;min-width:88px;text-align:center;padding:12px 10px;border-radius:10px;background:var(--surface-1);border:1px solid var(--line-2)}
+  .po-step + .po-step{margin-left:8px}
+  .po-step .n{font-size:22px;font-weight:700;color:var(--teal);line-height:1.1}
+  .po-step.metric .n{color:var(--text-2)}
+  .po-step .l{margin-top:7px;font-size:11.5px;color:var(--muted);font-weight:600;line-height:1.3}
+  .po-step .r{margin-top:6px;font-size:11px;color:var(--text-3);font-weight:600}
+  .po-step .r.ok{color:var(--teal-strong)}
+  .po-arrow{flex:0 0 auto;align-self:center;color:var(--text-3);font-size:14px;padding:0 2px;opacity:.55}
+  .po-note{margin-top:14px;font-size:12px;color:var(--muted);line-height:1.5}
+  .po-empty{padding:28px 8px;text-align:center;color:var(--muted);font-size:13.5px}
+  .po-refresh{display:inline-flex;align-items:center;gap:6px}
   .rep-nav a{display:block;padding:8px 18px;color:var(--text-2);font-size:13px}.rep-nav a:hover{background:var(--surface-1)}.rep-nav a.on{background:var(--teal-soft);color:var(--teal);font-weight:600}
   .rep-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
   .rep-head h1{font-weight:400;color:var(--title);font-size:26px;margin:0}
@@ -1399,7 +1420,7 @@
 </header>
 
 <nav class="rail" id="rail">
-  <button class="r on" data-view="dashboard" title="Dashboard"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+  <button class="r on" data-view="dashboard" title="Overview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-3"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
   <button class="r" data-view="messages" title="Messages"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg></button>
   <button class="r" data-view="followup" title="Dialer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v2a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h2a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.48-1.19a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/></svg></button>
   <!-- Leads live under People (default section). One visible rail button.
@@ -1422,33 +1443,15 @@
 <main class="main">
   <!-- DASHBOARD -->
   <section class="view on" id="view-dashboard"><div class="pad">
-    <div class="page-head"><h1>Dashboard</h1><button class="select" id="userFilter" style="min-width:170px;text-align:left;cursor:pointer">All Active Users</button></div>
-    <div class="card card-pad">
-      <div class="ta-head"><h2>Take Action <button class="rb" id="taRefreshBtn" title="Refresh"><svg id="taRefreshIco" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c2cad1" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button></h2>
-        <select class="select" id="taRange"><option value="7">Last 7 Days</option><option value="14">Last 14 Days</option><option value="30">Last 30 Days</option><option value="tm">This Month</option><option value="lm">Last Month</option><option value="ty">This Year</option><option value="ly">Last Year</option><option value="all">All Time</option></select></div>
-      <div class="ta-grid" id="taGrid"></div>
+    <div class="page-head">
+      <h1>Overview</h1>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="select" id="userFilter" style="min-width:170px;text-align:left;cursor:pointer">All Active Users</button>
+        <button class="pill-btn ghost po-refresh" id="poRefreshBtn" title="Refresh">Refresh</button>
+      </div>
     </div>
-    <div class="cols">
-      <div class="card card-pad">
-        <div class="tabs" id="dashTabs"><button class="on" data-dt="recent">RECENT ACTIVITY</button><button data-dt="plans">AUTO PLANS</button><span style="flex:1"></span><button class="chip" id="feedFilterBtn" style="background:#eaf7f7;color:var(--teal-strong)">Filtered</button></div>
-        <div id="feed"></div>
-        <!-- Only on the AUTO PLANS tab. The plan builder lives behind a gear in
-             the icon rail, which is not where anyone looks for it from here. -->
-        <div id="apPlansFoot" style="display:none;padding:10px 2px 0">
-          <button class="pill-btn ghost" id="apGoSettings">MANAGE AUTO PLANS</button>
-          <span style="font-size:12px;color:#8a939c;margin-left:10px">Build your own plans, steps, triggers and pause rules.</span>
-        </div>
-        <button class="load-more" id="loadMore">LOAD MORE…</button>
-      </div>
-      <div class="card card-pad">
-        <div class="at-head"><h3>Activity Tracking</h3><a href="#" style="font-size:12px;color:#87909a">Goal Settings ›</a></div>
-        <select class="select" id="atRange" style="width:100%"><option value="tw">This Week (Mon - Sun)</option><option value="lw">Last Week (Mon - Sun)</option><option value="tm">This Month</option><option value="lm">Last Month</option><option value="tq">This Quarter</option><option value="lq">Last Quarter</option><option value="ty">This Year</option><option value="ly">Last Year</option><option value="custom">Custom</option></select>
-        <div class="sub">Brivity Activities</div>
-        <div class="stat-grid" id="atStats"></div>
-        <div class="hr"></div>
-        <div class="at-head"><div class="sub" style="margin:0">Logged Activities</div><button class="link-btn" id="logBtn">+ LOG</button></div>
-        <div class="log-grid" id="logGrid"></div>
-      </div>
+    <div class="po-grid" id="pipeOverview">
+      <div class="po-card"><div class="po-empty">Loading pipeline…</div></div>
     </div>
   </div></section>
 
@@ -1967,122 +1970,76 @@ document.addEventListener("click",e=>{
 /* dashboard */
 let shown=8;
 function withinDays(iso,days){if(days>=9999)return true;return (Date.now()-new Date(iso))<=days*86400000;}
-function renderTakeAction(){
-  const tok=document.getElementById("taRange").value||"7";
-  const L=dashLeads();
-  const c=[
-    [L.filter(l=>inRange(l.createdAt,tok)).length,"New Leads in<br>Date Range"],
-    [L.filter(l=>!l.activity.length).length,"Leads with no<br>Communication"],
-    [L.filter(l=>!(l.alerts>0)).length,"Leads with no<br>Listing Alerts"],
-    [L.filter(l=>!(l.reports>0)).length,"Leads with no<br>Market Reports"],
-    [L.filter(l=>l.crmCallQueue==="urgent").length,"Leads with<br>Overdue Tasks"],
-    [L.filter(l=>!l.autoPlanEnrollments.length).length,"Leads with no<br>Auto Plans"]];
-  document.getElementById("taGrid").innerHTML=c.map(x=>'<div class="ta-card"><div class="n">'+x[0]+'</div><div class="l">'+x[1]+'</div></div>').join("");
+/* ===== Overview: Buyers Views→Close · Sellers Call→Close ===== */
+function fmtPoNum(n){
+  n=Number(n)||0;
+  if(n>=1000000) return (Math.round(n/100000)/10)+"M";
+  if(n>=10000) return Math.round(n/1000)+"k";
+  if(n>=1000) return (Math.round(n/100)/10)+"k";
+  return String(n);
 }
-function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
-/* Canonical feed-item type key, mirrors deriveAction's wording - used by the Timeline Filter popup. */
-function feedTypeOf(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"valuation";if(l.propertyInquired)return"inquiry";if(l.activity.some(a=>a.type==="text"))return"message";return"new";}
-const FEED_TYPES=[["valuation","Home valuation"],["inquiry","Property inquiry"],["message","Sent a message"],["new","New lead"]];
-var FEED_FILTER_HIDDEN={};
-function feedFilterActive(){ return Object.keys(FEED_FILTER_HIDDEN).length>0; }
-function updateFeedFilterChip(){
-  var b=document.getElementById("feedFilterBtn"); if(!b)return;
-  var n=Object.keys(FEED_FILTER_HIDDEN).length;
-  b.textContent=n?("Filtered ("+n+")"):"Filtered";
-  b.style.background=n?"var(--teal)":"#eaf7f7"; b.style.color=n?"#fff":"var(--teal-strong)";
-}
-function openFeedFilterMenu(anchor){
-  var items=FEED_TYPES.map(function(ft){
-    var key=ft[0],label=ft[1];
-    return {label:label,check:!FEED_FILTER_HIDDEN[key],fn:function(){
-      if(FEED_FILTER_HIDDEN[key])delete FEED_FILTER_HIDDEN[key]; else FEED_FILTER_HIDDEN[key]=1;
-      shown=8; renderFeed(); updateFeedFilterChip(); openFeedFilterMenu(anchor); return true;
-    }};
-  });
-  openActionMenu(anchor,items);
-}
-document.getElementById("feedFilterBtn").addEventListener("click",function(e){ e.stopPropagation(); openFeedFilterMenu(e.currentTarget); });
-function renderFeed(){
-  /*
-   * AUTO PLANS tab — the real enrollments on the board.
-   *
-   * WHAT THIS REPLACES, because it is the answer to "I want to create my own
-   * Auto Plans rather than being limited to preset options". Nothing was
-   * limiting him: the plan editor at Settings · Auto Plans builds a plan with
-   * any name, any number of task/email/text steps, its own day offsets, pause
-   * rules and completion status. What this tab did was rotate four HARDCODED
-   * plan names over whoever happened to be enrolled —
-   *   ["New Lead Follow-Up","Past Client Nurture","Open House Follow-Up",…]
-   * — with a made-up step number (1+i%5) out of a made-up 8, always "RUNNING".
-   * Four invented names on the dashboard read exactly like the four plans you
-   * are allowed to have. The enrollment carries its real planName, real
-   * currentStepIndex and real status, so that is what it says now.
-   *
-   * A lead can be on more than one plan, so each enrollment gets its own line
-   * rather than the lead getting one line and the first plan winning.
-   */
-  if(dashMode==="plans"){
-    const APSTATUS={active:["RUNNING","var(--teal)"],paused:["PAUSED","#b4762a"],completed:["COMPLETED","#8a939c"]};
-    const rows=[];
-    dashLeads().forEach(function(l){
-      (l.autoPlanEnrollments||[]).forEach(function(e){ rows.push({l:l,e:e}); });
-    });
-    const enrolled=rows.slice(0,shown);
-    document.getElementById("feed").innerHTML=enrolled.length?enrolled.map(function(r){
-      var e=r.e, l=r.l;
-      var st=APSTATUS[e.status]||APSTATUS.active;
-      /* An enrollment with no stored name is a real state (an older row, or a
-         plan since deleted). Say that, rather than borrowing a name. */
-      var planName=e.planName?esc(e.planName):'<span style="color:#8a939c">Unnamed plan</span>';
-      var step=(typeof e.currentStepIndex==="number")?("Step "+(e.currentStepIndex+1)):"Step unknown";
-      var done=(e.completedSteps&&e.completedSteps.length)?(" &nbsp;·&nbsp; "+e.completedSteps.length+" step(s) done"):"";
-      return '<div class="feed-item"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20v-8M12 12c0-3 2-5 5-5M12 12c0-3-2-5-5-5"/><path d="M5 20h14"/></svg></div><div class="feed-body">'+
-        '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> is enrolled in an Auto Plan;</div><div class="feed-time">'+relTime(e.enrolledAt||l.lastActivity)+'</div></div>'+
-        '<div class="feed-meta"><b>Plan:</b> '+planName+' &nbsp;·&nbsp; <b>'+step+'</b>'+done+
-          ' &nbsp;·&nbsp; <span style="color:'+st[1]+';font-weight:600">'+st[0]+'</span></div>'+
-        '</div></div>';
-    }).join("")
-      :'<div class="empty" style="padding:26px 4px">No auto-plan enrollments yet. '+
-       'Build a plan in <a class="lk" id="apGoSettingsEmpty" style="cursor:pointer">Settings · Auto Plans</a>.</div>';
-    /* The editor lives behind a gear in the icon rail, which is not where
-       anyone looks for it from here. */
-    var pf=document.getElementById("apPlansFoot");
-    if(pf) pf.style.display="";
-    document.getElementById("loadMore").style.display="none";
-    var goEmpty=document.getElementById("apGoSettingsEmpty");
-    if(goEmpty) goEmpty.onclick=function(){ var g=document.querySelector('.rail .r[data-view="plansettings"]'); if(g)g.click(); };
-    return;
+function poFunnelHTML(side){
+  if(!side||!side.steps||!side.steps.length){
+    return '<div class="po-empty">No '+esc(side&&side.title?side.title.toLowerCase():"pipeline")+' data yet.</div>';
   }
-  var pfHide=document.getElementById("apPlansFoot"); if(pfHide) pfHide.style.display="none";
-  const visible=dashLeads().filter(l=>!FEED_FILTER_HIDDEN[feedTypeOf(l)]);
-  const sorted=[...visible].sort((a,b)=>new Date(b.lastActivity)-new Date(a.lastActivity)).slice(0,shown);
-  document.getElementById("feed").innerHTML=sorted.length?sorted.map(l=>{
-    const c=l.criteria||{};const bb=(c.beds!=null)?'<b>Bed:</b> '+c.beds+' <b>Bath:</b> '+c.baths:'';const sq=(c.sqft!=null)?'<b>Sqft:</b> '+c.sqft:'';
-    return '<div class="feed-item" data-lid="'+esc(l.id)+'"><div class="feed-av"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="feed-body">'+
-      '<div class="feed-top"><div class="feed-name"><b class="ldlink" data-lid="'+esc(l.id)+'" style="cursor:pointer">'+esc(l.name)+'</b> '+deriveAction(l)+';</div><div class="feed-time">'+relTime(l.lastActivity)+'</div></div>'+
-      '<div class="act-row">'+actIcon("email",!l.email)+actIcon("phone",!l.phone)+actIcon("sms",!l.phone)+actIcon("appt")+actIcon("other")+'</div>'+
-      (c.location?'<div class="feed-meta"><b>Address:</b> '+esc(c.location)+'<a class="lk">See home value estimate</a>'+bb+(bb&&sq?'<br>':'')+sq+'</div>':'<div class="feed-meta">'+esc(l.phone)+'  ·  '+esc(l.source)+'</div>')+
-      '</div></div>';
-  }).join(""):'<div class="empty" style="padding:26px 4px">No activity matches the current filter.</div>';
-  document.getElementById("loadMore").style.display=shown<visible.length?"block":"none";
+  var parts=[];
+  side.steps.forEach(function(s,i){
+    if(i) parts.push('<div class="po-arrow" aria-hidden="true">→</div>');
+    var rate="";
+    if(s.kind==="people"&&s.rateFromPrev!=null){
+      rate='<div class="r'+(s.rateFromPrev>0?" ok":"")+'">'+s.rateFromPrev+'%</div>';
+    } else {
+      rate='<div class="r">&nbsp;</div>';
+    }
+    parts.push(
+      '<div class="po-step'+(s.kind==="metric"?" metric":"")+'">'+
+        '<div class="n">'+esc(fmtPoNum(s.count))+'</div>'+
+        '<div class="l">'+esc(s.label)+'</div>'+rate+
+      '</div>'
+    );
+  });
+  return '<div class="po-funnel">'+parts.join("")+'</div>'+
+    '<div class="po-meta">'+
+      '<span>In pipeline <b>'+fmtPoNum(side.inPipeline)+'</b></span>'+
+      '<span>Unstaged <b>'+fmtPoNum(side.unstaged)+'</b></span>'+
+      '<span>Closed <b>'+fmtPoNum(side.closed)+'</b></span>'+
+    '</div>';
 }
-function renderTracking(){
-  const tok=(document.getElementById("atRange")||{value:"tw"}).value||"tw";
-  const L=dashLeads();
-  let calls=0,texts=0,emails=0,appts=0;
-  L.forEach(l=>(l.activity||[]).forEach(a=>{ if(a.at&&!inRange(a.at,tok))return;
-    if(a.type==="call")calls++;else if(a.type==="text")texts++;else if(a.type==="email")emails++;
-    else if(a.type==="appointment"||a.type==="showing")appts++;}));
-  const contacts=L.filter(l=>(l.activity||[]).some(a=>!a.at||inRange(a.at,tok))).length;
-  const lg=loggedTotals(tok);
-  const stats=[[calls+(lg["Calls"]||0),"Calls"],[contacts+(lg["Contacts"]||0),"Contacts"],
-    [texts+(lg["Texts Sent"]||0),"Texts Sent"],[emails+(lg["Emails Sent"]||0),"Emails Sent"],
-    [appts+(lg["Appointments Set"]||0),"Appointments Set"],[(lg["Appointments Held"]||0),"Appointments Held"],
-    [(lg["Signings"]||0),"Signings"],[(lg["Open Houses"]||0),"Open Houses"]];
-  document.getElementById("atStats").innerHTML=stats.map(s=>'<div class="stat"><div class="n">'+s[0]+' <span style="color:var(--muted);font-weight:600">/ 0</span></div><div class="l">'+s[1]+'</div></div>').join("");
-  const logs=["Door Knocking","Networking Events","Circle Prospecting Calls","Canceled/Expired Calls","For Sale By Owner Calls","Non-CRM Contacts"];
-  document.getElementById("logGrid").innerHTML=logs.map(l=>'<div class="log-card"><div class="n">'+(lg[l]||0)+' / 0</div><div class="l">'+l+'</div></div>').join("");
+function poCardHTML(side){
+  return '<div class="po-card" data-side="'+esc(side.side)+'">'+
+    '<div class="po-head"><h2>'+esc(side.title)+'</h2><span class="po-sub">'+esc(side.subtitle)+'</span></div>'+
+    poFunnelHTML(side)+
+  '</div>';
 }
+var PIPE_OVERVIEW=null;
+function renderPipelineOverview(){
+  var el=document.getElementById("pipeOverview");
+  if(!el) return;
+  var agent=USER_FILTER.length?USER_FILTER.join(","):"";
+  var q=agent?("?agent="+encodeURIComponent(agent)):"";
+  el.innerHTML='<div class="po-card"><div class="po-empty">Loading pipeline…</div></div>';
+  fetch(crmApi("/api/crm/pipeline-overview"+q),{headers:{Accept:"application/json"}})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){
+      if(!d||!d.ok){
+        el.innerHTML='<div class="po-card"><div class="po-empty">Pipeline overview unavailable.</div></div>';
+        return;
+      }
+      PIPE_OVERVIEW=d;
+      var note=(d.notes&&d.notes[0])?('<div class="po-note">'+esc(d.notes[0])+'</div>'):"";
+      el.innerHTML=poCardHTML(d.buyers)+poCardHTML(d.sellers)+
+        (note?'<div style="grid-column:1/-1">'+note+'</div>':'');
+    })
+    .catch(function(){
+      el.innerHTML='<div class="po-card"><div class="po-empty">Could not load pipeline overview.</div></div>';
+    });
+}
+function renderTakeAction(){ renderPipelineOverview(); }
+function renderFeed(){ /* Overview replaced the activity feed. */ }
+function renderTracking(){ /* Overview replaced activity tracking tiles. */ }
+function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
+function feedTypeOf(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"valuation";if(l.propertyInquired)return"inquiry";if(l.activity.some(a=>a.type==="text"))return"message";return"new";}
+function updateFeedFilterChip(){}
 
 /* messages */
 /* ---- shared search + sort (drives the top-bar search + SORT BY buttons) ---- */
@@ -4091,19 +4048,16 @@ window.addEventListener("message", function(e){
   }catch(_){}
 })();
 
-document.getElementById("taRange").addEventListener("change",renderTakeAction);
-document.getElementById("loadMore").addEventListener("click",()=>{shown+=8;renderFeed();});
-document.getElementById("feedCount").textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
-updateFeedFilterChip();
-document.getElementById("taRefreshBtn").addEventListener("click",function(e){
+(function(){
+  var fc=document.getElementById("feedCount");
+  if(fc) fc.textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
+})();
+document.getElementById("poRefreshBtn").addEventListener("click",function(e){
   e.stopPropagation();
   var btn=e.currentTarget; if(btn.classList.contains("spinning"))return;
   btn.classList.add("spinning");
-  setTimeout(function(){
-    renderTakeAction(); renderFeed(); renderTracking();
-    btn.classList.remove("spinning");
-    crmToast("Dashboard refreshed");
-  },450);
+  renderPipelineOverview();
+  setTimeout(function(){ btn.classList.remove("spinning"); crmToast("Overview refreshed"); },450);
 });
 
 /* ===== LIVE DATA ===== */
@@ -5263,7 +5217,7 @@ document.querySelectorAll(".pill-btn.ghost").forEach(b=>{
     b.addEventListener("click",function(e){e.stopPropagation();openSortMenu(b,tkey);});
   }
 });
-document.querySelectorAll("#view-dashboard select").forEach(s=>s.addEventListener("change",()=>{ renderTakeAction(); renderTracking(); renderFeed(); }));
+/* Overview has no range selects; agent filter drives refresh via userFilter. */
 /* ---- Help button → the guided how-to tour, in a new tab ---- */
 (function(){
   var btn=document.getElementById("crmHelp"); if(!btn) return;
@@ -11143,11 +11097,15 @@ function leadSmartPred(l){
   }
   return !(SMART_PREDS[leadSmartKey])||SMART_PREDS[leadSmartKey](l);
 }
-document.getElementById("dashTabs").addEventListener("click",e=>{
-  const b=e.target.closest("[data-dt]"); if(!b)return;
-  document.querySelectorAll("#dashTabs [data-dt]").forEach(x=>x.classList.toggle("on",x===b));
-  dashMode=b.getAttribute("data-dt"); shown=8; renderFeed();
-});
+(function(){
+  var tabs=document.getElementById("dashTabs");
+  if(!tabs) return;
+  tabs.addEventListener("click",e=>{
+    const b=e.target.closest("[data-dt]"); if(!b)return;
+    document.querySelectorAll("#dashTabs [data-dt]").forEach(x=>x.classList.toggle("on",x===b));
+    dashMode=b.getAttribute("data-dt"); shown=8; renderFeed();
+  });
+})();
 document.getElementById("msgTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-mt]"); if(!b)return;
   document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>x.classList.toggle("on",x===b));
@@ -11427,7 +11385,19 @@ document.addEventListener("click",e=>{
 const TEAM=["Marco Puga","Wesley","Carlos"];
 let USER_FILTER=[];           // empty = All Active Users
 let CUSTOM_FROM="",CUSTOM_TO="";
-function dashLeads(){ return USER_FILTER.length? LEADS.filter(l=>USER_FILTER.includes(l.assignedTo||"Marco Puga")) : LEADS; }
+function dashLeads(){
+  if(!USER_FILTER.length) return LEADS;
+  return LEADS.filter(function(l){
+    var name=l.assignedUserName||l.assignedTo||"Marco Puga";
+    return USER_FILTER.some(function(f){
+      var a=String(name).toLowerCase(), b=String(f).toLowerCase();
+      if(b.indexOf("marco")>=0) return a.indexOf("marco")>=0;
+      if(b.indexOf("wesley")>=0||b==="wes") return a.indexOf("wesley")>=0||a.indexOf("wes")>=0;
+      if(b.indexOf("carlos")>=0) return a.indexOf("carlos")>=0;
+      return a===b||a.indexOf(b)>=0;
+    });
+  });
+}
 
 function rangeBounds(tok){
   const now=new Date();
@@ -11497,7 +11467,7 @@ function paintUserMenu(){
     if(u==="__all") USER_FILTER=[];
     else { const i=USER_FILTER.indexOf(u); i>=0?USER_FILTER.splice(i,1):USER_FILTER.push(u); }
     document.getElementById("userFilter").textContent=userLabel();
-    paintUserMenu(); renderTakeAction(); renderFeed(); renderTracking();
+    paintUserMenu(); renderPipelineOverview();
   }));
 }
 document.getElementById("userFilter").addEventListener("click",e=>{
@@ -11511,25 +11481,19 @@ document.getElementById("userFilter").addEventListener("click",e=>{
   ddMenu.classList.add("on"); ddMenu._for="userFilter";
 });
 
-/* ---- Activity Tracking range + Custom ---- */
-document.getElementById("atRange").addEventListener("change",function(){
-  if(this.value==="custom"){ document.getElementById("rangeScrim").classList.add("on"); return; }
-  renderTracking();
-});
+/* ---- Activity log modal (still available from lead detail flows) ---- */
 document.getElementById("rangeApply").addEventListener("click",()=>{
   CUSTOM_FROM=document.getElementById("rangeFrom").value; CUSTOM_TO=document.getElementById("rangeTo").value;
-  document.getElementById("rangeScrim").classList.remove("on"); renderTracking();
+  document.getElementById("rangeScrim").classList.remove("on");
 });
 ["rangeCancel","rangeClose"].forEach(id=>document.getElementById(id).addEventListener("click",()=>document.getElementById("rangeScrim").classList.remove("on")));
 
-/* ---- New Activity modal (+ LOG) ---- */
 function openActModal(){
   const d=new Date(),p=n=>String(n).padStart(2,"0");
   document.getElementById("actDate").value=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
   document.getElementById("actType").value=""; document.getElementById("actCount").value=1; document.getElementById("actNotes").value="";
   document.getElementById("actScrim").classList.add("on");
 }
-document.getElementById("logBtn").addEventListener("click",openActModal);
 ["actCancel","actClose"].forEach(id=>document.getElementById(id).addEventListener("click",()=>document.getElementById("actScrim").classList.remove("on")));
 document.getElementById("actSave").addEventListener("click",()=>{
   const type=document.getElementById("actType").value;
@@ -11541,7 +11505,7 @@ document.getElementById("actSave").addEventListener("click",()=>{
     notes:document.getElementById("actNotes").value.trim(), at:new Date().toISOString() });
   try{ localStorage.setItem("crmLoggedActivities",JSON.stringify(entries)); }catch(_){}
   document.getElementById("actScrim").classList.remove("on");
-  renderTracking(); crmToast("Activity logged");
+  renderPipelineOverview(); crmToast("Activity logged");
 });
 
 renderTakeAction();renderFeed();renderTracking();renderConvos();renderLeads();renderPeople();renderFollowUp();renderTx();renderReport("business");renderCal();renderNurture();renderFinance();updateSmartFilterCount();

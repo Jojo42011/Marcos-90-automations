@@ -75,6 +75,14 @@ check("business tools include Command Center social jobs", () => {
   }
 });
 
+check("CRM Overview funnel ships with Harvey get_pipeline_overview", () => {
+  const names = new Set((tools.HARVEY_TOOL_DEFINITIONS || []).map((t) => t.name));
+  assert(names.has("get_pipeline_overview"), "missing get_pipeline_overview");
+  assert(/\/api\/crm\/pipeline-overview/.test(read("src/server.ts")));
+  const crm = read("public/crm-brivity.html");
+  assert(/pipeOverview/.test(crm) && /renderPipelineOverview/.test(crm));
+});
+
 check("FORAI pins route-with-feature convention", () => {
   const forai = read("FORAI.md");
   assert(/new Command Center surface|Harvey route|EXECUTION_LANES|Command Center \/ Zernio/i.test(forai));

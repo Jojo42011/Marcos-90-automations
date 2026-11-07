@@ -62,6 +62,7 @@ import {
 import { channelForLead } from "../core/messageChannels.js";
 import { searchDocs, getDoc, listDocs, listCategories, knowledgeStats } from "../core/knowledgeStore.js";
 import { getSocialAnalytics } from "../core/socialAnalytics.js";
+import { buildPipelineOverview } from "../core/pipelineOverview.js";
 import {
   run as runBrowserCommand,
   status as browserStatus,
@@ -643,6 +644,21 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
     description:
       "Buyers & Sellers Tracker totals: how many people, how many on each side, counts by status and by pipeline stage, and how many are actually contactable (have a phone or email). Use this for 'how many sellers do we have', 'what's in the pipeline', 'how many hot leads'.",
     input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "get_pipeline_overview",
+    description:
+      "CRM Overview funnels: buyers Views→Close and sellers Call→Close. Optional agent filter (Marco / Wesley / Carlos). Returns collapsed pipeline step counts, conversion rates, unstaged counts, social views and call activity. Same numbers as the CRM Dashboard Overview tab.",
+    input_schema: {
+      type: "object",
+      properties: {
+        agent: {
+          type: "string",
+          description: "Optional. One agent name, or comma-separated (e.g. 'Marco Puga' or 'Wesley'). Omit for all.",
+        },
+      },
+      required: [],
+    },
   },
   {
     name: "get_tracker_pipelines",
@@ -1466,6 +1482,9 @@ export async function executePlatformTool(
           "Records with no phone or email are Instagram/TikTok handles from the DM funnel — they cannot be called or emailed yet.",
       };
     }
+
+    case "get_pipeline_overview":
+      return buildPipelineOverview({ agent: str(input.agent) || null });
 
     case "get_tracker_pipelines":
       return {

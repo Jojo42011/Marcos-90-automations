@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-06: CRM Dashboard Overview is buyers Views→Close + sellers Call→Close (Tracker stages cumulative, social views, dialer/call activity), filterable by Marco/Wesley. `GET /api/crm/pipeline-overview` + Harvey `get_pipeline_overview`. Old Take Action / activity tiles removed from that tab.
 - 2026-11-06: Comment agent public auto-replies are TikTok-only — Instagram (and other non-TikTok) `comment.received` events are recorded as `skipped_platform` and never posted. TikTok comment replies and all DM flows are unchanged.
 - 2026-11-05: Analytics tab lists every active Zernio connection for the signed-in owner (Marco’s second TikTok, Instagram, Facebook, YouTube; Wesley’s Instagram, etc.), pulls account insights + follower-stats (not only post roll-ups), and keeps canonical not-connected stubs. Harvey `get_social_analytics` / `get_social_summary` match by platform family or account id.
 - 2026-11-04: Harvey execution lanes (`EXECUTION_LANES`: Command Center → browser → Composio) are shared across chat operational prompt and Work context; false TikTok/social denials re-trigger capability recovery; `scripts/verify-harvey-jobs.mjs` pins routing and the route-with-feature convention. Token-efficient: one compact decision tree, not duplicated catalogs.
