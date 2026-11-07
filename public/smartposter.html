@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="/account-session.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SmartPoster — Marco Puga Realty</title>
+<style>
+  :root{
+    --accent:#59c4c4; --accent-2:#4ca7a7; --soft:#eef8f8;
+    --line:#e8edee; --text:#1f2b30; --muted:#6b7a82; --bg:#f7fafa;
+    --ok:#0f9d76; --warn:#b45309; --bad:#c0616a; --card:#fff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);padding:20px 22px 48px;min-height:100vh}
+  h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+  .head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .head .grow{flex:1;min-width:220px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button.btn,a.btn{
+    height:34px;padding:0 14px;border:1px solid var(--line);border-radius:8px;
+    background:var(--card);color:var(--text);font-size:12.5px;font-weight:600;
+    cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+  }
+  button.btn:hover,a.btn:hover{border-color:var(--accent)}
+  button.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+  button.btn[disabled]{opacity:.55;cursor:default}
+
+  .profiles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+  .profiles .lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-right:4px}
+  .chip{
+    display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px 0 8px;
+    border:1px solid var(--line);border-radius:999px;background:var(--card);
+    font-size:12px;font-weight:600;color:var(--text);cursor:pointer;user-select:none;
+  }
+  .chip.on{border-color:rgba(89,196,196,.55);background:var(--soft)}
+  .chip .av{
+    width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-size:9px;font-weight:700;color:#fff;letter-spacing:-.02em;
+  }
+  .chip .av.tiktok{background:#111} .chip .av.instagram{background:#c13584}
+  .chip .av.facebook{background:#1877f2} .chip .av.youtube{background:#ff0000}
+  .chip .av.other{background:#6b7a82}
+
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tab{
+    position:relative;padding:9px 14px;border:1px solid transparent;border-bottom:none;
+    border-radius:9px 9px 0 0;font-size:13px;font-weight:600;color:var(--muted);
+    cursor:pointer;background:transparent;bottom:-1px;
+  }
+  .tab:hover{color:var(--text)}
+  .tab.active{color:var(--text);border-bottom:2px solid var(--accent)}
+
+  .banner{border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.55;margin-bottom:14px;border:1px solid}
+  .banner.info{background:var(--soft);border-color:rgba(89,196,196,.35);color:#215b5b}
+  .banner.warn{background:#fffbeb;border-color:rgba(180,83,9,.25);color:#8a4b09}
+  .banner.bad{background:#fef2f2;border-color:rgba(192,97,106,.3);color:#8f3a41}
+
+  .layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;align-items:start}
+  @media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+  .rail,.panel{background:var(--card);border:1px solid var(--line);border-radius:11px}
+  .rail{padding:12px;min-height:420px}
+  .rail h2,.panel h2{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .rail-meta{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.4}
+  .media-item{
+    display:flex;flex-direction:column;gap:4px;padding:10px;border:1px solid var(--line);
+    border-radius:9px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  .media-item:hover,.media-item.on{border-color:rgba(89,196,196,.55);background:var(--soft)}
+  .media-item .name{font-size:12.5px;font-weight:600;word-break:break-word}
+  .media-item .meta{font-size:11px;color:var(--muted)}
+  .status{
+    display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:999px;
+    font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;
+  }
+  .status.draft,.status.inbox{background:#f1f5f5;color:var(--muted);border:1px dashed #c9d4d4}
+  .status.ready{background:#fff7ed;color:var(--warn)}
+  .status.scheduled{background:#e8f7f2;color:var(--ok)}
+  .status.published{background:#eef8f8;color:var(--accent-2)}
+  .status.failed{background:#fef2f2;color:var(--bad)}
+
+  .week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;min-height:420px}
+  @media (max-width:1100px){.week{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .day{
+    border:1px solid var(--line);border-radius:10px;background:var(--card);min-height:160px;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .day.today{border-color:rgba(89,196,196,.55);box-shadow:inset 0 0 0 1px rgba(89,196,196,.2)}
+  .day .dh{padding:9px 10px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline}
+  .day .dh .d{font-size:12.5px;font-weight:700}
+  .day .dh .w{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .day .slots{padding:8px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .slot-hint{font-size:10.5px;color:#9aa7ae;padding:2px 4px}
+  .post-block{
+    border-radius:8px;padding:8px 9px;border:1px solid var(--line);background:#fbfcfc;
+    cursor:pointer;transition:border-color .15s;
+  }
+  .post-block:hover{border-color:var(--accent)}
+  .post-block.draft{border-style:dashed}
+  .post-block.scheduled{border-color:rgba(15,157,118,.35);background:#f3fbf8}
+  .post-block.failed{border-color:rgba(192,97,106,.35);background:#fff8f8}
+  .post-block .t{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px}
+  .post-block .c{font-size:12px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .post-block .p{font-size:10.5px;color:var(--muted);margin-top:4px}
+
+  .queue{display:flex;flex-direction:column;gap:8px}
+  .qrow{
+    display:grid;grid-template-columns:minmax(0,1.4fr) 110px 150px 120px auto;gap:12px;
+    align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);
+  }
+  @media (max-width:900px){.qrow{grid-template-columns:1fr;gap:6px}}
+  .qrow .title{font-size:13px;font-weight:600}
+  .qrow .cap{font-size:12px;color:var(--muted);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .qrow .when,.qrow .plats{font-size:12px;color:var(--muted)}
+  .qacts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .qacts button{height:28px;padding:0 10px;font-size:11.5px}
+
+  .empty{padding:36px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+  .empty .big{font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px}
+
+  .settings{display:grid;gap:14px;max-width:720px}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .field label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .field input,.field textarea,.field select{
+    height:36px;border:1px solid var(--line);border-radius:8px;padding:0 11px;
+    font-size:13px;background:var(--card);color:var(--text);outline:none;
+  }
+  .field textarea{height:88px;padding:10px 11px;resize:vertical}
+  .field input:focus,.field textarea:focus{border-color:var(--accent)}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.45}
+  .row-inline{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px}
+  .toggle input{width:16px;height:16px}
+
+  .drawer-bg{position:fixed;inset:0;background:rgba(16,24,40,.28);z-index:40;display:none}
+  .drawer-bg.on{display:block}
+  .drawer{
+    position:fixed;top:0;right:0;bottom:0;width:min(420px,96vw);background:var(--card);
+    border-left:1px solid var(--line);z-index:41;padding:18px 18px 28px;overflow:auto;
+    transform:translateX(104%);transition:transform .22s ease;
+  }
+  .drawer.on{transform:translateX(0)}
+  .drawer h3{font-size:16px;font-weight:700;margin-bottom:4px}
+  .drawer .x{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer}
+
+  [data-theme="dark"]{
+    --bg:#121617; --card:#1a1f20; --text:#e8eeee; --muted:#9aa7ae; --line:#2a3233; --soft:#1c2828;
+  }
+  [data-theme="dark"] .post-block{background:#171c1d}
+  [data-theme="dark"] .banner.info{color:#a9d6d6}
+  [data-theme="dark"] .banner.warn{background:#342b1b;color:#edc98c}
+  [data-theme="dark"] .banner.bad{background:#342328;color:#efb0b7}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="grow">
+    <h1>SmartPoster</h1>
+    <div class="sub" id="sub">Drive inbox → AI captions → spaced schedule across your Zernio accounts.</div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btnSettings" type="button">Settings</button>
+    <button class="btn primary" id="btnSync" type="button">Sync Drive</button>
+  </div>
+</div>
+
+<div id="banner"></div>
+<div class="profiles" id="profiles"></div>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-view="calendar">Calendar</div>
+  <div class="tab" data-view="queue">Queue</div>
+</div>
+
+<div id="view"></div>
+
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer">
+  <button class="x" id="drawerClose" type="button" aria-label="Close">×</button>
+  <div id="drawerBody"></div>
+</aside>
+
+<script>
+"use strict";
+
+var DATA = null;
+var VIEW = "calendar";
+var FILTER = new Set();
+var WEEK_OFFSET = 0;
+var SELECTED = null;
+
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+  });
+}
+
+function fmtTime(iso, tz){
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: tz || (DATA && DATA.settings && DATA.settings.timezone) || "America/Chicago",
+      weekday: "short", month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit"
+    }).format(new Date(iso));
+  } catch (_) { return iso; }
+}
+
+function fmtHM(iso, tz){
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: tz || DATA.settings.timezone,
+      hour: "numeric", minute: "2-digit"
+    }).format(new Date(iso));
+  } catch (_) { return ""; }
+}
+
+function localYMD(d, tz){
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz || "America/Chicago",
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(d);
+}
+
+function addDaysISO(isoDate, days){
+  var p = isoDate.split("-").map(Number);
+  var dt = new Date(Date.UTC(p[0], p[1]-1, p[2] + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+function weekDates(){
+  var tz = DATA.settings.timezone || "America/Chicago";
+  var today = DATA.today || localYMD(new Date(), tz);
+  /* Monday-start week containing today, then WEEK_OFFSET. */
+  var base = new Date(today + "T12:00:00Z");
+  var dow = base.getUTCDay(); /* 0 Sun */
+  var toMon = dow === 0 ? -6 : 1 - dow;
+  var mon = addDaysISO(today, toMon + WEEK_OFFSET * 7);
+  var days = [];
+  for (var i = 0; i < 7; i++) days.push(addDaysISO(mon, i));
+  return days;
+}
+
+function postMatchesFilter(p){
+  if (!FILTER.size) return true;
+  if (!p.platforms || !p.platforms.length) return true;
+  return p.platforms.some(function(x){ return FILTER.has(x); })
+    || (p.accountIds || []).some(function(id){ return FILTER.has(id); });
+}
+
+function platformColor(p){
+  var x = String(p || "").toLowerCase();
+  if (x === "tiktok") return "tiktok";
+  if (x === "instagram") return "instagram";
+  if (x === "facebook") return "facebook";
+  if (x === "youtube") return "youtube";
+  return "other";
+}
+
+function initials(u){
+  var s = String(u || "?").replace(/^@/, "");
+  return (s.slice(0, 2) || "?").toUpperCase();
+}
+
+function renderBanner(){
+  var el = document.getElementById("banner");
+  if (!DATA) { el.innerHTML = ""; return; }
+  var bits = [];
+  if (!DATA.accounts || !DATA.accounts.length) {
+    bits.push('<div class="banner warn"><b>No Zernio social accounts on this profile yet.</b> Connect them in Zernio, then refresh.</div>');
+  }
+  if (!DATA.drive || !DATA.drive.connected) {
+    bits.push('<div class="banner info"><b>Google Drive not connected.</b> Open Settings to connect the editors\' folder, then Sync.</div>');
+  } else if (!DATA.settings.driveFolderId) {
+    bits.push('<div class="banner warn"><b>Drive is connected, but no folder id is set.</b> Paste the folder id in Settings.</div>');
+  } else if (DATA.settings.lastSyncNote) {
+    bits.push('<div class="banner info">' + esc(DATA.settings.lastSyncNote) + '</div>');
+  }
+  if (DATA.accountsError) {
+    bits.push('<div class="banner bad"><b>Zernio accounts error.</b> ' + esc(DATA.accountsError) + '</div>');
+  }
+  el.innerHTML = bits.join("");
+}
+
+function renderProfiles(){
+  var el = document.getElementById("profiles");
+  var accounts = (DATA && DATA.accounts) || [];
+  if (!accounts.length) {
+    el.innerHTML = '<span class="lbl">Profiles</span><span class="sub">None connected</span>';
+    return;
+  }
+  var html = '<span class="lbl">Profiles</span>';
+  accounts.forEach(function(a){
+    var on = FILTER.has(a.platform) || FILTER.has(a.id);
+    html += '<button type="button" class="chip' + (on ? ' on' : '') + '" data-plat="' + esc(a.platform) + '" data-id="' + esc(a.id) + '">'
+      + '<span class="av ' + platformColor(a.platform) + '">' + esc(initials(a.username || a.platform)) + '</span>'
+      + esc((a.username ? '@' + a.username : a.platform))
+      + '</button>';
+  });
+  el.innerHTML = html;
+  el.querySelectorAll(".chip").forEach(function(btn){
+    btn.onclick = function(){
+      var plat = btn.getAttribute("data-plat");
+      if (FILTER.has(plat)) FILTER.delete(plat); else FILTER.add(plat);
+      render();
+    };
+  });
+}
+
+function libraryPosts(){
+  return ((DATA && DATA.posts) || []).filter(function(p){
+    return ["inbox","draft","ready","failed"].indexOf(p.status) >= 0 && postMatchesFilter(p);
+  });
+}
+
+function renderLibrary(){
+  var items = libraryPosts();
+  if (!items.length) {
+    return '<div class="rail"><h2>Media</h2><div class="rail-meta">Unused / pending videos from Drive land here — Later-style side library.</div>'
+      + '<div class="empty"><div class="big">Library empty</div>Drop dated videos into the Drive folder, then Sync.</div></div>';
+  }
+  return '<div class="rail"><h2>Media</h2><div class="rail-meta">' + items.length + ' pending</div>'
+    + items.map(function(p){
+      return '<div class="media-item' + (SELECTED === p.id ? ' on' : '') + '" data-id="' + esc(p.id) + '">'
+        + '<div class="name">' + esc(p.title || p.fileName) + '</div>'
+        + '<div class="meta"><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span> · '
+        + esc((p.platforms || []).join(", ") || "all") + '</div></div>';
+    }).join("")
+    + '</div>';
+}
+
+function postsForDay(ymd){
+  return ((DATA && DATA.posts) || []).filter(function(p){
+    if (!postMatchesFilter(p)) return false;
+    var d = (p.scheduledFor && localYMD(new Date(p.scheduledFor), DATA.settings.timezone))
+      || p.targetDate;
+    return d === ymd;
+  }).sort(function(a,b){
+    return String(a.scheduledFor||"").localeCompare(String(b.scheduledFor||""));
+  });
+}
+
+function renderCalendar(){
+  var days = weekDates();
+  var tz = DATA.settings.timezone;
+  var slots = DATA.settings.slots || [];
+  var weekHtml = '<div class="week">' + days.map(function(ymd){
+    var isToday = ymd === DATA.today;
+    var label = new Date(ymd + "T12:00:00Z");
+    var wd = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" }).format(label);
+    var dayNum = ymd.slice(8);
+    var posts = postsForDay(ymd);
+    return '<div class="day' + (isToday ? ' today' : '') + '">'
+      + '<div class="dh"><span class="d">' + esc(dayNum) + '</span><span class="w">' + esc(wd) + '</span></div>'
+      + '<div class="slots">'
+      + (posts.length ? posts.map(function(p){
+          return '<div class="post-block ' + esc(p.status) + '" data-id="' + esc(p.id) + '">'
+            + '<div class="t">' + esc(fmtHM(p.scheduledFor, tz) || "unscheduled") + '</div>'
+            + '<div class="c">' + esc(p.title || p.fileName) + '</div>'
+            + '<div class="p">' + esc((p.platforms || []).join(" · ")) + '</div></div>';
+        }).join("") : '<div class="slot-hint">' + esc(slots.join(" · ") || "No slots") + '</div>')
+      + '</div></div>';
+  }).join("") + '</div>';
+
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">'
+    + '<div class="actions">'
+    + '<button class="btn" type="button" id="weekPrev">← Week</button>'
+    + '<button class="btn" type="button" id="weekToday">This week</button>'
+    + '<button class="btn" type="button" id="weekNext">Week →</button>'
+    + '</div>'
+    + '<div class="sub">Slots: ' + esc((DATA.settings.slots || []).join(", ")) + ' · ' + esc(tz) + '</div>'
+    + '</div>'
+    + '<div class="layout">' + renderLibrary() + '<div>' + weekHtml + '</div></div>';
+}
+
+function renderQueue(){
+  var posts = ((DATA && DATA.posts) || []).filter(postMatchesFilter).slice().reverse();
+  if (!posts.length) {
+    return '<div class="panel"><div class="empty"><div class="big">Queue is clear</div>Synced videos and schedules will show here.</div></div>';
+  }
+  return '<div class="queue">' + posts.map(function(p){
+    return '<div class="qrow" data-id="' + esc(p.id) + '">'
+      + '<div><div class="title">' + esc(p.title || p.fileName) + '</div>'
+      + '<div class="cap">' + esc(p.caption || "") + '</div></div>'
+      + '<div><span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></div>'
+      + '<div class="when">' + esc(fmtTime(p.scheduledFor, DATA.settings.timezone)) + '</div>'
+      + '<div class="plats">' + esc((p.platforms || []).join(", ")) + '</div>'
+      + '<div class="qacts">'
+      + (p.status === "draft" || p.status === "ready" || p.status === "failed"
+          ? '<button class="btn primary" data-act="schedule" data-id="' + esc(p.id) + '" type="button">Schedule</button>' : '')
+      + '<button class="btn" data-act="edit" data-id="' + esc(p.id) + '" type="button">Edit</button>'
+      + '</div></div>';
+  }).join("") + '</div>';
+}
+
+function openPostDrawer(id){
+  var p = ((DATA && DATA.posts) || []).find(function(x){ return x.id === id; });
+  if (!p) return;
+  SELECTED = id;
+  var body = document.getElementById("drawerBody");
+  body.innerHTML = '<h3>' + esc(p.title || p.fileName) + '</h3>'
+    + '<div class="sub" style="margin-bottom:14px">' + esc(p.fileName) + ' · <span class="status ' + esc(p.status) + '">' + esc(p.status) + '</span></div>'
+    + (p.error ? '<div class="banner bad" style="margin-bottom:12px">' + esc(p.error) + '</div>' : '')
+    + '<div class="field"><label>Caption</label><textarea id="editCaption">' + esc(p.caption) + '</textarea></div>'
+    + '<div class="field"><label>Title</label><input id="editTitle" value="' + esc(p.title) + '" /></div>'
+    + '<div class="field"><label>Scheduled for (ISO)</label><input id="editWhen" value="' + esc(p.scheduledFor || "") + '" /></div>'
+    + '<div class="hint" style="margin-bottom:12px">Platforms: ' + esc((p.platforms || []).join(", ") || "—")
+    + (p.zernioPostId ? '<br>Zernio id: ' + esc(p.zernioPostId) : '') + '</div>'
+    + '<div class="actions">'
+    + '<button class="btn primary" type="button" id="savePost">Save</button>'
+    + ((p.status === "draft" || p.status === "ready" || p.status === "failed")
+        ? '<button class="btn" type="button" id="schedPost">Push to Zernio</button>' : '')
+    + '<button class="btn" type="button" id="delPost">Remove</button>'
+    + '</div>';
+  document.getElementById("drawerBg").classList.add("on");
+  document.getElementById("drawer").classList.add("on");
+
+  document.getElementById("savePost").onclick = async function(){
+    await api("PATCH", "/api/smartposter/posts/" + encodeURIComponent(p.id), {
+      caption: document.getElementById("editCaption").value,
+      title: document.getElementById("editTitle").value,
+      scheduledFor: document.getElementById("editWhen").value || null
+    });
+    await load();
+    openPostDrawer(p.id);
+  };
+  var sp = document.getElementById("schedPost");
+  if (sp) sp.onclick = async function(){
+    sp.disabled = true;
+    await api("POST", "/api/smartposter/posts/" + encodeURIComponent(p.id) + "/schedule", {});
+    await load();
+    openPostDrawer(p.id);
+  };
+  document.getElementById("delPost").onclick = async function(){
+    if (!confirm("Remove this SmartPoster item? (Does not delete the Drive file.)")) return;
+    await api("DELETE", "/api/smartposter/posts/" + encodeURIComponent(p.id));
+    closeDrawer();
+    await load();
+  };
+}
+
+function openSettings(){
+  var s = DATA.settings || {};
+  var drive = DATA.drive || {};
+  var body = document.getElementById("drawerBody");
+  body.innerHTML = '<h3>Settings</h3>'
+    + '<div class="sub" style="margin-bottom:16px">Drive naming: <code>YYYY-MM-DD__platform__slug.mp4</code> · platforms: tiktok, instagram, facebook, youtube, all</div>'
+    + '<div class="field"><label>Google Drive</label>'
+    + (drive.connected
+        ? '<div class="row-inline"><span class="status scheduled">Connected</span><span class="hint">' + esc(drive.email || "") + '</span>'
+          + '<button class="btn" type="button" id="driveDisc">Disconnect</button></div>'
+        : (DATA.googleOAuthReady
+            ? '<a class="btn primary" href="/api/smartposter/drive/connect">Connect Google Drive</a>'
+            : '<div class="banner warn">OAuth needs HARVEY_GOOGLE_CLIENT_ID / SECRET, HARVEY_PUBLIC_URL, HARVEY_VAULT_KEY on the server.</div>'))
+    + '</div>'
+    + '<div class="field"><label>Drive folder id</label><input id="setFolder" value="' + esc(s.driveFolderId || "") + '" placeholder="1AbC…" /></div>'
+    + '<div class="field"><label>Folder name (optional label)</label><input id="setFolderName" value="' + esc(s.driveFolderName || "") + '" /></div>'
+    + '<div class="field"><label>Daily slots (HH:MM, comma-separated)</label><input id="setSlots" value="' + esc((s.slots || []).join(", ")) + '" /></div>'
+    + '<div class="field"><label>Timezone</label><input id="setTz" value="' + esc(s.timezone || "America/Chicago") + '" /></div>'
+    + '<div class="field"><label>Daily ingest hour (0–23, local)</label><input id="setHour" type="number" min="0" max="23" value="' + esc(s.ingestHour) + '" /></div>'
+    + '<div class="field"><label class="toggle"><input type="checkbox" id="setAuto"' + (s.autoSchedule !== false ? " checked" : "") + ' /> Auto-schedule to Zernio on sync</label></div>'
+    + '<div class="actions"><button class="btn primary" type="button" id="saveSettings">Save settings</button></div>';
+
+  document.getElementById("drawerBg").classList.add("on");
+  document.getElementById("drawer").classList.add("on");
+
+  var disc = document.getElementById("driveDisc");
+  if (disc) disc.onclick = async function(){
+    await api("POST", "/api/smartposter/drive/disconnect", {});
+    await load();
+    openSettings();
+  };
+  document.getElementById("saveSettings").onclick = async function(){
+    var slots = document.getElementById("setSlots").value.split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+    await api("PATCH", "/api/smartposter/settings", {
+      driveFolderId: document.getElementById("setFolder").value,
+      driveFolderName: document.getElementById("setFolderName").value,
+      slots: slots,
+      timezone: document.getElementById("setTz").value,
+      ingestHour: Number(document.getElementById("setHour").value),
+      autoSchedule: document.getElementById("setAuto").checked
+    });
+    await load();
+    openSettings();
+  };
+}
+
+function closeDrawer(){
+  document.getElementById("drawerBg").classList.remove("on");
+  document.getElementById("drawer").classList.remove("on");
+  SELECTED = null;
+}
+
+function render(){
+  renderBanner();
+  renderProfiles();
+  var view = document.getElementById("view");
+  view.innerHTML = VIEW === "queue" ? renderQueue() : renderCalendar();
+
+  document.querySelectorAll(".tab").forEach(function(t){
+    t.classList.toggle("active", t.getAttribute("data-view") === VIEW);
+  });
+
+  var prev = document.getElementById("weekPrev");
+  var next = document.getElementById("weekNext");
+  var today = document.getElementById("weekToday");
+  if (prev) prev.onclick = function(){ WEEK_OFFSET -= 1; render(); };
+  if (next) next.onclick = function(){ WEEK_OFFSET += 1; render(); };
+  if (today) today.onclick = function(){ WEEK_OFFSET = 0; render(); };
+
+  view.querySelectorAll("[data-id]").forEach(function(el){
+    if (el.tagName === "BUTTON") return;
+    el.addEventListener("click", function(e){
+      if (e.target.closest("[data-act]")) return;
+      var id = el.getAttribute("data-id");
+      if (id) openPostDrawer(id);
+    });
+  });
+  view.querySelectorAll("[data-act]").forEach(function(btn){
+    btn.addEventListener("click", async function(e){
+      e.stopPropagation();
+      var id = btn.getAttribute("data-id");
+      var act = btn.getAttribute("data-act");
+      if (act === "edit") openPostDrawer(id);
+      if (act === "schedule") {
+        btn.disabled = true;
+        await api("POST", "/api/smartposter/posts/" + encodeURIComponent(id) + "/schedule", {});
+        await load();
+      }
+    });
+  });
+
+  var sub = document.getElementById("sub");
+  var n = ((DATA && DATA.counts) || {});
+  sub.textContent = (DATA && DATA.drive && DATA.drive.connected ? "Drive connected · " : "Drive offline · ")
+    + (n.scheduled || 0) + " scheduled · " + (n.ready || 0) + " ready · " + (n.failed || 0) + " failed";
+}
+
+async function api(method, path, body){
+  var opts = { method: method, headers: { "Accept": "application/json" } };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  var res = await fetch(path, opts);
+  var json = null;
+  try { json = await res.json(); } catch (_) {}
+  if (!res.ok) throw new Error((json && json.error) || ("HTTP " + res.status));
+  return json;
+}
+
+async function load(){
+  DATA = await api("GET", "/api/smartposter/overview");
+  render();
+}
+
+document.getElementById("tabs").onclick = function(e){
+  var t = e.target.closest(".tab");
+  if (!t) return;
+  VIEW = t.getAttribute("data-view");
+  render();
+};
+document.getElementById("btnSettings").onclick = function(){ openSettings(); };
+document.getElementById("btnSync").onclick = async function(){
+  var btn = document.getElementById("btnSync");
+  btn.disabled = true;
+  btn.textContent = "Syncing…";
+  try {
+    var r = await api("POST", "/api/smartposter/sync", {});
+    await load();
+    if (r && r.note) {
+      document.getElementById("banner").innerHTML = '<div class="banner info">' + esc(r.note) + '</div>' + document.getElementById("banner").innerHTML;
+    }
+  } catch (err) {
+    document.getElementById("banner").innerHTML = '<div class="banner bad"><b>Sync failed.</b> ' + esc(err.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sync Drive";
+  }
+};
+document.getElementById("drawerClose").onclick = closeDrawer;
+document.getElementById("drawerBg").onclick = closeDrawer;
+
+load().catch(function(err){
+  document.getElementById("banner").innerHTML = '<div class="banner bad"><b>Could not load SmartPoster.</b> ' + esc(err.message) + '</div>';
+});
+</script>
+</body>
+</html>

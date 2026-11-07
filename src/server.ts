@@ -168,6 +168,8 @@ import { sendAssignmentEmail } from "./core/taskAssignmentEmail.js";
 import { getBrivityPeople, getBrivityImportStatus } from "./core/brivityPeople.js";
 import { buildZip } from "./core/zipWriter.js";
 import { getSocialAnalytics } from "./core/socialAnalytics.js";
+import { registerSmartPosterRoutes } from "./integrations/smartPoster/routes.js";
+import { maybeAutoSync as maybeSmartPosterAutoSync } from "./integrations/smartPoster/sync.js";
 import { handleWebsiteVisit } from "./agents/reEngagement/index.js";
 import { handleListingStatusUpdate } from "./agents/listingStatusAutomation/index.js";
 import { deleteClipFile, getFreeDiskMB, runSafetyDiskCleanup } from "./core/diskCleanup.js";
@@ -12405,6 +12407,9 @@ app.get("/analytics", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "analytics.html"));
 });
 
+/* SmartPoster — Drive inbox → AI captions → Zernio schedule (Growth tab). */
+registerSmartPosterRoutes(app, { publicDir, requireAuthPage });
+
 /* ——— 1.2 Browser control: the extension's endpoints ———
    The extension polls; the server never reaches into a browser. Both routes
    authenticate on the pairing token and fail closed when it isn't set. */
@@ -15291,6 +15296,14 @@ if (!isTenantGateway() && isSheetSyncConfigured()) {
 /* Scheduled Auto Plan execution — hourly. The old 24h cadence meant a "day 0"
    step could sit unsent for a day and chained steps drifted a full day per
    link; an hourly sweep keeps offsets honest at day granularity. */
+/* SmartPoster daily Drive ingest — checks once an hour; runs in the configured local ingest hour. */
+setInterval(() => {
+  if (isTenantGateway()) return;
+  void maybeSmartPosterAutoSync().catch((err) =>
+    console.warn("[smartposter] auto-sync failed:", err),
+  );
+}, 60 * 60 * 1000).unref();
+
 const AUTO_PLAN_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(() => {
   if (isTenantGateway()) return;
