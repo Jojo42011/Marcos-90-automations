@@ -22,6 +22,7 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-07: SmartPoster Drive connect uses Composio (same managed Google sign-in as Harvey Plugins). Operators pick the inbox folder by name — no Google client IDs or pasted folder IDs.
 - 2026-11-07: SmartPoster (Growth tab under Analytics) — Later-style calendar + media rail for Marco/Wesley. Drive folder naming `YYYY-MM-DD__platform__slug.mp4`, daily ingest, AI captions from past Zernio captions, spaced slots (America/Chicago), schedule via Zernio `POST /v1/media/presign` + `POST /v1/posts`. Harvey `get_smartposter`.
 - 2026-11-07: Overview agent filter fixed — unchecking Marco no longer snaps back to All (empty pick → zeros); Carlos removed from agent list; Views/Comments only when All or Marco is selected so Wesley picks do not keep Marco's social totals.
 - 2026-11-07: Overview funnel tiles taller (more vertical padding / larger numbers) without widening, so both funnels stay readable without horizontal scroll.

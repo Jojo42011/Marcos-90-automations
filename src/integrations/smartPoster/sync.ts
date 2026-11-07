@@ -1,9 +1,9 @@
 /**
  * SmartPoster daily Drive pull → caption → slot → Zernio schedule.
  */
+import { tenantOwner } from "../../core/tenantData.js";
 import {
   findByDriveFileId,
-  getDriveAuth,
   getSettings,
   listPosts,
   localDateISO,
@@ -17,10 +17,15 @@ import { createZernioPost, uploadBufferToZernio } from "../zernio/posts.js";
 import { draftCaption, parseVideoFileName } from "./captions.js";
 import {
   downloadDriveFile,
+  ensureFolderId,
+  getComposioDriveStatus,
   listFolderVideos,
   readSidecarJson,
-  resolveFolderName,
 } from "./drive.js";
+
+function smartPosterOwner(explicit?: string): string {
+  return String(explicit || tenantOwner() || "operator");
+}
 
 export interface SyncResult {
   ok: boolean;
@@ -50,7 +55,10 @@ function resolveAccounts(
   };
 }
 
-export async function schedulePostToZernio(post: SmartPosterPost): Promise<SmartPosterPost> {
+export async function schedulePostToZernio(
+  post: SmartPosterPost,
+  owner = smartPosterOwner(),
+): Promise<SmartPosterPost> {
   const settings = getSettings();
   if (!post.driveFileId) {
     return upsertPost({
@@ -85,7 +93,7 @@ export async function schedulePostToZernio(post: SmartPosterPost): Promise<Smart
   }
 
   try {
-    const bytes = await downloadDriveFile(post.driveFileId);
+    const bytes = await downloadDriveFile(owner, post.driveFileId);
     const uploaded = await uploadBufferToZernio(post.fileName, bytes);
     if (!uploaded.ok || !uploaded.publicUrl) {
       return upsertPost({
@@ -168,18 +176,20 @@ export async function schedulePostToZernio(post: SmartPosterPost): Promise<Smart
 export async function runSmartPosterSync(opts?: {
   date?: string;
   forceSchedule?: boolean;
+  owner?: string;
 }): Promise<SyncResult> {
+  const owner = smartPosterOwner(opts?.owner);
   const settings = getSettings();
-  const drive = getDriveAuth();
+  const drive = await getComposioDriveStatus(owner);
   const today = opts?.date || localDateISO(settings.timezone);
 
   if (!drive.connected) {
-    const note = "Connect Google Drive in SmartPoster settings first.";
+    const note = "Connect Google Drive in SmartPoster settings (Composio) first.";
     saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: false, scanned: 0, created: 0, scheduled: 0, skipped: 0, failed: 0, note, posts: [] };
   }
-  if (!settings.driveFolderId.trim()) {
-    const note = "Set a Drive folder id in SmartPoster settings.";
+  if (!settings.driveFolderName.trim() && !settings.driveFolderId.trim()) {
+    const note = "Pick a Drive folder by name in SmartPoster settings.";
     saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: false, scanned: 0, created: 0, scheduled: 0, skipped: 0, failed: 0, note, posts: [] };
   }
@@ -192,15 +202,16 @@ export async function runSmartPosterSync(opts?: {
   const touched: SmartPosterPost[] = [];
 
   try {
-    const folderName =
-      settings.driveFolderName
-      || (await resolveFolderName(settings.driveFolderId))
-      || "";
-    if (folderName && folderName !== settings.driveFolderName) {
-      saveSettings({ driveFolderName: folderName });
+    const folder = await ensureFolderId(
+      owner,
+      settings.driveFolderName || "SmartPoster",
+      settings.driveFolderId || undefined,
+    );
+    if (folder.id !== settings.driveFolderId || folder.name !== settings.driveFolderName) {
+      saveSettings({ driveFolderId: folder.id, driveFolderName: folder.name });
     }
 
-    const files = await listFolderVideos(settings.driveFolderId);
+    const files = await listFolderVideos(owner, folder.id);
     scanned = files.length;
 
     const accounts = await listZernioAccounts();
@@ -230,7 +241,7 @@ export async function runSmartPosterSync(opts?: {
       }
 
       const stem = file.name.replace(/\.[^.]+$/, "");
-      const sidecar = await readSidecarJson(settings.driveFolderId, stem).catch(() => null);
+      const sidecar = await readSidecarJson(owner, folder.id, stem).catch(() => null);
       const sidecarCaption =
         sidecar && typeof sidecar.caption === "string" ? sidecar.caption : null;
       const sidecarTitle =
@@ -270,7 +281,7 @@ export async function runSmartPosterSync(opts?: {
       if (!existing) created += 1;
 
       if ((settings.autoSchedule || opts?.forceSchedule) && post.scheduledFor) {
-        post = await schedulePostToZernio(post);
+        post = await schedulePostToZernio(post, owner);
         if (post.status === "scheduled") scheduled += 1;
         else if (post.status === "failed") failed += 1;
       }
@@ -293,9 +304,10 @@ export async function runSmartPosterSync(opts?: {
 let lastAutoDate: string | null = null;
 
 export async function maybeAutoSync(): Promise<void> {
+  const owner = smartPosterOwner();
   const settings = getSettings();
-  const drive = getDriveAuth();
-  if (!drive.connected || !settings.driveFolderId) return;
+  const drive = await getComposioDriveStatus(owner);
+  if (!drive.connected || (!settings.driveFolderName && !settings.driveFolderId)) return;
   const now = new Date();
   const today = localDateISO(settings.timezone, now);
   const hour = Number(
@@ -308,24 +320,23 @@ export async function maybeAutoSync(): Promise<void> {
   if (hour !== settings.ingestHour) return;
   if (lastAutoDate === today) return;
   lastAutoDate = today;
-  await runSmartPosterSync({ date: today });
+  await runSmartPosterSync({ date: today, owner });
 }
 
-export async function getSmartPosterOverview() {
+export async function getSmartPosterOverview(owner = smartPosterOwner()) {
   const settings = getSettings();
-  const drive = getDriveAuth();
+  const drive = await getComposioDriveStatus(owner);
   const accounts = await listZernioAccounts();
   const posts = listPosts({ limit: 300 });
   const today = localDateISO(settings.timezone);
   return {
-    settings,
+    settings: {
+      ...settings,
+      /* UI should key off folder name; id is an internal cache after pick/sync. */
+    },
     drive,
-    googleOAuthReady: Boolean(
-      process.env.HARVEY_GOOGLE_CLIENT_ID?.trim()
-        && process.env.HARVEY_GOOGLE_CLIENT_SECRET?.trim()
-        && process.env.HARVEY_PUBLIC_URL?.trim()
-        && process.env.HARVEY_VAULT_KEY?.trim(),
-    ),
+    composioReady: drive.ready,
+    googleOAuthReady: drive.ready,
     zernioConfigured: accounts.ok || Boolean(accounts.error),
     accounts: accounts.ok ? accounts.accounts.filter((a) => a.active) : [],
     accountsError: accounts.ok ? null : accounts.error || null,

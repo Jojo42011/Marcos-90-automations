@@ -84,6 +84,18 @@ check("page + routes + Zernio publish client exist", () => {
   assert(/YYYY-MM-DD__platform__slug/.test(read("public/smartposter.html")));
 });
 
+check("Drive connect uses Composio, not pasted Google client OAuth", () => {
+  const drive = read("src/integrations/smartPoster/drive.ts");
+  assert(/composioReady|executeToolkit|googledrive/i.test(drive));
+  assert(/GOOGLEDRIVE_FIND_FILE/.test(drive));
+  assert(/GOOGLEDRIVE_FIND_FOLDER/.test(drive));
+  assert(!/HARVEY_GOOGLE_CLIENT_ID/.test(drive));
+  const page = read("public/smartposter.html");
+  assert(/Connect with Composio/.test(page));
+  assert(!/Paste the folder id/.test(page));
+  assert(/executeToolkit/.test(read("src/harvey/work/composio.ts")));
+});
+
 check("Harvey get_smartposter ships with the surface", () => {
   assert(/get_smartposter/.test(read("src/harvey/platformTools.ts")));
   assert(/get_smartposter/.test(read("src/harvey/work/capabilities.ts")));

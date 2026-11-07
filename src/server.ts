@@ -12408,7 +12408,7 @@ app.get("/analytics", requireAuthPage, (_req, res) => {
 });
 
 /* SmartPoster — Drive inbox → AI captions → Zernio schedule (Growth tab). */
-registerSmartPosterRoutes(app, { publicDir, requireAuthPage });
+registerSmartPosterRoutes(app, { publicDir, requireAuthPage, sessionUser: sessionUserSync });
 
 /* ——— 1.2 Browser control: the extension's endpoints ———
    The extension polls; the server never reaches into a browser. Both routes
