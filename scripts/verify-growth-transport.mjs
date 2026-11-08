@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import {registerHooks} from 'node:module';
-registerHooks({load(url,context,next){
- if(url.endsWith('/core/zernioOwnerConfig.js'))return {format:'commonjs',shortCircuit:true,source:"exports.currentZernioSecrets=()=>({apiKey:'fixture-only',ownerSlug:'fixture'});"};
- return next(url,context);
-}});
+import Module from 'node:module';
+const originalLoad=Module._load;
+Module._load=function(request,parent,isMain){
+ if(request.endsWith('zernioOwnerConfig.js'))return {currentZernioSecrets:()=>({apiKey:'fixture-only',ownerSlug:'fixture'})};
+ return originalLoad.call(this,request,parent,isMain);
+};
 const original=globalThis.fetch;let calls=[];
 globalThis.fetch=async(url,init)=>{calls.push({url:String(url),init});return new Response(JSON.stringify({dailyData:[{date:'2026-11-06',metrics:{views:25,comments:0}},{date:'invalid',metrics:{views:100}}]}),{status:200});};
 try{
@@ -22,4 +23,4 @@ try{
  assert.equal(created.postId,'remote');assert.equal(calls.at(-1).init.headers['Idempotency-Key'],'stable-post-id');
  assert.equal(JSON.parse(calls.at(-1).init.body).scheduledFor,'2030-11-10T16:00:00Z');
  console.log('Daily performance and publishing transport checks passed: received attribution, account scope, date range, null metrics, cache, errors and idempotency header.');
-}finally{globalThis.fetch=original;}
+}finally{globalThis.fetch=original;Module._load=originalLoad;}

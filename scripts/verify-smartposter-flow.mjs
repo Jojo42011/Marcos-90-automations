@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import {registerHooks} from 'node:module';
+import Module from 'node:module';
+import {pathToFileURL} from 'node:url';
+const originalLoad=Module._load;
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -7,7 +9,7 @@ const root=mkdtempSync(join(tmpdir(),'poster-flow-'));
 process.env.TENANT_DATA_ROOT=root;
 const state=globalThis.posterFixture={created:0,updated:0,rejectUpdate:false,files:[{id:'file-1',name:'Finished tour.mp4'},{id:'file-2',name:'2030-12-31__all__future-video.mp4'}]};
 const mock=source=>({format:'commonjs',shortCircuit:true,source:source.replace(/export (async )?function (\w+)/g,(_,a,n)=>';exports.'+n+' = '+(a||'')+'function '+n)});
-registerHooks({load(url,ctx,next){
+function fixtureLoad(url,ctx,next){
  if(url.endsWith('/smartPoster/drive.js'))return mock(`
  export async function getComposioDriveStatus(){return {connected:true,ready:true};}
  export async function ensureFolderId(){return {id:'folder',name:'Finished'};}
@@ -22,7 +24,15 @@ registerHooks({load(url,ctx,next){
  export async function updateZernioPost(id,body){globalThis.posterFixture.updated++;globalThis.posterFixture.lastUpdate={id,body};return globalThis.posterFixture.rejectUpdate?{ok:false,error:'Provider unavailable'}:{ok:true};}`);
  if(url.endsWith('/smartPoster/captions.js'))return mock(`export function parseVideoFileName(name){return {slug:name,platforms:['all']};}export async function draftCaption(){return 'Fixture caption';}`);
  return next(url,ctx);
-}});
+}
+Module._load=function(request,parent,isMain){
+ const resolved=Module._resolveFilename(request,parent,isMain);
+ if(typeof resolved==='string'&&resolved.endsWith('.js')){
+   const fixture=fixtureLoad(pathToFileURL(resolved).href,{},()=>null);
+   if(fixture){const exports={};new Function('exports',fixture.source)(exports);return exports;}
+ }
+ return originalLoad.call(this,request,parent,isMain);
+};
 const store=await import('../dist/src/core/smartPosterStore.js');
 const flow=await import('../dist/src/integrations/smartPoster/sync.js');
 try{
@@ -69,4 +79,4 @@ try{
  await assert.rejects(flow.updateSmartPosterPost(fresh.id,body,true,'fixture'),/no provider ID/);
  assert.equal(state.created,calls,'An unknown outcome must not cause a duplicate post');
  console.log('SmartPoster passed: import-only, exact targets, timezone, cadence, retries, published reconciliation, immutable schedules and uncertain-submit protection.');
-}finally{store.getSmartPosterDb().close();rmSync(root,{recursive:true,force:true});}
+}finally{Module._load=originalLoad;store.getSmartPosterDb().close();rmSync(root,{recursive:true,force:true});}
