@@ -32,3 +32,5 @@
 
 #pipeOverview .po-card[data-side="buyer"]{--po-num:#187e60}#pipeOverview .po-card[data-side="seller"]{--po-num:#ae5a3f}
 [data-theme="dark"] #pipeOverview .po-card[data-side="buyer"]{--po-num:#6ed2b0}[data-theme="dark"] #pipeOverview .po-card[data-side="seller"]{--po-num:#efa184}
+
+.po-selection{grid-column:1/-1;font-size:12px;color:var(--text-3)}

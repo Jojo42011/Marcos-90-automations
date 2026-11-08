@@ -14,7 +14,7 @@ import {
   type SmartPosterPost,
 } from "../../core/smartPosterStore.js";
 import { listZernioAccounts } from "../zernio/index.js";
-import { createZernioPost, updateZernioPost, uploadBufferToZernio } from "../zernio/posts.js";
+import { createZernioPost, getZernioPostStatus, updateZernioPost, uploadBufferToZernio } from "../zernio/posts.js";
 import { draftCaption, parseVideoFileName } from "./captions.js";
 import {
   downloadDriveFile,
@@ -118,6 +118,7 @@ async function publishPost(
     });
   }
 
+  let submitted=false;
   try {
     const bytes = await downloadDriveFile(owner, post.driveFileId);
     const uploaded = await uploadBufferToZernio(post.fileName, bytes);
@@ -144,7 +145,12 @@ async function publishPost(
       return entry;
     });
 
+    // Persist before the network call: a crash must not turn an accepted schedule into a retryable draft.
+    requireFutureSchedule(post); // Upload time may have consumed the original scheduling margin.
+    upsertPost({...post,mediaUrl:uploaded.publicUrl,status:'scheduled',error:'Schedule confirmation pending. Check Zernio before retrying.'});
+    submitted=true;
     const created = await createZernioPost({
+      idempotencyKey: post.id,
       content: post.caption || post.title || post.fileName,
       mediaUrl: uploaded.publicUrl,
       mediaType: "video",
@@ -160,8 +166,8 @@ async function publishPost(
         mediaUrl: uploaded.publicUrl,
         accountIds: resolved.accountIds,
         platforms: resolved.platforms.length ? resolved.platforms : post.platforms,
-        status: "failed",
-        error: created.error || "Zernio create post failed",
+        status: created.uncertain ? "scheduled" : "failed",
+        error: created.uncertain ? "Schedule outcome unknown. Check Zernio before making changes." : created.error || "Zernio create post failed",
       });
     }
 
@@ -178,8 +184,8 @@ async function publishPost(
   } catch (err) {
     return upsertPost({
       ...post,
-      status: "failed",
-      error: err instanceof Error ? err.message : String(err),
+      status: submitted ? "scheduled" : "failed",
+      error: submitted ? "Schedule outcome unknown. Check Zernio before making changes." : err instanceof Error ? err.message : String(err),
     });
   }
 }
@@ -261,7 +267,7 @@ async function syncInbox(opts?: {
     const note =
       `Checked ${scanned} finished video(s): ${created} added to inbox, ${scheduled} scheduled, `
       + `${skipped} skipped, ${failed} failed.`;
-    saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
+    saveSettings({ lastSyncAt: new Date().toISOString(), lastSuccessfulSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: failed === 0, scanned, created, scheduled, skipped, failed, note, posts: touched };
   } catch (err) {
     const note = err instanceof Error ? err.message : String(err);
@@ -277,31 +283,51 @@ export function runSmartPosterSync(opts?: {date?:string;forceSchedule?:boolean;o
   return syncInFlight;
 }
 
-/** Tick used by the server interval — runs once in the ingest hour window. */
-let lastAutoDate: string | null = null;
-
+/** Persistent cadence survives restarts; failures retry after 15 minutes. */
+export function importDue(settings: ReturnType<typeof getSettings>, now = new Date()): boolean {
+  const attempt = Date.parse(settings.lastAutoAttemptAt || '');
+  if (Number.isFinite(attempt) && now.getTime()-attempt < 15*60_000) return false;
+  const success = Date.parse(settings.lastSuccessfulSyncAt || '');
+  if (settings.ingestIntervalMinutes > 0) return !Number.isFinite(success) || now.getTime()-success >= settings.ingestIntervalMinutes*60_000;
+  const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone:settings.timezone,hour:'numeric',hourCycle:'h23'}).format(now));
+  return hour >= settings.ingestHour && (!Number.isFinite(success) || localDateISO(settings.timezone,new Date(success)) !== localDateISO(settings.timezone,now));
+}
+let autoRunning=false;
 export async function maybeAutoSync(): Promise<void> {
-  const owner = smartPosterOwner();
-  const settings = getSettings();
-  const drive = await getComposioDriveStatus(owner);
-  if (!drive.connected || (!settings.driveFolderName && !settings.driveFolderId)) return;
-  const now = new Date();
-  const today = localDateISO(settings.timezone, now);
-  const hour = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: settings.timezone,
-      hour: "numeric",
-      hourCycle: "h23",
-    }).format(now),
-  );
-  if (hour < settings.ingestHour) return;
-  if (settings.lastSyncAt && localDateISO(settings.timezone, new Date(settings.lastSyncAt)) === today) return;
-  if (lastAutoDate === today) return;
-  lastAutoDate = today;
-  await runSmartPosterSync({ date: today, owner });
+  if(autoRunning) return;
+  autoRunning=true;
+  try {
+    void reconcileScheduledPosts().catch(()=>{});
+    const settings=getSettings();
+    if ((!settings.driveFolderName && !settings.driveFolderId) || !importDue(settings)) return;
+    saveSettings({lastAutoAttemptAt:new Date().toISOString()});
+    await runSmartPosterSync({owner:smartPosterOwner()});
+  } finally {autoRunning=false;}
+}
+let lastReconcile=0;
+let reconciling:Promise<void>|null=null;
+export async function reconcileScheduledPosts():Promise<void> {
+  if(reconciling)return reconciling;
+  if(Date.now()-lastReconcile<5*60_000)return;
+  reconciling=(async()=>{
+    const posts=listPosts({limit:0}).filter(p=>p.zernioPostId && p.status==='scheduled');
+    for(const post of posts){
+      if(publishing.has(post.id))continue;
+      publishing.add(post.id);
+      try{
+        const result=await getZernioPostStatus(post.zernioPostId!);
+        if(result.ok && result.status==='published')upsertPost({...post,status:'published',platformPostUrl:result.url||post.platformPostUrl,error:null});
+        else if(result.ok && ['failed','partial','cancelled','canceled'].includes(result.status||''))upsertPost({...post,status:'failed',error:result.error||'The provider reported '+result.status+'. Review this post in Zernio before retrying.'});
+      }catch{/* Provider outage is not a publishing failure; keep the known schedule. */}
+      finally{publishing.delete(post.id);}
+    }
+    lastReconcile=Date.now();
+  })().finally(()=>{reconciling=null;});
+  return reconciling;
 }
 
 export async function getSmartPosterOverview(owner = smartPosterOwner()) {
+  void reconcileScheduledPosts().catch(()=>{});
   const settings = getSettings();
   const drive = await getComposioDriveStatus(owner);
   const accounts = await listZernioAccounts();

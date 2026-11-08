@@ -78,6 +78,7 @@ export function registerSmartPosterRoutes(
     try {
       if (!getPost(String(req.params.id))) { res.status(404).json({error:"Post not found"}); return; }
       const post = await updateSmartPosterPost(String(req.params.id), req.body || {}, true, ownerOf(req, sessionUser));
+      if (post.status === "scheduled" && !post.zernioPostId) { res.status(409).json({error:post.error,post}); return; }
       if (post.status === "failed") { res.status(400).json({error:post.error,post}); return; }
       res.json({post});
     } catch (err) { res.status(400).json({error:err instanceof Error ? err.message : String(err)}); }
@@ -126,6 +127,7 @@ export function registerSmartPosterRoutes(
       if (b.timezone != null) patch.timezone = String(b.timezone).trim();
       if (Array.isArray(b.slots)) patch.slots = b.slots.map((s) => String(s));
       if (b.autoSchedule != null) patch.autoSchedule = Boolean(b.autoSchedule);
+      if (b.ingestIntervalMinutes != null) patch.ingestIntervalMinutes = Number(b.ingestIntervalMinutes);
       if (b.ingestHour != null) patch.ingestHour = Number(b.ingestHour);
       const settings = saveSettings(patch as never);
       res.json({ settings });

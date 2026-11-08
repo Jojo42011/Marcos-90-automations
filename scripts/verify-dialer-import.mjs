@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../public/crm-brivity.html',import.meta.url),'utf8');
+const elements=new Map();const element=id=>{if(!elements.has(id))elements.set(id,{value:'Fixture source',hidden:false,disabled:false,textContent:''});return elements.get(id);};
+const dialog={innerHTML:'',showModal(){},addEventListener(){},querySelector:element};
+let requests=[],fail=false;
+const context=vm.createContext({console,URL,location:{href:'https://example.test/crm'},setTimeout:()=>{},crmApi:x=>x,esc:x=>x,crmToast:()=>{},document:{createElement:()=>dialog,body:{appendChild(){}}},fetch:async(url,init)=>{requests.push(JSON.parse(init.body));return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{ok:true,create:2,enrich:1,skip:3,created:2,enriched:1}};}});
+vm.runInContext(source.slice(source.indexOf('async function dialImportFile('),source.indexOf('function dialBind(){')),context);
+await context.dialImportFile({name:'fixture.csv',size:50,text:async()=>'Name,Phone\nFixture,2105550199'});
+element('#dlImportReview').onclick();await new Promise(r=>setImmediate(r));
+assert.equal(requests[0].apply,false);assert.equal(element('#dlImportApply').hidden,false);assert.match(element('#dlImportPreview').textContent,/2 new/);
+element('#dlImportApply').onclick();await new Promise(r=>setImmediate(r));assert.equal(requests[1].apply,true);assert.equal(requests[1].source,'Fixture source');
+fail=true;await context.dialImportFile({name:'fixture.csv',size:50,text:async()=>''});element('#dlImportReview').onclick();await new Promise(r=>setImmediate(r));
+assert.match(element('#dlImportPreview').textContent,/Import unavailable/);assert.equal(element('#dlImportReview').disabled,false);
+console.log('Dialer import checks passed: preview-before-apply, source preservation, success and server-error recovery.');

@@ -198,6 +198,7 @@ function bufferFromDownloadPayload(payload: unknown): Buffer | null {
 
   for (const c of candidates) {
     if (typeof c === "string" && c.trim()) {
+      if (/^https?:\/\//i.test(c)) continue; // Download links are not video bytes.
       /* Prefer base64 when it looks like it; otherwise treat as latin1 bytes. */
       const cleaned = c.replace(/^data:[^;]+;base64,/, "");
       if (/^[A-Za-z0-9+/=\r\n]+$/.test(cleaned.slice(0, 200)) && cleaned.length > 64) {
@@ -243,6 +244,7 @@ export async function downloadDriveFile(owner: string, fileId: string): Promise<
     || (typeof root.downloadUrl === "string" && root.downloadUrl)
     || (typeof root.url === "string" && root.url)
     || (typeof root.s3url === "string" && root.s3url)
+    || (typeof asRecord(root.file)?.s3url === "string" && String(asRecord(root.file)!.s3url))
     || (typeof asRecord(root.file)?.url === "string" && String(asRecord(root.file)!.url))
     || null;
   if (url && /^https?:\/\//i.test(url)) return fetchUrlBytes(url);

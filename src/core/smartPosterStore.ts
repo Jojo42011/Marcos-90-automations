@@ -6,8 +6,8 @@
  *   platform = tiktok | instagram | facebook | youtube | all
  * Optional sidecar JSON with the same stem: { caption?, title?, platforms?[] }
  *
- * The daily sync assigns slot times (America/Chicago by default), drafts AI
- * captions from past Zernio captions, and schedules through Zernio.
+ * Imports draft captions into an unscheduled inbox. Operators explicitly choose
+ * the time and target accounts before scheduling through Zernio.
  */
 import { dataPath } from "./tenantData.js";
 import Database from "better-sqlite3";
@@ -30,10 +30,14 @@ export interface SmartPosterSettings {
   timezone: string;
   /** HH:MM local times used to space posts across the day. */
   slots: string[];
-  /** When true, Drive sync schedules to Zernio immediately. */
+  /** Legacy field retained for compatibility; always false. */
   autoSchedule: boolean;
   /** Local hour (0-23) when the daily Drive pull runs. */
   ingestHour: number;
+  /** Zero = daily at ingestHour; otherwise repeat after this many minutes. */
+  ingestIntervalMinutes: number;
+  lastSuccessfulSyncAt: string | null;
+  lastAutoAttemptAt: string | null;
   lastSyncAt: string | null;
   lastSyncNote: string | null;
 }
@@ -128,6 +132,9 @@ function defaultSettings(): SmartPosterSettings {
     slots: [...DEFAULT_SLOTS],
     autoSchedule: false,
     ingestHour: 7,
+    ingestIntervalMinutes: 0,
+    lastSuccessfulSyncAt: null,
+    lastAutoAttemptAt: null,
     lastSyncAt: null,
     lastSyncNote: null,
   };
@@ -170,6 +177,7 @@ export function saveSettings(patch: Partial<SmartPosterSettings>): SmartPosterSe
   };
   new Intl.DateTimeFormat("en-US", {timeZone:next.timezone}).format(new Date());
   if (!Number.isInteger(next.ingestHour) || next.ingestHour < 0 || next.ingestHour > 23) throw new Error("Import hour must be a whole number from 0 to 23.");
+  if (![0,15,60,240,720].includes(next.ingestIntervalMinutes)) throw new Error("Choose a supported import cadence.");
   if (!next.slots.length) next.slots = [...DEFAULT_SLOTS];
   getSmartPosterDb()
     .prepare(

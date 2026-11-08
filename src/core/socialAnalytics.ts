@@ -8,6 +8,8 @@
 import {
   isZernioConfigured,
   fetchAllZernioAccountAnalytics,
+  fetchDailyPerformance,
+  type DailyPerformance,
   type ZernioPlatformStats,
 } from "../integrations/zernio/index.js";
 import { currentZernioSecrets } from "./zernioOwnerConfig.js";
@@ -15,6 +17,7 @@ import { currentZernioSecrets } from "./zernioOwnerConfig.js";
 export type PlatformStatus = "live" | "not_connected" | "error" | "unreadable";
 
 export interface PlatformMetrics {
+  dailyPerformance?: {days:DailyPerformance[];error:string|null};
   id: string;
   platform: string;
   label: string;
@@ -290,8 +293,9 @@ export async function getSocialAnalytics(): Promise<AnalyticsPayload> {
       platforms[platforms.length - 1].source = "Zernio";
     }
   } else {
+    const daily = await Promise.all(batch.accounts.map(a => fetchDailyPerformance(a.id)));
     for (let i = 0; i < batch.accounts.length; i++) {
-      platforms.push(fromFetch(batch.accounts[i], batch.results[i]));
+      platforms.push({...fromFetch(batch.accounts[i], batch.results[i]), dailyPerformance:daily[i]});
     }
     // Keep a clear "not connected" chip for canonical platforms with no active account.
     for (const p of CANONICAL_PLATFORMS) {

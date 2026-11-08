@@ -84,10 +84,17 @@ let payload;const transfer={setData:(_,value)=>payload=value,getData:()=>payload
 dragHandlers.dragstart({dataTransfer:transfer});dayHandlers.drop({preventDefault(){},dataTransfer:transfer});
 assert.deepEqual(dropped,{id:'draft-1',date:'2026-11-12'});
 assert.equal(requests.length,1,'Dropping must not send a publish request');
-const sample=[{status:'live',label:'Account A',recentPosts:[1,2,3,9].map((n,i)=>({id:i,caption:'Caption',views:1000,comments:n}))}];
-assert.equal(analytics.growthCandidates(sample,'comments')[0].score,9);
-assert.equal(analytics.growthCandidates(sample,'comments')[0].baseline,2);
-assert.equal(analytics.growthCandidates([{...sample[0],recentPosts:sample[0].recentPosts.slice(0,3)}],'comments').length,0);
+analytics.TREND_DAYS=7;analytics.TREND_METRIC='views';
+const daily=[{accountId:'a',dailyPerformance:{days:[{date:'2026-11-06',metrics:{views:30}}]}}];
+let series=analytics.trendSeries(daily,'2026-11-07T20:00:00Z');
+assert.equal(series.length,14);assert.equal(series[13].date,'2026-11-06');assert.equal(series[13].value,30);
+assert.equal(series[12].value,null,'Missing dates must not become zero');
+assert.equal(series[13].complete,true);
+series=analytics.trendSeries([...daily,{accountId:'b',dailyPerformance:{days:[]}}],'2026-11-07T20:00:00Z');
+assert.equal(series[13].value,30);assert.equal(series[13].complete,false);
+assert.match(analytics.growthActions([]),/not available/);
+assert.doesNotMatch(read('analytics'),/Your next move|Find what moves your audience/);
+assert.doesNotMatch(read('crm-brivity'),/Turn attention into appointments/);
 
 // A slower response for a previous agent filter must never overwrite the latest filter.
 const crmSource=read('crm-brivity');

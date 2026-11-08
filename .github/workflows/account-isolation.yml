@@ -32,6 +32,11 @@ jobs:
       - run: node scripts/verify-tracker-dialer-bump.mjs
       - run: node scripts/verify-conversational-playbook.mjs
       - run: node scripts/verify-zernio-analytics.mjs
+      - run: node scripts/verify-growth-ui.mjs
+      - run: node scripts/verify-growth-transport.mjs
+      - run: node scripts/verify-dialer-import.mjs
+      - run: node scripts/verify-smartposter-flow.mjs
+      - run: node scripts/verify-publishing-workflows.mjs
       - run: node scripts/verify-workspace-files.mjs
       - run: node scripts/verify-workspace-sheet.mjs
       - run: node scripts/verify-source-transfers.mjs

@@ -663,7 +663,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_smartposter",
     description:
-      "SmartPoster status for this account — Drive connection, schedule slots, Zernio social targets, and the video queue (draft / ready / scheduled / failed). Use when someone asks what is queued to post, whether Drive is connected, or about SmartPoster / SmartPosting. Read-only overview. To import, plan, or explicitly schedule, use crm_api after crm_api_index: POST /api/smartposter/sync imports only; PATCH /api/smartposter/posts/:id accepts title, caption, accountIds, localDate, localTime, timezone; POST /api/smartposter/posts/:id/schedule saves those fields and schedules. Never pick every account by default.",
+      "SmartPoster status for this account — Drive connection, configurable import cadence (ingestIntervalMinutes: 0 daily, 15, 60, 240, 720; ingestHour for daily), provider-confirmed publishing status, schedule slots, Zernio social targets, and the video queue (draft / ready / scheduled / failed). Use when someone asks what is queued to post, whether Drive is connected, or about SmartPoster / SmartPosting. Read-only overview. To import, plan, or explicitly schedule, use crm_api after crm_api_index: POST /api/smartposter/sync imports only; PATCH /api/smartposter/posts/:id accepts title, caption, accountIds, localDate, localTime, timezone; POST /api/smartposter/posts/:id/schedule saves those fields and schedules. Never pick every account by default.",
     input_schema: { type: "object", properties: {}, required: [] },
   },
   {

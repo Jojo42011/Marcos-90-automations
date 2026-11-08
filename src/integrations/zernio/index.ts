@@ -106,6 +106,33 @@ async function zernioGet(path: string): Promise<{ ok: boolean; status: number; j
   return { ok: res.ok, status: res.status, json, text };
 }
 
+export interface DailyPerformance {
+  date: string;
+  metrics: Record<string, number | null>;
+}
+const dailyCache = new Map<string, {at:number; value:{days:DailyPerformance[];error:string|null}}>();
+/** Received attribution measures engagement gained that day, including on older posts. */
+export async function fetchDailyPerformance(accountId: string): Promise<{days:DailyPerformance[];error:string|null}> {
+  const key = `${currentZernioSecrets().ownerSlug}:${accountId}`;
+  const cached = dailyCache.get(key);
+  if (cached && Date.now()-cached.at < 5*60_000) return cached.value;
+  try {
+    const end = new Date(); end.setUTCDate(end.getUTCDate()-1);
+    const start = new Date(end); start.setUTCDate(start.getUTCDate()-179);
+    const query = new URLSearchParams({accountId, attribution:'received', fromDate:start.toISOString().slice(0,10), toDate:end.toISOString().slice(0,10)});
+    const r = await zernioGet(`/analytics/daily-metrics?${query}`);
+    if (!r.ok) throw new Error(`Daily performance unavailable (HTTP ${r.status}).`);
+    const raw = (r.json as {dailyData?:unknown[]})?.dailyData;
+    if (!Array.isArray(raw)) throw new Error('Daily performance was not returned by Zernio.');
+    const days = raw.flatMap((item) => {
+      const row = item as {date?:string;metrics?:Record<string,unknown>};
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date || '')) return [];
+      return [{date:row.date!,metrics:Object.fromEntries(['views','likes','comments','shares','saves'].map(k=>[k,num(row.metrics?.[k])]))}];
+    });
+    const value = {days,error:null}; dailyCache.set(key,{at:Date.now(),value}); return value;
+  } catch (error) { return {days:[],error:error instanceof Error?error.message:String(error)}; }
+}
+
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);

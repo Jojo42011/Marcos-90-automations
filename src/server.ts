@@ -15297,13 +15297,13 @@ if (!isTenantGateway() && isSheetSyncConfigured()) {
 /* Scheduled Auto Plan execution — hourly. The old 24h cadence meant a "day 0"
    step could sit unsent for a day and chained steps drifted a full day per
    link; an hourly sweep keeps offsets honest at day granularity. */
-/* SmartPoster daily Drive ingest — checks once an hour; runs in the configured local ingest hour. */
+/* SmartPoster cadence and provider status: account-local, independent of open browser tabs. */
 setInterval(() => {
   if (isTenantGateway()) return;
   void maybeSmartPosterAutoSync().catch((err) =>
     console.warn("[smartposter] auto-sync failed:", err),
   );
-}, 60 * 60 * 1000).unref();
+}, 60 * 1000).unref();
 
 const AUTO_PLAN_INTERVAL_MS = 60 * 60 * 1000;
 setInterval(() => {

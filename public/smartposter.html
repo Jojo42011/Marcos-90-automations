@@ -259,7 +259,7 @@ function postMatchesFilter(p){
 }
 function renderSummary(){
   var n=DATA.counts||{};
-  document.getElementById("publishSummary").innerHTML='<div><div class="eyebrow">From idea to published</div><h2>Your week. Your content. Your call.</h2><small>'+'Morning import at '+String(DATA.settings.ingestHour).padStart(2,'0')+':00 · '+esc(DATA.settings.timezone)+' · Nothing publishes until you schedule'+'</small></div>'+
+  document.getElementById("publishSummary").innerHTML='<div><div class="eyebrow">From idea to published</div><h2>Your week. Your content. Your call.</h2><small>'+(DATA.settings.ingestIntervalMinutes?'Import every '+DATA.settings.ingestIntervalMinutes+' min':'Daily import at '+String(DATA.settings.ingestHour).padStart(2,'0')+':00')+' · '+esc(DATA.settings.timezone)+' · Nothing publishes until you schedule'+'</small></div>'+
     [['ready','Ready to schedule',n.ready||0],['scheduled','On the calendar',n.scheduled||0],['failed','Needs attention',n.failed||0]].map(function(x){return '<button data-summary="'+x[0]+'"><div class="eyebrow">'+x[1]+'</div><strong>'+x[2]+'</strong><small>Review content →</small></button>';}).join('');
   document.getElementById("publishSummary").querySelectorAll('[data-summary]').forEach(function(b){b.onclick=function(){STATUS_FILTER=b.dataset.summary;FILTER.clear();VIEW='queue';document.getElementById('statusFilter').value=STATUS_FILTER;render();};});
 }
@@ -351,7 +351,7 @@ function renderLibrary(){
   var items = libraryPosts();
   if (!items.length) {
     return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">Review a caption, then send it to your schedule.</div>'
-      + '<div class="empty"><div class="big">No pending content here</div>Try another filter, or add dated videos to your Drive folder and sync.</div></div>';
+      + '<div class="empty"><div class="big">No pending content here</div>Try another filter, or add finished videos to your Drive folder and sync.</div></div>';
   }
   return '<div class="rail"><h2>Content inbox</h2><div class="rail-meta">' + items.length + ' to plan · Drag onto a day, or open to choose.</div>'
     + items.map(function(p){
@@ -518,8 +518,9 @@ function openSettings(){
         : 'Search by name after connecting Drive.') + '</div>'
     + '</div>'
     + '<div class="field"><label>Timezone</label><input id="setTz" value="' + esc(s.timezone || "America/Chicago") + '" /></div>'
+    + '<div class="field"><label for="setCadence">Import cadence</label><select id="setCadence">'+[[0,'Daily at the hour below'],[15,'Every 15 minutes'],[60,'Every hour'],[240,'Every 4 hours'],[720,'Every 12 hours']].map(function(x){return '<option value="'+x[0]+'"'+((s.ingestIntervalMinutes||0)===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div>'
     + '<div class="field"><label>Daily ingest hour (0–23, local)</label><input id="setHour" type="number" min="0" max="23" value="' + esc(s.ingestHour) + '" /></div>'
-    + '<div class="banner info">Morning imports add finished videos to your inbox. You choose the day, time, and accounts before anything is scheduled.</div>'
+    + '<div class="banner info">Automatic imports add finished videos to your inbox. You choose the day, time, and accounts before anything is scheduled.</div>'
     + '<div class="actions"><button class="btn primary" type="button" id="saveSettings">Save settings</button></div>';
 
   showDrawer();
@@ -573,6 +574,7 @@ function openSettings(){
       driveFolderName: document.getElementById("setFolderName").value,
       driveFolderId: pickedId,
       timezone: document.getElementById("setTz").value,
+      ingestIntervalMinutes: Number(document.getElementById("setCadence").value),
       ingestHour: Number(document.getElementById("setHour").value),
       autoSchedule: false
     });
@@ -704,6 +706,7 @@ document.addEventListener('keydown',function(e){
     else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===drawer)){e.preventDefault();first.focus();}
   }
 });
+setInterval(function(){if(!document.hidden&&!document.getElementById('drawer').classList.contains('on')&&!document.getElementById('btnSync').disabled)load().catch(function(){});},60000);
 load().catch(function(err){
   document.getElementById("banner").innerHTML = '<div class="banner bad"><b>Could not load SmartPoster.</b> ' + esc(err.message) + '</div>';
 });

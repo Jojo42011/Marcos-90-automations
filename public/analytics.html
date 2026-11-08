@@ -181,35 +181,42 @@ function mixBar(mix){
 function safePostURL(url){
   try { var u=new URL(url); return /^https?:$/.test(u.protocol)?u.href:""; } catch(_){ return ""; }
 }
-var POST_SORT="views", POST_QUERY="", GROWTH_GOAL="comments";
+var POST_SORT="views", POST_QUERY="";
 function postLink(post,label,cls){
   var url=safePostURL(post.url);
   return url?'<a class="'+(cls||'top')+'" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+esc(label)+'</a>':'<span class="'+(cls||'')+'">'+esc(label)+'</span>';
 }
-function growthCandidates(channels,goal){
-  var found=[];
-  channels.filter(function(c){return c.status==='live';}).forEach(function(c){
-    var eligible=(c.recentPosts||[]).filter(function(p){return p.caption&&p.views>=100&&p[goal]!=null&&(!p.availableMetrics||p.availableMetrics.includes(goal));});
-    if(eligible.length<4)return;
-    eligible.forEach(function(post){
-      var others=eligible.filter(function(x){return x!==post;}).map(function(x){return goal==='views'?x.views:x[goal]/x.views*1000;}).sort(function(a,b){return a-b;});
-      var mid=Math.floor(others.length/2),baseline=others.length%2?others[mid]:(others[mid-1]+others[mid])/2;
-      var score=goal==='views'?post.views:post[goal]/post.views*1000;
-      if(score<=baseline||score===0)return;
-      found.push({post:post,label:c.label,score:score,baseline:baseline,sample:eligible.length,lift:baseline?score/baseline:null});
-    });
-  });
-  return found.sort(function(a,b){return (b.lift||0)-(a.lift||0)||b.score-a.score;}).slice(0,3);
+var TREND_DAYS=30,TREND_METRIC='views';
+function trendSeries(channels,now){
+  var end=new Date(now||Date.now());end.setUTCHours(0,0,0,0);end.setUTCDate(end.getUTCDate()-1);
+  var sources=channels.filter(function(c){return c.accountId;}),rows=[];
+  for(var i=TREND_DAYS*2-1;i>=0;i--){
+    var d=new Date(end);d.setUTCDate(d.getUTCDate()-i);var key=d.toISOString().slice(0,10),sum=0,reported=0;
+    sources.forEach(function(c){var row=((c.dailyPerformance||{}).days||[]).find(function(x){return x.date===key;});var v=row&&row.metrics[TREND_METRIC];if(v!=null&&Number.isFinite(v)){sum+=v;reported++;}});
+    rows.push({date:key,value:reported?sum:null,complete:reported===sources.length&&reported>0});
+  }
+  return rows;
 }
 function growthActions(channels){
-  var goal=GROWTH_GOAL,items=growthCandidates(channels,goal);
-  var labels={comments:'Start conversations',shares:'Earn referrals & shares',saves:'Be worth saving',views:'Reach more people'};
-  var test={comments:'Make a follow-up answering the question in this caption. End with one specific question viewers can answer.',shares:'Create a companion tip for the same audience. Give viewers a useful reason to send it to a friend.',saves:'Turn the topic into a short checklist or step-by-step guide people can revisit.',views:'Test a second opening for the same topic. Keep the format and length similar so the hook is the main change.'};
-  return '<section class="panel growth-lab"><div class="panel-head"><div><div class="eyebrow">Your next move</div><h2>Turn a strong signal into a weekly experiment</h2></div><select id="growthGoal" aria-label="Content growth goal">'+Object.keys(labels).map(function(k){return '<option value="'+k+'"'+(goal===k?' selected':'')+'>'+labels[k]+'</option>';}).join('')+'</select></div><div class="experiment-grid">'+(items.length?items.map(function(x,i){return '<article class="experiment"><span class="eyebrow">Experiment 0'+(i+1)+' · '+esc(x.label)+'</span><h3>'+esc(x.lift?x.lift.toFixed(1)+'× the account median':'Above the account median')+'</h3><p class="sub">'+esc(goal==='views'?full(x.score)+' views':x.score.toFixed(1)+' '+goal+' per 1,000 views')+' · compared with '+(x.sample-1)+' other eligible posts</p><blockquote>'+esc(shortCaption(x.post.caption))+'</blockquote><p>'+esc(test[goal])+'</p><div class="experiment-links">'+postLink(x.post,'Study the original ↗')+'<a class="top" href="/smartposter">Plan the follow-up →</a></div></article>';}).join(''):'<div class="empty">No reliable comparison yet. We need at least four captioned posts with 100+ views on the same account and a reported '+esc(goal)+' metric. Keep publishing and check back.</div>')+'</div><div class="src">Based on the available source sample, not every historical post. Benchmarks compare the same account; posts can have different ages. These are experiments, not proven causes or attributed leads. After seven days, compare the new post’s '+esc(goal==='views'?'views':goal+' per 1,000 views')+' and record what you learned.</div></section>';
+  var rows=trendSeries(channels),prior=rows.slice(0,TREND_DAYS),current=rows.slice(TREND_DAYS);
+  var total=current.reduce(function(n,r){return n+(r.value||0);},0),before=prior.reduce(function(n,r){return n+(r.value||0);},0);
+  var complete=rows.every(function(r){return r.complete;}),valid=current.some(function(r){return r.value!==null;});
+  var change=complete?(before?((total-before)/before*100):null):null;
+  var max=Math.max.apply(null,[1].concat(current.map(function(r){return r.value||0;})));
+  var labels={views:'Views',likes:'Likes',comments:'Comments',shares:'Shares',saves:'Saves'};
+  var group=TREND_DAYS===90?7:1,bars=[];
+  for(var i=0;i<current.length;i+=group){var part=current.slice(i,i+group);bars.push({date:part[0].date,end:part[part.length-1].date,value:part.some(function(r){return r.value!==null;})?part.reduce(function(n,r){return n+(r.value||0);},0):null,complete:part.every(function(r){return r.complete;})});}
+  max=Math.max.apply(null,[1].concat(bars.map(function(r){return r.value||0;})));
+  var dateLabel=function(d){return new Date(d+'T12:00:00Z').toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'});};
+  var h='<section class="panel trend-panel"><div class="panel-head"><div><div class="eyebrow">Performance over time</div><h2>See your momentum</h2></div><div class="actions"><select id="trendMetric" aria-label="Chart metric">'+Object.keys(labels).map(function(k){return '<option value="'+k+'"'+(k===TREND_METRIC?' selected':'')+'>'+labels[k]+'</option>';}).join('')+'</select><select id="trendDays" aria-label="Chart period">'+[7,30,90].map(function(n){return '<option value="'+n+'"'+(n===TREND_DAYS?' selected':'')+'>Last '+n+' days</option>';}).join('')+'</select></div></div>';
+  h+='<div class="trend-summary"><strong>'+ (valid?full(total):'—') +'</strong><span>'+labels[TREND_METRIC].toLowerCase()+' gained</span><span class="trend-change '+(change<0?'down':'')+'">'+(change!==null?(change>0?'↗ +':change<0?'↘ ':'')+change.toFixed(1)+'% vs previous '+TREND_DAYS+' days':complete&&before===0?'Previous period: 0':'Comparison unavailable · incomplete reporting')+'</span></div>';
+  if(valid){h+='<div class="trend-scroll"><div class="trend-plot"><div class="trend-scale"><span>'+num(max)+'</span><span>'+num(max/2)+'</span><span>0</span></div><div class="trend-bars">'+bars.map(function(r){var label=dateLabel(r.date)+(r.end!==r.date?' – '+dateLabel(r.end):'')+': '+(r.value===null?'Not reported':full(r.value)+' '+labels[TREND_METRIC].toLowerCase())+(!r.complete?' (partial reporting)':'');return '<div class="trend-column"><button class="trend-bar '+(!r.complete?'partial':'')+'" style="height:'+Math.max(r.value?2:0,(r.value||0)/max*190)+'px" aria-label="'+esc(label)+'" title="'+esc(label)+'"><span>'+esc(label)+'</span></button><small>'+dateLabel(r.date)+'</small></div>';}).join('')+'</div></div></div>';}else{h+='<div class="empty">Daily performance is not available for this selection yet. Refresh to check again.</div>';}
+  h+='<div class="src">'+dateLabel(current[0].date)+' – '+dateLabel(current[current.length-1].date)+' · UTC · '+(group===7?'Weekly bars; last bar may be a partial week.':'Daily bars.')+' Engagement gained on each date, including older posts. Today is excluded. Striped bars indicate incomplete reporting; missing data is not zero.</div><details class="trend-data"><summary>View daily data</summary><div class="table-scroll"><table class="post-table"><thead><tr><th>Date (UTC)</th><th>'+labels[TREND_METRIC]+'</th><th>Coverage</th></tr></thead><tbody>'+current.map(function(r){return '<tr><td>'+r.date+'</td><td>'+full(r.value)+'</td><td>'+(r.complete?'Reported':'Partial / unavailable')+'</td></tr>';}).join('')+'</tbody></table></div></details></section>';
+  return h;
 }
 function dashboardBody(p,combined){
   var posts=p.recentPosts||[];
-  var html='<section class="hero"><div><div class="eyebrow">Content intelligence / '+esc(combined?'All channels':p.label)+'</div><h2>Find what moves your audience.</h2><p>See what earns attention, learn from your strongest posts, and bring that insight into your next piece of content.</p></div><div class="hero-mark" aria-hidden="true">↗</div></section>';
+  var html='';
   if(combined){
     html+=DATA.platforms.filter(function(x){return x.status==='live';}).map(statusBanner).join('');
   }else html+=statusBanner(p);
@@ -288,7 +295,7 @@ function render(){
 
 document.getElementById("view").addEventListener("click",function(e){var b=e.target.closest("[data-channel]");if(b){CURRENT=b.dataset.channel;render();}});
 document.getElementById("view").addEventListener("input",function(e){if(e.target.id!=="postSearch")return;POST_QUERY=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
-document.getElementById("view").addEventListener("change",function(e){if(e.target.id==="growthGoal"){GROWTH_GOAL=e.target.value;render();return;}if(e.target.id!=="postSort")return;POST_SORT=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
+document.getElementById("view").addEventListener("change",function(e){if(e.target.id==="trendMetric"){TREND_METRIC=e.target.value;render();return;}if(e.target.id==="trendDays"){TREND_DAYS=Number(e.target.value);render();return;}if(e.target.id!=="postSort")return;POST_SORT=e.target.value;document.getElementById("postResults").innerHTML=postRows(CURRENT==="all"?DATA.combined:DATA.platforms.find(function(p){return p.id===CURRENT;}));});
 async function load(){
   var btn = document.getElementById("refresh");
   btn.disabled = true; btn.textContent = "Loading…";

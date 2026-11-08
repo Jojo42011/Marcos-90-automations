@@ -25,6 +25,7 @@ async function zernioJson(
   method: string,
   path: string,
   body?: unknown,
+  idempotencyKey?: string,
 ): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
   const key = apiKey();
   if (!key) return { ok: false, status: 0, json: null, text: "ZERNIO_DM_API_KEY is not set" };
@@ -33,6 +34,7 @@ async function zernioJson(
     headers: {
       Authorization: `Bearer ${key}`,
       Accept: "application/json",
+      ...(idempotencyKey ? {"Idempotency-Key":idempotencyKey} : {}),
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -128,6 +130,7 @@ export async function uploadBufferToZernio(filename: string, bytes: Buffer): Pro
 }
 
 export interface CreateZernioPostInput {
+  idempotencyKey?: string;
   content: string;
   mediaUrl: string;
   mediaType?: "video" | "image";
@@ -146,6 +149,7 @@ export async function createZernioPost(input: CreateZernioPostInput): Promise<{
   platformPostUrl?: string | null;
   error?: string;
   raw?: unknown;
+  uncertain?: boolean;
 }> {
   if (!apiKey()) return { ok: false, error: "ZERNIO_DM_API_KEY is not set" };
   if (!input.platforms.length && !input.isDraft) {
@@ -168,7 +172,7 @@ export async function createZernioPost(input: CreateZernioPostInput): Promise<{
   else if (input.publishNow) body.publishNow = true;
   else if (input.scheduledFor) body.scheduledFor = input.scheduledFor;
 
-  const r = await zernioJson("POST", "/posts", body);
+  const r = await zernioJson("POST", "/posts", body, input.idempotencyKey);
   if (!r.ok) {
     return {
       ok: false,
@@ -177,6 +181,7 @@ export async function createZernioPost(input: CreateZernioPostInput): Promise<{
         || r.text.slice(0, 400)
         || `HTTP ${r.status}`,
       raw: r.json,
+      uncertain: r.status >= 500 || r.status === 409,
     };
   }
   const root = (r.json || {}) as {
@@ -194,4 +199,14 @@ export async function createZernioPost(input: CreateZernioPostInput): Promise<{
     platformPostUrl: firstUrl,
     raw: r.json,
   };
+}
+
+/** Read back the provider's actual publication outcome. */
+export async function getZernioPostStatus(id:string):Promise<{ok:boolean;status?:string;url?:string;error?:string}> {
+  const r=await zernioJson('GET',`/posts/${encodeURIComponent(id)}`);
+  if(!r.ok)return {ok:false};
+  const root=r.json as {post?:Record<string,unknown>};
+  const post=root?.post || r.json as Record<string,unknown>;
+  const platforms=Array.isArray(post?.platforms)?post.platforms as Record<string,unknown>[]:[];
+  return {ok:true,status:String(post?.status||'').toLowerCase(),url:platforms.map(p=>String(p.platformPostUrl||'')).find(Boolean),error:String(post?.error||platforms.map(p=>p.error).filter(Boolean).join('; ')||'')};
 }
