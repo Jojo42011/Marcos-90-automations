@@ -1,11 +1,11 @@
 /* Scoped to CRM Overview: the surrounding CRM and other tabs stay independent. */
-#pipeOverview{gap:20px;align-items:start}
+#pipeOverview{gap:20px;align-items:stretch}
 #pipeOverview .po-hero{grid-column:1/-1;border:1px solid color-mix(in srgb,var(--teal) 30%,var(--line));border-radius:20px;padding:28px 30px;background:radial-gradient(ellipse at 85% 0%,#59c4c426,transparent 65%),var(--card);display:flex;align-items:center;justify-content:space-between;gap:24px;overflow:hidden}
 #pipeOverview .po-eyebrow{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px}
 #pipeOverview .po-hero h2{font-size:30px;font-weight:600;letter-spacing:-1px;color:var(--ink);margin:0 0 10px;line-height:1.2}
 #pipeOverview .po-hero p{font-size:13px;color:var(--muted);line-height:1.7;max-width:620px;margin:0}
 #pipeOverview .po-orbit{width:94px;height:94px;flex-shrink:0;border:1px solid color-mix(in srgb,var(--teal) 40%,transparent);border-radius:50%;display:grid;place-items:center;box-shadow:0 0 0 16px #59c4c409,0 0 0 32px #59c4c407;color:var(--teal-strong);font-size:34px}
-#pipeOverview .po-card{border-radius:18px;padding:24px;box-shadow:0 4px 20px #162d3010;background:var(--card);overflow:hidden}
+#pipeOverview .po-card{border-radius:18px;padding:24px;box-shadow:0 4px 20px #162d3010;background:var(--card);overflow:hidden;display:flex;flex-direction:column;min-width:0}
 #pipeOverview .po-card[data-side="buyer"]{--po-num:#229b77}
 #pipeOverview .po-card[data-side="seller"]{--po-num:#cc7555}
 #pipeOverview .po-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;gap:14px}
@@ -34,3 +34,13 @@
 [data-theme="dark"] #pipeOverview .po-card[data-side="buyer"]{--po-num:#6ed2b0}[data-theme="dark"] #pipeOverview .po-card[data-side="seller"]{--po-num:#efa184}
 
 .po-selection{grid-column:1/-1;font-size:12px;color:var(--text-3)}
+#pipeOverview .po-metric strong{font-size:clamp(28px,2.8vw,38px);line-height:1.2;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+#pipeOverview .po-metric span{font-size:11px;margin-top:7px}
+#pipeOverview .po-metrics{min-height:82px;gap:12px}
+#pipeOverview .po-funnel{flex:1}#pipeOverview .po-step{flex:1;min-height:56px}
+#pipeOverview .po-next{margin-top:20px;min-height:80px}
+.overview-alerts{margin-top:22px;border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden}
+.oa-head{display:flex;align-items:center;justify-content:space-between;padding:22px 24px 16px;gap:16px}.oa-head h2{font-size:19px;letter-spacing:-.4px;color:var(--ink);margin:0 0 7px}.oa-head p{font-size:12px;color:var(--muted);margin:0}.oa-head button{border:1px solid var(--line);background:var(--card);padding:8px 12px;border-radius:8px;color:var(--text-2)}#oaCount{font-size:12px;font-weight:500;color:var(--muted);margin-left:8px}
+.oa-tabs{display:flex;gap:6px;padding:0 24px 16px;border-bottom:1px solid var(--line)}.oa-tabs button{border:1px solid transparent;border-radius:7px;background:none;color:var(--muted);font-size:12px;padding:7px 12px}.oa-tabs button.on{background:var(--teal-soft);border-color:var(--line);color:var(--teal-strong)}
+#oaList{max-height:380px;overflow-y:auto;scrollbar-gutter:stable}.oa-row{width:100%;display:grid;grid-template-columns:36px 1fr auto 18px;gap:14px;align-items:center;background:none;border:0;border-bottom:1px solid var(--line-2);padding:17px 24px;text-align:left;color:var(--text-1);font:inherit;cursor:pointer}.oa-row:hover{background:var(--surface-1)}.oa-row:last-child{border-bottom:0}.oa-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:var(--teal-soft);color:var(--teal-strong)}.oa-row[data-kind=task] .oa-icon{background:#d68e2015;color:#b77d24}.oa-copy{min-width:0}.oa-copy strong{display:block;font-size:12px;font-weight:600}.oa-copy small{display:block;margin-top:5px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.oa-action{font-size:11px;color:var(--teal-strong)}.oa-empty,#oaStatus:not(:empty){padding:16px 24px;font-size:12px;color:var(--muted);line-height:1.7}.overview-alerts button:focus-visible{outline:2px solid var(--teal);outline-offset:-3px}
+@media(max-width:560px){.oa-head{padding:18px 16px}.oa-tabs{padding:0 12px 12px;gap:2px}.oa-tabs button{padding:7px 9px}.oa-row{padding:15px 16px;gap:10px;grid-template-columns:30px 1fr 12px}.oa-action{display:none}.oa-icon{width:28px;height:28px}#pipeOverview .po-metric strong{font-size:28px}#pipeOverview .po-metrics{gap:8px}}

@@ -20,6 +20,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>CRM · Marco Puga Realty</title>
 <link rel="stylesheet" href="/growth-overview.css">
+<link rel="stylesheet" href="/message-center.css">
+<script src="/overview-alerts.js" defer></script>
 <style>
   :root{
     /* Brivity palette (resolved from tw- design tokens): teal #59C4C4,
@@ -1468,37 +1470,48 @@
     <div class="po-grid" id="pipeOverview">
       <div class="po-card"><div class="po-empty" aria-hidden="true"></div></div>
     </div>
+    <section class="overview-alerts" aria-label="Notifications">
+      <div class="oa-head"><div><h2>Notifications <span id="oaCount"></span></h2><p>Replies, follow-ups and updates worth your attention.</p></div><button type="button" id="oaRefresh">Refresh</button></div>
+      <div class="oa-tabs" id="oaTabs" role="group" aria-label="Filter notifications"><button type="button" data-alert="all" class="on" aria-pressed="true">All</button><button type="button" data-alert="reply" aria-pressed="false">Replies</button><button type="button" data-alert="task" aria-pressed="false">Follow-ups</button><button type="button" data-alert="update" aria-pressed="false">Updates</button></div>
+      <div id="oaStatus" role="status"></div><div id="oaList"></div>
+    </section>
   </div></section>
 
   <!-- MESSAGES -->
   <section class="view" id="view-messages">
-    <div class="pad" style="padding-bottom:0"><div class="page-head" style="margin-bottom:10px"><h1>Message Center</h1><button class="pill-btn">FILTER</button></div>
+    <div class="mc-heading"><div><h1>Message Center</h1><p>Every conversation. One place to follow through.</p></div><span class="mc-heading-note">Your connected channels</span></div>
+    <div class="mc-workspace">
+    <aside class="mc-channels" aria-label="Message channels"><div class="mc-section-label">Inbox</div>
       <!-- Channel split: social DMs (Instagram/TikTok) are a different kind of
            conversation from real SMS/email and no longer share one list.
            Counts are unread-per-channel; tabs with nothing in them are dimmed
            rather than hidden, so it's clear the channel exists but is quiet. -->
       <div class="tabs" style="padding-left:2px" id="msgTabs">
-        <button class="on" data-mt="all">ALL <span class="chcount" data-cc="all"></span></button>
-        <button data-mt="instagram">INSTAGRAM <span class="chcount" data-cc="instagram"></span></button>
-        <button data-mt="tiktok">TIKTOK <span class="chcount" data-cc="tiktok"></span></button>
-        <button data-mt="sms">SMS <span class="chcount" data-cc="sms"></span></button>
-        <button data-mt="email">EMAIL <span class="chcount" data-cc="email"></span></button>
-        <button data-mt="group">GROUP</button>
-        <button data-mt="scheduled">SCHEDULED <span class="chcount" data-cc="scheduled"></span></button>
+        <button class="on" data-mt="all" aria-pressed="true"><span class="mc-channel-icon">≡</span>All conversations <span class="chcount" data-cc="all"></span></button>
+        <button data-mt="instagram" aria-pressed="false"><span class="mc-channel-icon ig">◎</span>Instagram <span class="chcount" data-cc="instagram"></span></button>
+        <button data-mt="tiktok" aria-pressed="false"><span class="mc-channel-icon tk">♪</span>TikTok <span class="chcount" data-cc="tiktok"></span></button>
+        <button data-mt="sms" aria-pressed="false"><span class="mc-channel-icon sm">↗</span>SMS <span class="chcount" data-cc="sms"></span></button>
+        <button data-mt="email" aria-pressed="false"><span class="mc-channel-icon em">@</span>Email <span class="chcount" data-cc="email"></span></button>
+        <button data-mt="group" aria-pressed="false"><span class="mc-channel-icon">⊞</span>Groups</button>
+        <button data-mt="scheduled" aria-pressed="false"><span class="mc-channel-icon">◷</span>Scheduled <span class="chcount" data-cc="scheduled"></span></button>
       </div>
       <div class="quo-line-bar" id="quoLineBar" style="display:none" aria-label="Quo sending line"></div>
-    </div>
+      <div class="mc-sidebar-note">Pick a channel, then a conversation.<br>Badges show replies to review.</div>
+    </aside>
     <div class="msg-wrap" id="msgWrap">
       <div class="msg-list" id="msgList">
+        <div class="mc-list-title"><h2 id="mcListTitle">All conversations</h2><span id="mcListCount"></span></div>
         <div class="msg-list-head">
-          <input class="msg-search" id="convSearch" type="search" placeholder="Search name or type a phone to text…" />
+          <input class="msg-search" id="convSearch" type="search" aria-label="Search conversations" placeholder="Search name or phone…" />
           <button class="rb" id="convClearBtn" title="Clear"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           <button class="rb tl" id="convNewBtn" title="New message"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
         </div>
+        <div class="mc-list-tools"><button type="button" id="mcReplyFilter" aria-pressed="false">Needs a reply</button><span>Newest first</span></div>
         <div class="msg-scroll" id="convList"></div>
       </div>
       <div class="msg-split" id="msgSplit" title="Drag to resize" role="separator" aria-orientation="vertical"></div>
-      <div class="thread" id="thread"><div class="thread-empty">No message selected</div></div>
+      <div class="thread" id="thread"><div class="thread-empty"><span class="mc-empty-icon">↗</span><h2>A little attention goes a long way.</h2><p>Choose a conversation to read the history and take the next step.</p></div></div>
+    </div>
     </div>
   </section>
 
@@ -2104,15 +2117,14 @@ function renderPipelineOverview(){
         return;
       }
       PIPE_OVERVIEW=d;
-      var note='<details class="po-method"><summary>How to read these pipelines · sources & coverage</summary><p>Content metrics and contact stages come from different sources. These figures show activity and pipeline position; they do not prove that a view or a call caused a sale.</p>'+(d.notes||[]).map(function(n){return '<p>'+esc(n)+'</p>';}).join('')+'</details>';
-      el.innerHTML='<span class="po-selection">'+esc(d.agent||'Selected team')+'</span>'+poCardHTML(d.buyers)+poCardHTML(d.sellers)+note;
+      el.innerHTML='<span class="po-selection">'+esc(d.agent||'Selected team')+'</span>'+poCardHTML(d.buyers)+poCardHTML(d.sellers);
     })
     .catch(function(){
       if(request!==PO_REQUEST)return;
       el.innerHTML='<div class="po-card"><div class="po-empty">Could not load pipeline overview.</div></div>';
     });
 }
-function renderTakeAction(){ renderPipelineOverview(); }
+function renderTakeAction(){ renderPipelineOverview(); if(window.refreshOverviewAlerts)window.refreshOverviewAlerts(); }
 function renderFeed(){ /* Overview replaced the activity feed. */ }
 function renderTracking(){ /* Overview replaced activity tracking tiles. */ }
 function deriveAction(l){const s=(l.source||"").toLowerCase();if(s.includes("valuation"))return"submitted a home valuation";if(l.propertyInquired)return"asked about a property";if(l.activity.some(a=>a.type==="text"))return"sent a message";return"is a new lead";}
@@ -2434,7 +2446,7 @@ function quoEmptyMsg(){
    keep the thread the user is reading open. */
 function convKey(c){
   if(!c) return "";
-  return c.quo?("q:"+c.peerKey):("n:"+(c.names||[]).join("|"));
+  return c.quo?("q:"+(c.phoneNumberId||'')+':'+c.peerKey):('n:'+(c.channel||'other')+':'+(c.leadId||c.email||c.phone||(c.names||[]).join('|')));
 }
 /* Can this thread put a real text on the wire?
 
@@ -2623,6 +2635,7 @@ var SCHED_STATUS={pending:{l:"Scheduled",c:"#2563eb"},sent:{l:"Sent",c:"#10b981"
 
 function renderScheduled(){
   const el=document.getElementById("convList");
+  document.getElementById('mcListCount').textContent=String(SCHEDULED.length);
   if(!schedLoaded){ el.innerHTML='<div class="empty">Loading…</div>'; return; }
   const q=(convSearchTerm||SEARCH||"").toLowerCase();
   const list=SCHEDULED.filter(m=>!q||(m.leadName+" "+m.body+" "+m.to).toLowerCase().includes(q));
@@ -2695,12 +2708,19 @@ function startSmsToNumber(rawPhone, nameHint){
   crmToast(QUO.configured?("Texting "+fmtPhone(e164)):("Draft thread for "+fmtPhone(e164)+" — Quo is not connected yet"));
 }
 
+var MC_REPLY_ONLY=false;
 function renderConvos(){
+  var heading=document.getElementById('mcListTitle');
+  if(heading)heading.textContent=convGroupMode==='all'?'All conversations':convGroupMode==='scheduled'?'Scheduled':convGroupMode==='group'?'Groups':(CHANNEL_META[convGroupMode]||{}).label||'Conversations';
+  document.getElementById('mcReplyFilter').disabled=convGroupMode==='scheduled';
   if(convGroupMode==="scheduled"){ paintChannelCounts(); renderScheduled(); return; }
   const q=(convSearchTerm||SEARCH||"");
   const list=CONVOS.map((c,i)=>({c,i}))
     .filter(e=>convInTab(e.c,convGroupMode))
-    .filter(e=>convHit(e.c,q));
+    .filter(e=>convHit(e.c,q))
+    .filter(e=>!MC_REPLY_ONLY||convUnread(e.c))
+    .sort((a,b)=>String(b.c.at||'').localeCompare(String(a.c.at||'')));
+  document.getElementById('mcListCount').textContent=String(list.length);
   paintChannelCounts();
   const el=document.getElementById("convList");
   var dialRow="";
@@ -2718,14 +2738,15 @@ function renderConvos(){
   el.innerHTML=dialRow+(list.length?list.map(({c,i})=>{
     const last=c.msgs[c.msgs.length-1]||{};const who=last.me?"Marco Puga":(c.names.find(n=>n!=="Marco Puga")||c.names[0]);
     const unread=convUnread(c)&&i!==openConvIdx;
-    return '<div class="conv'+(i===openConvIdx?" on":"")+'" data-i="'+i+'">'+
+    return '<div class="conv'+(i===openConvIdx?" on":"")+'" data-i="'+i+'" role="button" tabindex="0" aria-pressed="'+(i===openConvIdx)+'" aria-label="'+esc(convTitle(c.names))+', '+esc((CHANNEL_META[c.channel]||CHANNEL_META.other).label)+'">'+
       '<div class="conv-dot">'+(unread?'<i></i>':'')+'</div>'+
       avStack(c.names)+
-      '<div class="conv-body"><div class="conv-top"><div class="conv-names"'+(unread?' style="font-weight:800"':'')+'>'+esc(convTitle(c.names))+chChip(c.channel)+'</div><div class="conv-time">'+relTime(c.at)+'</div></div>'+
+      '<div class="conv-body"><div class="conv-top"><div class="conv-names"'+(unread?' style="font-weight:800"':'')+'>'+esc(convTitle(c.names.filter(n=>n!=="Marco Puga")))+chChip(c.channel)+'</div><div class="conv-time">'+relTime(c.at)+'</div></div>'+
       '<div class="conv-prev">'+esc(who)+': '+esc(last.t||"")+'</div></div>'+
       '<button class="conv-del" data-cdel="'+i+'" title="Delete conversation">✕</button></div>';
   }).join(""):(dialRow?'':'<div class="empty">'+emptyChannelMsg()+'</div>'));
   el.querySelectorAll(".conv").forEach(x=>x.addEventListener("click",()=>openThread(+x.dataset.i,x)));
+  el.querySelectorAll('.conv').forEach(x=>x.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openThread(+x.dataset.i);}}));
   el.querySelectorAll("[data-cdel]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); deleteConv(+b.getAttribute("data-cdel")); }));
   var dial=document.getElementById("convDialAny");
   if(dial){
@@ -2738,17 +2759,32 @@ function deleteConv(i){
   const c=CONVOS[i]; if(!c) return;
   if(!confirm('Delete conversation with '+convTitle(c.names)+'? This can\'t be undone.')) return;
   CONVOS.splice(i,1);
-  if(openConvIdx===i){ openConvIdx=null; document.getElementById("thread").innerHTML='<div class="thread-empty">No message selected</div>'; }
+  MC_DRAFTS.delete(convKey(c));
+  if(openConvIdx===i){ openConvIdx=null;var host=document.getElementById('thread');delete host.dataset.conversation;host.innerHTML='<div class="thread-empty">No message selected</div>';document.getElementById('view-messages').classList.remove('mc-thread-open'); }
   else if(openConvIdx!=null && openConvIdx>i){ openConvIdx--; }
   renderConvos(); crmToast("Conversation deleted");
 }
 let pendingAttachments=[];
+var MC_DRAFTS=new Map();
+var MC_SEND_PENDING=new Set();
+function saveMessageDraft(){
+  var host=document.getElementById('thread'),input=document.getElementById('threadInput');
+  if(!host||!host.dataset.conversation||!input)return;
+  var channel=host.querySelector('.ch-toggle .on');
+  MC_DRAFTS.set(host.dataset.conversation,{text:input.value,files:pendingAttachments.slice(),channel:channel&&channel.dataset.ch||'sms'});
+}
 function attFileIcon(name){ return /\.(png|jpe?g|gif|webp|svg)$/i.test(name||"")?"🖼":/\.pdf$/i.test(name||"")?"📄":"📎"; }
 function paintThread(i){
   const c=CONVOS[i];
+  if(!c)return;
+  saveMessageDraft();
+  var threadHost=document.getElementById('thread'),oldBody=document.getElementById('threadBody');
+  var sameThread=threadHost.dataset.conversation===convKey(c);
+  var oldScroll=sameThread&&oldBody&&oldBody.scrollHeight-oldBody.scrollTop-oldBody.clientHeight>60?oldBody.scrollTop:null;
+  threadHost.dataset.conversation=convKey(c);
   const other=c.names.find(n=>n!=="Marco Puga")||c.names[0];
   document.getElementById("thread").innerHTML=
-    '<div class="thread-head"><div>'+esc(convTitle(c.names))+'<div class="th-sub">'+
+    '<div class="thread-head"><div><button type="button" class="mc-back" id="mcBack">← Inbox</button><div>'+esc(convTitle(c.names.filter(n=>n!=="Marco Puga")))+'</div><div class="th-sub">'+
       esc(c.phone?fmtPhone(c.phone):(c.email||""))+
       (c.phone||c.email?' · ':'')+esc((CHANNEL_META[c.channel||"other"]||CHANNEL_META.other).label)+
       (c.quo&&!c._full?' · loading history…':'')+'</div></div>'+
@@ -2757,12 +2793,13 @@ function paintThread(i){
       '<button class="rb" id="threadDeleteBtn" title="Delete conversation" style="color:#c0616a"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></div></div>'+
     '<div class="thread-body" id="threadBody">'+c.msgs.map(m=>'<div class="bub '+(m.me?"me":"them")+'">'+(m.t?esc(m.t):"")+
       (m.files&&m.files.length?'<div class="bub-atts">'+m.files.map(f=>'<span class="atc-chip sm">'+attFileIcon(f.name)+' '+esc(f.name)+'</span>').join("")+'</div>':"")+
-      '<span class="t">'+(m.me?"Marco Puga":other)+' · '+relTime(m.at)+'</span></div>').join("")+'</div>'+
+      '<span class="t">'+esc(m.me?"Marco Puga":other)+' · '+relTime(m.at)+'</span></div>').join("")+'</div>'+
     '<div class="thread-attach-preview" id="threadAttachPreview"></div>'+
     '<div class="thread-vsplit" id="threadVSplit" title="Drag to resize composer" role="separator" aria-orientation="horizontal"></div>'+
     '<div class="thread-compose" id="threadCompose">'+
       '<div class="compose-tools">'+
         '<div class="ch-toggle"><button class="on" data-ch="sms">SMS</button><button data-ch="email">Email</button></div>'+
+        '<span class="mc-delivery" id="mcDelivery"></span>'+
         '<button class="rb attach" id="threadAttachBtn" title="Attach"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.4 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.2-9.2a3 3 0 0 1 4.24 4.25l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.48-8.49"/></svg></button>'+
         '<input type="file" id="threadAttachInput" multiple style="display:none">'+
       '</div>'+
@@ -2770,7 +2807,7 @@ function paintThread(i){
         '<div class="ti-wrap"><div class="ti-ghost" id="threadGhost"></div><textarea id="threadInput" placeholder="Type a message…" rows="3"></textarea></div>'+
         '<button class="rb sug" id="threadSuggestBtn" title="Suggest a reply — reads the whole conversation"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></button>'+
         '<button class="rb" id="threadLaterBtn" title="Send later"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>'+
-        '<button class="snd" id="threadSend"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>'+
+        '<button class="snd" id="threadSend" aria-label="Send message"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>'+
       '</div>'+
     '</div>'+
     '<div class="sug-pop" id="sugPop">'+
@@ -2796,7 +2833,16 @@ function paintThread(i){
       '<div class="sp-echo" id="schedEcho"></div>'+
       '<div class="sp-foot"><button class="sp-cancel" id="schedCancel">Cancel</button><button class="sp-go" id="schedGo">Schedule</button></div>'+
     '</div>';
-  document.querySelectorAll(".ch-toggle button").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".ch-toggle button").forEach(x=>x.classList.toggle("on",x===b));}));
+  document.getElementById('mcBack').onclick=function(){saveMessageDraft();document.getElementById('view-messages').classList.remove('mc-thread-open');};
+  var draft=MC_DRAFTS.get(convKey(c));
+  pendingAttachments=draft?draft.files.slice():[];
+  document.getElementById('threadInput').value=draft?draft.text:'';
+  document.getElementById('threadInput').setAttribute('aria-label','Message draft');
+  function showDelivery(){var email=threadHost.querySelector('.ch-toggle .on').dataset.ch==='email';document.getElementById('mcDelivery').textContent=email?'Send email from the contact profile.':convCanText(c)?'SMS via Quo · '+fmtPhone(c.phone||c.peer):'SMS needs a connected Quo line and phone number.';document.getElementById('threadSend').disabled=email||!convCanText(c)||MC_SEND_PENDING.has(convKey(c));}
+  document.querySelectorAll('.ch-toggle button').forEach(b=>{b.classList.toggle('on',b.dataset.ch===(draft?draft.channel:'sms'));b.addEventListener('click',()=>{document.querySelectorAll('.ch-toggle button').forEach(x=>x.classList.toggle('on',x===b));showDelivery();});});
+  showDelivery();
+  threadHost.querySelector('[title="Call"]').onclick=function(){if(c.phone)window.location.href='tel:'+c.phone.replace(/[^+\d]/g,'');else crmToast('No phone number on this contact yet.');};
+  threadHost.querySelector('[title="Profile"]').onclick=function(){if(c.leadId)openLead(c.leadId);else crmToast('This conversation is not linked to a CRM contact.');};
 
   /* ---- 3.3 AI suggested replies ---------------------------------------
      Two shapes, one server context builder that reads the contact's WHOLE
@@ -2986,7 +3032,8 @@ function paintThread(i){
       .then(({ok,d})=>{
         if(!ok){ setEcho(d.error||"Couldn't schedule","bad"); goBtn.disabled=false; return; }
         pop.classList.remove("on");
-        document.getElementById("threadInput").value="";
+        MC_DRAFTS.delete(convKey(c));
+        tInput.value="";
         whenInput.value=""; document.getElementById("schedDate").value=""; document.getElementById("schedTime").value="";
         crmToast(d.warning?("Queued for "+d.interpreted+" — will not send: "+d.warning)
                           :("Scheduled for "+d.interpreted));
@@ -3016,14 +3063,16 @@ function paintThread(i){
        added only after Quo accepts it — a text that failed must never sit in
        the thread looking delivered. */
     if(composeChannel()==="sms"&&convCanText(c)){ sendQuoText(t); return; }
-    const files=pendingAttachments.slice(); pendingAttachments=[];
-    c.msgs.push({me:true,t,files,at:new Date().toISOString()});c.at=new Date().toISOString();paintThread(i);renderConvos();
-    const b=document.getElementById("threadBody");if(b)b.scrollTop=b.scrollHeight;};
+    saveMessageDraft();
+    crmToast(composeChannel()==='email'?'Email was not sent. Open the contact profile and use Email to send it.':'Message was not sent. SMS needs a connected Quo line and a phone number. Social replies must be sent through their connected inbox.');};
 
   function sendQuoText(t){
+    var sendKey=convKey(c);
+    if(MC_SEND_PENDING.has(sendKey))return;
     if(!t){ crmToast("SMS needs some text — attachments can't go out over text yet"); return; }
     if(pendingAttachments.length) crmToast("Attachments don't send over SMS — sending the message text only");
     const btn=document.getElementById("threadSend");
+    MC_SEND_PENDING.add(sendKey);
     btn.disabled=true; btn.classList.add("busy");
     var from=c.phoneNumberId||quoActiveId()||undefined;
     fetch(crmApi("/api/quo/send"),{method:"POST",headers:{"Content-Type":"application/json"},
@@ -3034,28 +3083,31 @@ function paintThread(i){
         // Quo's own words, not a generic failure - an A2P registration
         // problem and a bad number need different things done about them.
         if(!ok){ crmToast(d&&d.error?("Not sent — "+d.error):"Not sent"); return; }
-        pendingAttachments=[];
+        MC_DRAFTS.delete(convKey(c));
+        var stillOpen=CONVOS[openConvIdx]===c;
+        if(stillOpen){pendingAttachments=[];document.getElementById('threadInput').value='';}
         c.msgs.push({me:true,t,at:new Date().toISOString(),status:d.status||"sent"});
         c.at=new Date().toISOString();
-        paintThread(openConvIdx!=null?openConvIdx:i); renderConvos();
-        const b=document.getElementById("threadBody"); if(b)b.scrollTop=b.scrollHeight;
+        if(stillOpen)paintThread(openConvIdx); renderConvos();
+        const b=stillOpen&&document.getElementById("threadBody"); if(b)b.scrollTop=b.scrollHeight;
         /* Texting from a DM thread does not turn that thread into an SMS one -
            the text is its own conversation, and it shows up under SMS on the
            next refresh with the rest of the history. */
         if(!c.quo) loadQuoThreads();
       })
       .catch(()=>{ btn.disabled=false; btn.classList.remove("busy");
-        crmToast("Couldn't reach the server — nothing was sent"); });
+        crmToast("Could not confirm delivery. Check the thread before trying again."); })
+      .finally(()=>{MC_SEND_PENDING.delete(sendKey);if(threadHost.dataset.conversation===sendKey)showDelivery();});
   }
   document.getElementById("threadSend").addEventListener("click",send);
   document.getElementById("threadInput").addEventListener("keydown",e=>{
     if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); }
   });
-  document.getElementById("threadDeleteBtn").addEventListener("click",()=>deleteConv(i));
-  const b=document.getElementById("threadBody");if(b)b.scrollTop=b.scrollHeight;
+  document.getElementById("threadDeleteBtn").addEventListener("click",()=>deleteConv(CONVOS.indexOf(c)));
+  const b=document.getElementById("threadBody");if(b)b.scrollTop=oldScroll==null?b.scrollHeight:oldScroll;
   bindThreadComposeResize();
 }
-function openThread(i){ openConvIdx=i; pendingAttachments=[]; renderConvos(); paintThread(i);
+function openThread(i){ saveMessageDraft();openConvIdx=i;renderConvos();paintThread(i);document.getElementById('view-messages').classList.add('mc-thread-open');
   // Quo threads arrive as a one-line summary; the history loads on open.
   const c=CONVOS[i]; if(c&&c.quo&&!c._full) loadQuoThread(i);
 }
@@ -4138,6 +4190,7 @@ document.getElementById("poRefreshBtn").addEventListener("click",function(e){
   var btn=e.currentTarget; if(btn.classList.contains("spinning"))return;
   btn.classList.add("spinning");
   renderPipelineOverview();
+  if(window.refreshOverviewAlerts)window.refreshOverviewAlerts();
   setTimeout(function(){ btn.classList.remove("spinning"); crmToast("Overview refreshed"); },450);
 });
 
@@ -11198,13 +11251,17 @@ function leadSmartPred(l){
 })();
 document.getElementById("msgTabs").addEventListener("click",e=>{
   const b=e.target.closest("[data-mt]"); if(!b)return;
-  document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>x.classList.toggle("on",x===b));
+  saveMessageDraft();
+  document.querySelectorAll("#msgTabs [data-mt]").forEach(x=>{x.classList.toggle("on",x===b);x.setAttribute('aria-pressed',String(x===b));x.title=x.textContent.trim();});
   convGroupMode=b.getAttribute("data-mt");
+  document.getElementById('view-messages').classList.remove('mc-thread-open');
+  if(convGroupMode==='scheduled'||(openConvIdx!=null&&!convInTab(CONVOS[openConvIdx],convGroupMode))){openConvIdx=null;pendingAttachments=[];var host=document.getElementById('thread');delete host.dataset.conversation;host.innerHTML='<div class="thread-empty"><span class="mc-empty-icon">↗</span><h2>'+(convGroupMode==='scheduled'?'Your scheduled messages':'Choose a conversation')+'</h2><p>'+(convGroupMode==='scheduled'?'Review delivery status, reschedule or cancel from the list.':'Open a thread to see the full history.')+'</p></div>';}
   paintQuoLineBar();
   if(convGroupMode==="scheduled") loadScheduled();
   if(convGroupMode==="sms"||convGroupMode==="all"){ if(QUO.configured) loadQuoThreads(); }
   renderConvos();
 });
+document.getElementById('mcReplyFilter').onclick=function(){MC_REPLY_ONLY=!MC_REPLY_ONLY;this.setAttribute('aria-pressed',String(MC_REPLY_ONLY));renderConvos();};
 /* Delegated, because the source rows are generated on every render — handlers
    bound once at load would be lost the first time the list repaints. */
 document.querySelector('#view-leads .leads-nav').addEventListener("click",function(e){
