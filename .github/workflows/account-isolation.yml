@@ -38,6 +38,7 @@ jobs:
       - run: node scripts/verify-crm-message-center.mjs
       - run: node scripts/verify-growth-transport.mjs
       - run: node scripts/verify-dialer-import.mjs
+      - run: node scripts/verify-dialer-workspace.mjs
       - run: node scripts/verify-smartposter-flow.mjs
       - run: node scripts/verify-publishing-workflows.mjs
       - run: node scripts/verify-workspace-files.mjs
