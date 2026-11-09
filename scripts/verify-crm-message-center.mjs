@@ -25,3 +25,24 @@ assert.notEqual(ctx.convKey({quo:true,peerKey:'555',phoneNumberId:'a'}),ctx.conv
 assert.notEqual(ctx.convKey({channel:'instagram',leadId:'a'}),ctx.convKey({channel:'email',leadId:'a'}));
 assert.notEqual(ctx.convKey({channel:'instagram',leadId:'owner:a'}),ctx.convKey({channel:'instagram',leadId:'other:a'}));
 console.log('CRM checks passed: actionable-only alerts, dates, agent filters, direct targets, script syntax and channel/line identity.');
+// Rendering regressions: phone-only contacts, date grouping, escaped messages, invalid dates.
+const presentation=vm.createContext({});
+for(const name of ['esc','initials','convTitle']){
+ const line=html.split('\n').find(l=>l.startsWith('function '+name+'('));
+ vm.runInContext(line,presentation);
+}
+vm.runInContext(html.slice(html.indexOf('function mcContactName(c)'),html.indexOf('var MC_REPLY_ONLY=false;')),presentation);
+assert.match(presentation.mcContactAvatar({names:['(210) 555-1000','Marco Puga']}),/<svg/);
+assert.match(presentation.mcContactAvatar({names:['Olivia Carter','Marco Puga']}),/>OC<\/span>/);
+const history=presentation.mcMessageHistory({names:['<Contact>'],msgs:[
+ {t:'<script>alert(1)</script>',at:'2026-11-08T15:00:00Z'},
+ {t:'Same day',me:true,at:'2026-11-08T16:00:00Z'},
+ {t:'Next day',at:'2026-11-09T16:00:00Z'},
+ {t:'No date',at:'invalid'}
+]});
+assert.equal((history.match(/class="mc-day"/g)||[]).length,2);
+assert(!history.includes('<script>'));
+assert(history.includes('&lt;script&gt;'));
+assert(!history.includes('Invalid Date'));
+assert.match(history,/class="mc-message outgoing"/);
+console.log('Inbox rendering passed: phone avatars, date groups, invalid dates and escaped content.');
