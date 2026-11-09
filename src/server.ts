@@ -1,3 +1,5 @@
+import {registerDialer} from './dialer/routes.js';
+import {startDialerSync} from './dialer/sync.js';
 import { hasDmPhoneCapture } from "./core/dmMetrics.js";
 import { accountBridgeUser } from "./core/accountBridge.js";
 import { canViewWorkspace } from "./core/workspaceAccess.js";
@@ -893,6 +895,9 @@ app.get("/team-tasks", requireAuthPage, (_req, res) => {
 });
 
 // Harvey Jobs — start a job, watch each step, read what it produced.
+app.get("/dialer", requireAuthPage, (_req,res)=>res.sendFile(path.join(publicDir,"dialer.html")));
+registerDialer(app,dashboardTokenOk,sessionUserSync);
+
 app.get("/listings", requireAuthPage, (_req, res) => {
   res.sendFile(path.join(publicDir, "listings.html"));
 });
@@ -15379,6 +15384,7 @@ httpServer.listen(PORT, tenantOwner() ? "127.0.0.1" : "0.0.0.0", () => {
   }
   process.send?.({ type: "tenant-ready", port: PORT });
   startWorker();
+  startDialerSync();
   void import("./videoKnowledge/index.js").then(({ startVideoKnowledge }) => startVideoKnowledge()).catch(() => console.error("[videoKnowledge] Startup failed"));
   console.log(`[Server] Listening on 0.0.0.0:${PORT}`);
   /* Publish the real routing table to Harvey's CRM bridge. Read from Express

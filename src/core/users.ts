@@ -129,6 +129,10 @@ function readUsers(allAccounts = false): CRMUser[] {
 }
 
 export function getUsers(): CRMUser[] { return readUsers(); }
+/** Explicit shared Dialer projection; no credentials, permissions or private profile data. */
+export function getDialerTeam() {
+  return readUsers(true).filter(u=>u.active).map(u=>({id:u.id,name:u.name,quoPhoneNumber:u.quoPhoneNumber,quoPhoneNumberId:u.quoPhoneNumberId}));
+}
 /** Identity lookup only; never use this to expose a business roster. */
 export function getAccountUserById(id: string): CRMUser | null { return readUsers(true).find(u => u.id === id) || null; }
 

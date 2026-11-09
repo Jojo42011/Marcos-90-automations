@@ -4119,6 +4119,7 @@ function openPeopleSection(sec){
 }
 document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("click",()=>{
   const v=b.getAttribute("data-view");
+  if(v==="followup"){if(window.parent!==window)window.parent.postMessage({type:"app-navigate",tab:"dialer"},location.origin);else location.href="/dialer";return;}
   if(v==="people"){ openPeopleSection(peopleSection==="leads"||!peopleSection?"leads":peopleSection); return; }
   if(v==="leads"){ openPeopleSection("leads"); return; } // legacy deep-links
   document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on"));

@@ -11,6 +11,7 @@ const tmp = mkdtempSync(join(tmpdir(), "dialer-bump-"));
 process.env.TRACKER_DB_PATH = join(tmp, "tracker.db");
 
 const {
+  getTrackerDb,
   createTrackerRecord,
   getTrackerRecord,
   getTrackerRecordByLead,
@@ -236,6 +237,7 @@ check("planDialerBump never invents Closed", () => {
   assert.ok(appt.every((c) => c.to === "actively_showing"));
 });
 
+getTrackerDb().close();
 rmSync(tmp, { recursive: true, force: true });
 
 console.log(`\n${passed} passed, ${failed} failed`);

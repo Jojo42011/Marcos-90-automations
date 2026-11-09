@@ -98,6 +98,12 @@ check("FORAI pins route-with-feature convention", () => {
   assert(/new Command Center surface|Harvey route|EXECUTION_LANES|Command Center \/ Zernio/i.test(forai));
 });
 
+check("Dialer ships its shared API and Harvey guide",()=>{
+  assert(read("src/core/crmApiSurface.ts").includes('"/api/dialer/"'));
+  assert(read("src/harvey/platformTools.ts").includes('/api/dialer/guide'));
+  assert(read("src/server.ts").includes('registerDialer(app'));
+  assert(read("public/shell.html").includes('key:"dialer"'));
+});
 console.log(`${passed} passed, ${failed} failed`);
 if (failed) {
   for (const f of failures) console.error("FAIL:", f);

@@ -15,7 +15,8 @@ import { dirname, join, resolve } from "node:path";
 import http, { IncomingMessage } from "node:http";
 import net from "node:net";
 import type { Request, Response, NextFunction } from "express";
-import { getUsers } from "./users.js";
+import {dialerStore} from "../dialer/store.js";
+import { getUsers,updateUser } from "./users.js";
 import { dataPath, isTenantGateway, tenantOwner } from "./tenantData.js";
 import type { CRMUser } from "./types.js";
 import { zernioEnvForOwner } from "./zernioOwnerConfig.js";
@@ -39,6 +40,7 @@ export function tenantEnvironment(owner: string, parent = process.env): NodeJS.P
   env.SHARED_KNOWLEDGE_DB_PATH = parent.SHARED_KNOWLEDGE_DB_PATH || dataPath("shared-knowledge.db");
   env.LISTINGS_DB_PATH = parent.LISTINGS_DB_PATH || dataPath("listings.db");
   env.SHARED_TASK_DB_PATH = parent.SHARED_TASK_DB_PATH || dataPath("shared-tasks.db");
+  env.SHARED_DIALER_DB_PATH = parent.SHARED_DIALER_DB_PATH || dataPath("shared-dialer.db");
   env.TENANT_MEMBER = getUsers().find(u => u.id === owner)?.name.trim().split(/\s+/)[0].toLowerCase() || owner;
   env.AUTH_DB_PATH = parent.AUTH_DB_PATH || dataPath("auth.db");
   env.USERS_JSON_PATH = parent.USERS_JSON_PATH || join(dirname(parent.DB_JSON_PATH || dataPath("db.json")), "users.json");
@@ -212,6 +214,17 @@ export function accountMiddleware(sessionUser: (req: Request) => CRMUser | null,
     if (identityPath(req.path)) return next();
     if(user && req.path === "/api/users" && req.method === "GET") {
       res.json({users:getUsers().filter(u=>canViewWorkspace(user,u.id)).map(({passwordHash,...safe})=>safe)});return;
+    }
+    if(user && user.active && req.path === "/api/dialer/numbers/default" && req.method === "POST") {
+      try {
+        const body=await readAccountJson(req),source=dialerStore().get("numbers",user.id);
+        const number=source?.numbers?.find(n=>n.id===body?.lineId);
+        if(!number||source.error||Date.now()-Date.parse(source.at)>600000)throw new Error("Refresh your connected numbers before selecting a default.");
+        const clash=getUsers().find(u=>u.active&&u.id!==user.id&&u.quoPhoneNumberId===number.id);
+        if(clash)throw new Error("This number is already assigned to "+clash.name+".");
+        updateUser(user.id,{quoPhoneNumberId:number.id,quoPhoneNumber:number.number});
+        res.json({ok:true,number});
+      }catch(e){res.status(400).json({error:(e as Error).message});}return;
     }
     if(user && req.path === "/api/account/chats" && req.method === "GET") {res.json({chats:accessibleChats(user)});return;}
     if(user && req.path === "/api/account/chat-relay" && req.method === "POST") {

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dialer · Command Center</title>
+    <script src="/account-session.js"></script>
+    <link
+      rel="preload"
+      as="font"
+      href="/fonts/manrope/Manrope-variable.ttf"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/dialer.css" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <script src="/vendor/leaflet/leaflet.js" defer></script>
+    <script src="/dialer.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to workspace</a>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="wordmark" href="/dialer"
+          ><span class="brand-icon" id="brandIcon"></span>Dialer</a
+        >
+        <div class="team-label">Team workspace</div>
+        <nav id="nav" aria-label="Dialer sections"></nav>
+        <div class="sidebar-head">
+          <span>Calling lists</span
+          ><button data-action="new-list" aria-label="Create calling list">
+            +
+          </button>
+        </div>
+        <div id="sideLists" class="side-lists"></div>
+        <div class="sidebar-head">
+          <span>Groups</span
+          ><button data-action="new-group" aria-label="Create contact group">
+            +
+          </button>
+        </div>
+        <div id="sideGroups" class="side-lists"></div>
+        <div class="sidebar-foot">
+          <span class="status-dot"></span
+          ><span id="syncStatus">Connecting…</span>
+        </div>
+      </aside>
+      <main id="main" tabindex="-1">
+        <header class="page-head">
+          <div>
+            <p id="sectionLabel">Team prospecting</p>
+            <h1 id="pageTitle">Home</h1>
+          </div>
+          <div class="head-actions">
+            <button
+              data-action="refresh"
+              class="icon-button"
+              aria-label="Refresh workspace"
+              id="refreshIcon"
+            ></button
+            ><button data-action="import">Import leads</button
+            ><button data-action="start" class="primary" id="startButton">
+              Start session
+            </button>
+          </div>
+        </header>
+        <div id="notice" role="status" class="notice" hidden></div>
+        <div id="workspace">
+          <div class="empty">Loading your team workspace…</div>
+        </div>
+      </main>
+    </div>
+    <dialog id="dialog" aria-labelledby="dialogTitle"></dialog>
+    <div id="toast" role="status" hidden></div>
+  </body>
+</html>
