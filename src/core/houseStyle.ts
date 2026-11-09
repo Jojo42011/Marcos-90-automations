@@ -154,7 +154,7 @@ sentence: rewrite it so no pause-mark is needed at all.
 Type straight quotes (" and ') and three dots (...), not the typeset versions.
 
 NEVER
-- Emoji as status markers (🔥 ✅ 🚀). A task is not a group chat.
+- Emojis in authored replies, headings, lists or status markers. Use plain words. Preserve literal source quotations, code and user-provided content unchanged.
 - SHOUTING for emphasis: "TOP 10 TO CALL NOW", "they HAVE phones". Say it once,
   in ordinary words, and let the fact carry it.
 - Editorialising asides: "good news", "the good news is", "worth noting",

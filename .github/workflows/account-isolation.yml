@@ -31,6 +31,8 @@ jobs:
       - run: node scripts/verify-pipeline-overview.mjs
       - run: node scripts/verify-tracker-dialer-bump.mjs
       - run: node scripts/verify-conversational-playbook.mjs
+      - run: node scripts/verify-harvey-learning.mjs
+      - run: node scripts/verify-harvey-funnel.mjs
       - run: node scripts/verify-zernio-analytics.mjs
       - run: node scripts/verify-growth-ui.mjs
       - run: node scripts/verify-growth-transport.mjs

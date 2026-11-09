@@ -14,6 +14,7 @@ import {
   executeWorkspaceTool,
 } from "./platformTools.js";
 import { execMode } from "../core/codeExec.js";
+import { hasDmPhoneCapture } from "../core/dmMetrics.js";
 import { getThreadForLead } from "../core/smsStore.js";
 import { getNotes, searchNotes } from "../core/harveyNotes.js";
 import { searchListings, getListing } from "../core/listingsStore.js";
@@ -60,12 +61,6 @@ import type { Lead } from "../core/types.js";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 
 const MS_48H = 48 * 60 * 60 * 1000;
-const POST_PHONE_STAGES = new Set([
-  "phone_captured",
-  "property_sent",
-  "criteria_collected",
-  "email_sent",
-]);
 
 function hoursSince(iso: string | null | undefined): number {
   if (!iso) return 9999;
@@ -1249,6 +1244,8 @@ async function getLeadSummary(): Promise<unknown> {
     byAdCampaign,
     phonesCaptured,
     emailsCaptured,
+    scope: "All stored CRM contacts, current snapshot; not a date-filtered DM cohort",
+    definitions: { byFunnelStage: "Current DM qualification state, not CRM sales stage", phonesCaptured: "Contacts with a non-empty phone field; includes imports. A phone_requested stage does not prove phone capture." },
   };
 }
 
@@ -1279,22 +1276,28 @@ async function getFunnelStats(): Promise<unknown> {
   const todayStart = startOfTodayUtc();
   let addedToday = 0;
   let inPhoneFunnel = 0;
+  let dmConversations = 0;
 
   for (const lead of leads) {
     const stage = String(lead.state);
     countByStage[stage] = (countByStage[stage] ?? 0) + 1;
-    if (POST_PHONE_STAGES.has(stage)) inPhoneFunnel++;
+    const conversation = await getConversation(lead.id);
+    if (conversation.messages?.length) dmConversations++;
+    if (hasDmPhoneCapture(lead, conversation)) inPhoneFunnel++;
     if (lead.createdAt >= todayStart) addedToday++;
   }
 
   const total = leads.length;
   const phoneCaptureRatePct =
-    total > 0 ? Math.round((100 * inPhoneFunnel) / total) : 0;
+    dmConversations > 0 ? Math.round((100 * inPhoneFunnel) / dmConversations) : null;
 
   return {
     countByStage,
     phoneCaptureRatePct,
     phoneCaptureNumerator: inPhoneFunnel,
+    phoneCaptureDenominator: dmConversations,
+    scope: "Current DM qualification stages across all stored contacts; not CRM sales stages or a date-filtered cohort",
+    definitions: { phoneCaptureRatePct: "Conversations with a non-empty phone divided by stored non-empty DM conversations. Same capture definition as DM Agent analytics; not proof of when or how the phone was obtained.", leadsAddedToday: "Contacts created since 00:00 UTC", countByStage: "Current stage labels, not completed actions; phone_requested does not mean a phone was captured" },
     totalLeads: total,
     leadsAddedToday: addedToday,
     leadsAllTime: total,

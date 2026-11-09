@@ -27,7 +27,7 @@
    re-skinning is a colour change and not a hunt.
    ========================================================================== */
 :root{
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  --sans:Inter,"Segoe UI Variable Text",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
   --col:780px;             /* the reading column */
   --side-w:264px;
@@ -79,7 +79,7 @@ html[data-theme="light"]{
 html,body{height:100%}
 body{
   background:var(--bg); color:var(--ink); font-family:var(--sans);
-  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  font-size:15px; line-height:1.65; -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums;
   overflow:hidden;
 }
 button,input,textarea,select{font:inherit;color:inherit}

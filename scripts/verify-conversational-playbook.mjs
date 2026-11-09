@@ -43,9 +43,10 @@ check("prompt: five behavior sections present", () => {
   }
 });
 
-check("prompt: hand-the-ball-back rule is unhedged with explicit escape hatches", () => {
+check("prompt: helpful next step is offered without expanding authorization", () => {
   assert(/HAND THE BALL BACK/.test(fp.CONVERSATIONAL_PACING));
-  assert(/only three exceptions/i.test(fp.CONVERSATIONAL_PACING));
+  assert(/Wait for an answer before starting that new scope/.test(fp.CONVERSATIONAL_PACING));
+  assert(/Finish already-authorized work/.test(fp.CONVERSATIONAL_PACING));
   assert(!/when it fits|sometimes|earned momentum/i.test(fp.CONVERSATIONAL_PACING.split("HAND THE BALL BACK")[1].split("\n")[0]));
 });
 
@@ -79,7 +80,7 @@ check("prompt: honest-numbers rules present in operational half", () => {
 
 check("prompt: execution lanes + no false Composio/TikTok denials", () => {
   assert(/EXECUTION LANES/.test(fp.OPERATIONAL_PROMPT));
-  assert(/Never walk back a live tool number/.test(fp.OPERATIONAL_PROMPT));
+  assert(/authoritative only for its returned account, metric definition, coverage and date range/.test(fp.OPERATIONAL_PROMPT));
   assert(/Missing Composio \/ Plugins TikTok is NOT a missing capability/.test(fp.OPERATIONAL_PROMPT));
   assert(/get_social_analytics/.test(fp.OPERATIONAL_PROMPT));
   assert(/THIS signed-in account only/.test(fp.OPERATIONAL_PROMPT));
