@@ -4,7 +4,7 @@
   "description": "Custom automation system for Marco Puga — buyer lead pipeline from comment to CRM.",
   "main": "dist/app/webhook.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:people",
     "verify:video": "npm run build && node scripts/verify-video-knowledge.mjs && node scripts/verify-video-flow.mjs && node scripts/verify-video-auto-approval.mjs && node scripts/verify-video-backend.mjs && node scripts/verify-video-links.mjs",
     "start": "node dist/src/server.js",
     "dev": "ts-node src/app/webhook.ts",
@@ -16,7 +16,8 @@
     "brivity-migration:dry-run": "ts-node scripts/brivity-migration-dry-run.ts",
     "brivity-migration:apply": "node scripts/brivity-migration-apply.mjs",
     "disk-cleanup:dry-run": "node scripts/disk-cleanup-now.mjs --dry-run",
-    "disk-cleanup:execute": "node scripts/disk-cleanup-now.mjs --execute"
+    "disk-cleanup:execute": "node scripts/disk-cleanup-now.mjs --execute",
+    "build:people": "tsc -p web/people/tsconfig.json && node scripts/build-people.mjs"
   },
   "keywords": [
     "automation",
@@ -29,20 +30,27 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "0.7.11",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^20.10.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
+    "esbuild": "0.28.2",
     "typescript": "^5.3.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@astryxdesign/core": "0.7.11",
+    "@astryxdesign/theme-neutral": "0.7.11",
     "@composio/core": "0.17.0",
     "@modelcontextprotocol/sdk": "1.30.1",
     "@playwright/mcp": "0.0.82",
+    "@stylexjs/stylex": "0.19.1",
     "axios": "^1.13.6",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
@@ -56,6 +64,8 @@
     "multer": "^2.2.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "twilio": "^6.0.2",
     "upload-post": "^2.2.0",
     "web-push": "^3.6.7",

@@ -4039,7 +4039,7 @@ function mapLeadRow(l){
   const loc=l.address||c.location||c.address||l.propertyInquired||"";
   return {
     id:l.id, accountOwnerId:l.accountOwnerId, accountOwnerName:l.accountOwnerName, name:l.name||l.username||"Unknown",
-    intent:(l.crmIntent==="seller")?"seller":"buyer",
+    intent:(l.crmIntent==="seller")?"seller":"buyer", crmIntent:l.crmIntent,
     crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
     stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
     phone:l.phone||"", email:l.email||null, source:l.source||"", platform:l.platform||"",
@@ -12643,3 +12643,5 @@ setInterval(function(){
 })();
 </script>
 <link rel="stylesheet" href="/people-workspace.css">
+
+<script src="/people-astryx-bridge.js"></script>

@@ -77,9 +77,10 @@ WORKDIR /app
 COPY tsconfig.json ./
 COPY config ./config
 COPY src ./src
-RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
-COPY public ./public
+COPY web ./web
 COPY scripts ./scripts
+COPY public ./public
+RUN npm run build && npm prune --omit=dev && npm cache clean --force && rm -rf /root/.npm
 COPY supervisord.conf ./supervisord.conf
 
 # Fail the BUILD if the server did not compile.
@@ -89,7 +90,7 @@ COPY supervisord.conf ./supervisord.conf
 # image still built perfectly — it just contained no application. The first
 # symptom was supervisord crash-looping on `Cannot find module
 # /app/dist/src/server.js` in production, which is far too late to find out.
-RUN test -f /app/dist/src/server.js || (echo "BUILD FAILED: dist/src/server.js missing" && exit 1)
+RUN test -f /app/public/astryx/people.js && test -f /app/public/astryx/people.css && test -f /app/dist/src/server.js || (echo "BUILD FAILED: dist/src/server.js missing" && exit 1)
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
