@@ -33,6 +33,7 @@ jobs:
       - run: node scripts/verify-conversational-playbook.mjs
       - run: node scripts/verify-harvey-learning.mjs
       - run: node scripts/verify-harvey-funnel.mjs
+      - run: node scripts/verify-lead-brief.mjs
       - run: node scripts/verify-zernio-analytics.mjs
       - run: node scripts/verify-growth-ui.mjs
       - run: node scripts/verify-crm-message-center.mjs

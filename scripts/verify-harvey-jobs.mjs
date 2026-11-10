@@ -104,6 +104,11 @@ check("Dialer ships its shared API and Harvey guide",()=>{
   assert(read("src/server.ts").includes('registerDialer(app'));
   assert(read("public/shell.html").includes('key:"dialer"'));
 });
+check("Contact briefs ship evidence access for Harvey",()=>{
+ assert(read("src/harvey/platformTools.ts").includes('/api/crm/lead/:id/brief'));
+ assert(read("src/server.ts").includes('app.get("/api/crm/lead/:id/brief"'));
+ assert(read("src/server.ts").includes('app.post("/api/crm/lead/:id/brief"'));
+});
 console.log(`${passed} passed, ${failed} failed`);
 if (failed) {
   for (const f of failures) console.error("FAIL:", f);

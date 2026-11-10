@@ -1065,3 +1065,5 @@ td {
     margin-right: 20%;
   }
 }
+
+:root,[data-theme="dark"]{--d-accent:var(--accent,#a92028);--d-selected:color-mix(in srgb,var(--accent,#a92028) 12%,var(--d-panel))}.primary{color:#fff}.bar{background:var(--accent,#a92028)}

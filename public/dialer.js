@@ -1258,7 +1258,7 @@
       e.returnValue = "";
     }
   });
-  $("#brandIcon").innerHTML = icon("sessions");
+
   $("#refreshIcon").innerHTML = icon("refresh");
   nav();
   refresh();

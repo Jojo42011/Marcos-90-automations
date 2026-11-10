@@ -1540,11 +1540,11 @@
              row exists only when there is something behind it — and TikTok,
              Instagram and Mojo finally appear, which is what was being asked
              for and was never displayed anywhere. -->
-        <div class="src-head" id="lnOrgHead" style="display:none">By origin</div>
+        <details class="people-secondary"><summary>Sources &amp; origin</summary><div class="src-head" id="lnOrgHead" style="display:none">By origin</div>
         <div id="lnOrigins"></div>
         <div class="src-head">By source <span style="font-weight:400;color:#98a2ad">(5+)</span></div>
         <div id="lnSources"></div>
-        <a id="lnSrcMore" class="src-more" style="display:none"></a>
+        <a id="lnSrcMore" class="src-more" style="display:none"></a></details>
         <a id="leadPonds">Lead Ponds <span class="c">›</span></a>
         <a id="smartFiltersToggle">Smart Filters <span class="c" id="sfCount">8 ›</span></a>
         <div id="smartFiltersList" class="sf-list" style="display:none">
@@ -1611,9 +1611,11 @@
         </div>
         <a class="on" data-bucket="all">All People <span class="c" id="pnAll">0</span></a>
         <a data-bucket="client">Clients <span class="c" id="pnClient">0</span></a>
+        <a data-bucket="active_client">Active Clients <span class="c" id="pnActive">0</span></a>
+        <details class="people-secondary"><summary>More people</summary><button type="button" data-psec="leads" class="people-nav-button">Lead filters</button>
         <a data-bucket="collaborator">Collaborators <span class="c" id="pnCollab">0</span></a>
         <a data-bucket="team">Team <span class="c" id="pnTeam">0</span></a>
-        <a data-bucket="archived">Archived <span class="c" id="pnArch">0</span></a>
+        <a data-bucket="archived">Archived <span class="c" id="pnArch">0</span></a></details>
         <a id="pSmartToggle">Smart Filters <span class="c" id="pSmartCount">8 ›</span></a>
         <div id="pSmartList" class="sf-list" style="display:none">
           <div class="sf-search"><input type="text" id="pSmartSearch" placeholder="Search filters"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa4ae" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg></div>
@@ -2014,7 +2016,7 @@ function actIcon(kind,mut){const paths={
      real conversation, no number) are on the board, an undimmed Call/Text on a
      contact with no number is a button that cannot do what it looks like it
      does, which this system does not ship. */
-  return '<span class="ai'+(mut?' mut':'')+'" data-act="'+kind+'" title="'+titles[kind]+'" style="cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+paths[kind]+'</svg></span>';}
+  return '<button type="button" aria-label="'+titles[kind]+'" class="ai'+(mut?' mut':'')+'" data-act="'+kind+'" title="'+titles[kind]+'" style="cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+paths[kind]+'</svg></button>';}
 /* Contact-action icons → open the lead profile on the matching tab (Brivity
    behavior). Works in the feed and any table row that carries a lead id. */
 const ACT_TAB={email:"email",phone:"call",sms:"text",appt:"appointment",mail:"other",other:"other"};
@@ -2133,7 +2135,7 @@ function updateFeedFilterChip(){}
 
 /* messages */
 /* ---- shared search + sort (drives the top-bar search + SORT BY buttons) ---- */
-let SEARCH="", leadSort="recent";
+let SEARCH="", leadSort="name";
 function _q(s){return String(s||"").toLowerCase();}
 function hitRow(o){ if(!SEARCH)return true; return (_q(o.name)+" "+_q(o.address)+" "+_q(o.city)+" "+_q(o.phone)+" "+_q(o.email)+" "+_q(o.agent)).includes(SEARCH); }
 /* Column sort — per table, persisted per user (TABLE_PREFS, defined below;
@@ -3247,7 +3249,7 @@ function metricCells(l){
 /* New columns arrive hidden. They are real, but adding seven columns to a
    table the team already works from every day would rearrange everyone's view
    without being asked; the Columns picker is where they get turned on. */
-var DEFAULT_HIDDEN_COLS={leads:["hot_score","favorites","avg_fav_price","listing_alerts","market_reports","cma","last_sent","tag"]};
+var DEFAULT_HIDDEN_COLS={people:["show_in_leads","mail","other"],leads:["mail","other","auto_plans","birthdate","home_anniversary","hot_score","favorites","avg_fav_price","listing_alerts","market_reports","cma","last_sent","tag"]};
 function seedDefaultHidden(tkey){
   var p=tblPrefs(tkey);
   if(p._seeded)return; p._seeded=true;
@@ -3287,7 +3289,7 @@ function renderLeads(){
       '<td>'+(l.address?'<div class="addr">'+esc(l.address)+'</div>':'<span style="color:#c2cad1">-</span>')+'</td>'+
       '<td><div class="li"><span class="lab">'+esc(l.lastLabel)+'</span> <span class="tm">'+relTime(l.lastActivity)+'</span></div></td>'+
       '<td><div class="due '+(l.due.label==="Due Today"?"today":"up")+'">'+l.due.label+'<span class="d">'+l.due.date+'</span></div></td>'+
-      '<td><div class="pa"><span class="agav has-marco-photo"></span><span>Marco Puga</span></div></td>'+
+      '<td><div class="pa"><span class="agav">'+esc(initials(l.assignedUserName||""))+'</span><span>'+esc(l.assignedUserName||"Unassigned")+'</span></div></td>'+
       '<td class="mut-cell">'+(l.autoPlan?esc(l.autoPlan):"-")+'</td>'+
       dtCell(l,"birthdate")+
       dtCell(l,"anniversary")+
@@ -3398,7 +3400,7 @@ function applyPeopleSmartFilter(key){
 })();
 
 function peopleFor(b){
-  const base=b==="all"?PEOPLE:b==="client"?PEOPLE.filter(p=>p.cat==="client"):PEOPLE.filter(p=>p.cat===b);
+  const base=b==="active_client"?PEOPLE.filter(p=>p.cat==="client"&&p.status!=="past_client"):b==="all"?PEOPLE.filter(p=>p.cat!=="archived"):b==="client"?PEOPLE.filter(p=>p.cat==="client"):PEOPLE.filter(p=>p.cat===b);
   return pSmartKey?base.filter(pSmartPred):base;
 }
 function eyeIcon(on){return on
@@ -3415,20 +3417,20 @@ function personStatusPill(status){
   return '<span class="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>';
 }
 function renderPeople(){
-  document.getElementById("pnAll").textContent=PEOPLE.length;
+  document.getElementById("pnAll").textContent=PEOPLE.filter(p=>p.cat!=="archived").length;document.getElementById("pnActive").textContent=PEOPLE.filter(p=>p.cat==="client"&&p.status!=="past_client").length;
   document.getElementById("pnClient").textContent=PEOPLE.filter(p=>p.cat==="client").length;
   document.getElementById("pnCollab").textContent=PEOPLE.filter(p=>p.cat==="collaborator").length;
   document.getElementById("pnTeam").textContent=PEOPLE.filter(p=>p.cat==="team").length;
   document.getElementById("pnArch").textContent=PEOPLE.filter(p=>p.cat==="archived").length;
   const list=sortRows(peopleFor(pBucket).filter(advPred).filter(hitRow),"people");
-  const titleMap={all:"All People",client:"Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
+  const titleMap={all:"All People",client:"Clients",active_client:"Active Clients",collaborator:"Collaborators",team:"Team",archived:"Archived"};
   const smartActive=pSmartKey?PEOPLE_SMART_FILTERS.find(f=>f.key===pSmartKey):null;
   document.getElementById("pTitle").innerHTML=(smartActive?esc(smartActive.label):titleMap[pBucket])+' <small>('+list.length+')</small>';
   /* The chip bar is owned by the advanced filter now — it shows the live
      filter chips whenever any are set, on every bucket. */
   if(typeof renderAdvChips==="function") renderAdvChips();
   const pages=Math.max(1,Math.ceil(list.length/PER));
-  const rows=list.slice((pPage-1)*PER,pPage*PER);
+  if(pPage>pages)pPage=pages;const rows=list.slice((pPage-1)*PER,pPage*PER);
   document.getElementById("peopleRows").innerHTML=rows.map(p=>{
     return '<tr><td><input type="checkbox" class="cb"></td>'+
       '<td><span class="lead-name ldlink" data-lid="'+esc(p.id)+'">'+esc(p.name)+'</span>'+marketPill(p,"row")+'</td>'+
@@ -3446,7 +3448,7 @@ function renderPeople(){
   pg+='<button '+(pPage>=pages?'disabled':'')+' data-p="'+(pPage+1)+'">›</button>';
   document.getElementById("pPager").innerHTML=pg;
   document.querySelectorAll("#pPager button[data-p]").forEach(b=>b.addEventListener("click",()=>{const p=+b.dataset.p;if(p>=1&&p<=pages){pPage=p;renderPeople();}}));
-  if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-people table.leads"),"people");
+  seedDefaultHidden("people");if(typeof applyColPrefs==="function")applyColPrefs(document.querySelector("#view-people table.leads"),"people");
 }
 document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventListener("click",()=>{
   document.querySelectorAll('.leads-nav a[data-bucket]').forEach(x=>x.classList.remove("on"));a.classList.add("on");
@@ -4093,7 +4095,7 @@ function ensureEmailFrame(){
 function renderEmail(){ ensureEmailFrame(); }
 
 /* view switching — People rail opens Leads by default (merged People tab) */
-var peopleSection="leads";
+var peopleSection="all";
 function syncPeopleSubtabs(){
   document.querySelectorAll("[data-psec]").forEach(function(b){
     b.classList.toggle("on", b.getAttribute("data-psec")===peopleSection);
@@ -4120,7 +4122,7 @@ function openPeopleSection(sec){
 document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("click",()=>{
   const v=b.getAttribute("data-view");
   if(v==="followup"){if(window.parent!==window)window.parent.postMessage({type:"app-navigate",tab:"dialer"},location.origin);else location.href="/dialer";return;}
-  if(v==="people"){ openPeopleSection(peopleSection==="leads"||!peopleSection?"leads":peopleSection); return; }
+  if(v==="people"){ openPeopleSection(peopleSection||"all"); return; }
   if(v==="leads"){ openPeopleSection("leads"); return; } // legacy deep-links
   document.querySelectorAll(".rail .r").forEach(x=>x.classList.remove("on"));
   document.querySelectorAll('.rail .r[data-view="'+v+'"]').forEach(x=>x.classList.add("on"));
@@ -4265,8 +4267,8 @@ function mapPeopleLive(rows){
   return rows.map(r=>{
     let cat="lead", status=r.statusDisp;
     if(r.crmStatus==="dead"||r.crmStatus==="unresponsive"){cat="archived";status="archived";}
-    else if(r.stage==="closed"){cat="client";status="past_client";}
-    else if(r.stage==="under_contract"){cat="client";status="client";}
+    else if(r.stage==="closed"||r.crmStatus==="past_client"){cat="client";status="past_client";}
+    else if(r.stage==="under_contract"||r.crmStatus==="active_client"||r.crmStatus==="client"){cat="client";status="client";}
     return {id:r.id,name:r.name,cat,status,showInLeads:cat!=="archived",intent:r.intent,
       stageLabel:r.stageLabel,email:r.email,phone:r.phone,address:r.address,
       lastLabel:r.lastLabel,lastActivity:r.lastActivity,due:r.due,
@@ -5192,7 +5194,7 @@ document.getElementById("topSearch").addEventListener("input",function(){
  */
 var SORT_FIELDS={
   leads:[
-    [null,"Most Recent (Default)"],
+    [null,"Name A–Z (Default)"],
     ["first_name","First Name"],
     ["last_name","Last Name"],
     ["status","Status"],
@@ -5222,7 +5224,7 @@ var SORT_FIELDS={
     ["address","Address"]
   ],
   people:[
-    [null,"Most Recent (Default)"],
+    [null,"Name A–Z (Default)"],
     ["first_name","First Name"],
     ["last_name","Last Name"],
     ["status","Status"],
@@ -5994,8 +5996,8 @@ function openLead(id, tab){ const l=LEADS.find(x=>x.id===id); if(!l)return; curr
   LDTASKS={leadId:id,list:[],loading:true,err:null};
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on")); document.getElementById("view-lead").classList.add("on"); window.scrollTo(0,0);
   renderLead();
-  loadContactRecord(id,function(){ if(currentLeadId===id)crRepaint(); }); }
-function backToLeads(){ openPeopleSection("leads"); }
+  loadContactRecord(id,function(){ if(currentLeadId===id)crRepaint(); }); loadLeadBrief(id,false); }
+function backToLeads(){ openPeopleSection(peopleSection||"all"); }
 function stepLead(dir){ const list=sortRows(LEADS.filter(hitRow),"leads"); const i=list.findIndex(x=>x.id===currentLeadId); const n=list[i+dir]; if(n) openLead(n.id); }
 /**
  * The contact record.
@@ -6012,7 +6014,7 @@ function renderLead(){
   const host=document.getElementById("leadDetail");
   host.classList.add("cr-canvas");
   host.innerHTML=
-    '<button class="ld-back" id="ldBack">‹ Back to Leads</button>'+
+    '<button class="ld-back" id="ldBack">Back to people</button>'+
     '<div class="ld-grid cr3">'+
       /* ── column 1 ── */
       '<div class="cr-col">'+
@@ -6023,17 +6025,17 @@ function renderLead(){
           (ldEditing?'<input id="ldNameIn" class="ld-edit-in" value="'+esc(l.name||"")+'" style="text-align:center;font-size:15px;font-weight:700;margin-top:2px">':'<div class="ld-name">'+esc(l.name)+' '+marketPill(l)+'</div>')+
           (l.address?'<div class="ld-sub" style="margin-top:6px">'+esc(l.address)+'</div>':'')+
           oppTagsHTML(l)+
-          '<div style="margin-top:10px"><button type="button" class="mini-pill" id="ldOppTagBtn">+ Opportunity type</button></div>'+
-          '<div class="ld-sub">SOURCE: <b>'+esc(l.source||"-")+'</b></div>'+
+          '<div style="margin-top:10px"><button type="button" class="mini-pill" id="ldOppTagBtn">Opportunity type</button></div>'+
+          '<div class="ld-sub">Source: <b>'+esc(l.source||"-")+'</b></div>'+
           '<div class="ld-sub" style="margin-top:4px">Registered '+esc(fmtReg(l.createdAt))+'</div>'+
           '<div style="margin-top:16px">'+
-            fieldRow("LAST INTERACTION",'<span class="v">'+(relTime(l.lastActivity)||"-")+'</span>')+
-            fieldRow("STAGE",'<span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span>')+
-            fieldRow("STATUS",'<span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>')+
-            fieldRow("INTENT",'<span class="ld-intent editable" data-lid="'+esc(l.id)+'" data-kind="intent">'+intentLabel+' ▾</span>')+
-            fieldRow("PERSON TYPE","Lead")+
+            fieldRow("Last interaction",'<span class="v">'+(relTime(l.lastActivity)||"-")+'</span>')+
+            fieldRow("Stage",'<span class="stage editable" data-lid="'+esc(l.id)+'" data-kind="stage">'+esc(l.stageLabel)+' ▾</span>')+
+            fieldRow("Status",'<span class="status editable" data-lid="'+esc(l.id)+'" data-kind="status" style="background:'+sm.c+'">'+sm.l+' ▾</span>')+
+            fieldRow("Intent",'<span class="ld-intent editable" data-lid="'+esc(l.id)+'" data-kind="intent">'+intentLabel+' ▾</span>')+
+            fieldRow("Person type","Lead")+
           '</div>'+
-          '<label style="display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:13px;color:#6b7480;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--teal)"> Show in Leads Index?</label>'+
+          '<label style="display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:13px;color:#6b7480;cursor:pointer"><input type="checkbox" checked style="accent-color:var(--teal)"> Show in leads</label>'+
         '</div>'+
         /* Emails, phones, addresses, social, details, relationships, notes,
            transactions and documents all live in the accordion stack. */
@@ -7492,28 +7494,29 @@ function refreshTxList(){
  */
 var aiFolded=null;   // null until prefs load, then true/false for this session
 
+var LEAD_BRIEFS={};
+function leadRecs(l){return (LEAD_BRIEFS[l.id]?.brief?.recommendations||[]).map(function(r){return r.action;});}
+function paintLeadBrief(id){if(currentLeadId!==id)return;var panel=document.getElementById("crAiPanel"),lead=LEADS.find(x=>x.id===id);if(panel&&lead){panel.outerHTML=aiPanelHTML(lead);wireAiPanel(lead);}}
+async function loadLeadBrief(id,generate){
+ if(LEAD_BRIEFS[id]?.loading)return;LEAD_BRIEFS[id]={loading:true};paintLeadBrief(id);
+ try{var r=await fetch(crmApi('/api/crm/lead/'+encodeURIComponent(id)+'/brief'),{method:generate?'POST':'GET'}),d=await r.json();if(!r.ok)throw Error(d.error||'Contact history unavailable');LEAD_BRIEFS[id]=d;paintLeadBrief(id);if(!d.brief&&!generate)await loadLeadBrief(id,true);}
+ catch(e){LEAD_BRIEFS[id]={error:e.message};paintLeadBrief(id);}
+}
 function aiPanelHTML(l){
-  var folded=aiFolded===null?!!UI_PREFS.contactAiCollapsed:aiFolded;
-  var items=(aiTab==="rec"?leadRecs(l):leadInsights(l));
-  return '<div class="ai-panel'+(folded?" folded":"")+'" id="crAiPanel">'+
-    '<div class="ai-top ai-fold" id="crAiFold"><h4>✦ Harvey AI <span style="font-size:11px">'+(folded?"▸":"▾")+'</span></h4>'+
-      '<span class="ai-upd">↻ Updated: '+esc(fmtUpdated(l.lastActivity||l.updatedAt))+'</span></div>'+
-    '<div class="ai-tabs">'+
-      '<button data-ai="rec" class="'+(aiTab==="rec"?"on":"")+'">Harvey Recommends</button>'+
-      '<button data-ai="about" class="'+(aiTab==="about"?"on":"")+'">About This Lead</button></div>'+
-    '<ul class="ai-stream">'+items.map(function(i){return '<li>'+esc(i)+'</li>';}).join("")+'</ul>'+
-    '<label class="ai-def"><input type="checkbox" id="crAiDefault"'+(UI_PREFS.contactAiCollapsed?" checked":"")+
-      '> Collapse by default</label>'+
-  '</div>';
+ var state=LEAD_BRIEFS[l.id]||{},brief=state.brief,context=state.context,folded=aiFolded===null?!!UI_PREFS.contactAiCollapsed:aiFolded;
+ var evidence=context?.evidence||[];
+ var content=state.loading?'<li>Reading the available conversation and contact history…</li>':state.error?'<li>'+esc(state.error)+'</li>':!brief?'<li>No brief yet. Review this contact’s history to get a useful next step.</li>':aiTab==='about'?'<li>'+esc(brief.summary)+'</li>'+brief.missing.map(x=>'<li>'+esc(x)+'</li>').join(''):brief.recommendations.map(r=>'<li><strong>'+esc(r.action)+'</strong><p>'+esc(r.reason)+'</p>'+ (r.evidenceIds.length?'<details class="lead-context-evidence"><summary>View supporting history</summary>'+r.evidenceIds.map(id=>{var e=evidence.find(x=>x.id===id);return e?'<blockquote>'+esc(e.text)+'<small>'+esc(e.source)+' · '+esc(fmtUpdated(e.at))+'</small></blockquote>':'';}).join('')+'</details>':'')+'</li>').join('');
+ return '<div class="ai-panel'+(folded?' folded':'')+'" id="crAiPanel"><div class="ai-top"><button class="ai-refresh" id="crAiFold" aria-expanded="'+!folded+'">Harvey · Contact brief</button><span class="ai-upd">'+(brief?'Reviewed '+esc(fmtUpdated(brief.generatedAt)):'Based on synced contact history')+'</span></div><div class="ai-tabs"><button data-ai="rec" class="'+(aiTab==='rec'?'on':'')+'">Next steps</button><button data-ai="about" class="'+(aiTab==='about'?'on':'')+'">About this person</button></div><ul class="ai-stream" aria-live="polite">'+content+'</ul>'+(context?'<p class="ai-coverage">'+context.coverage.included+' history entries reviewed'+(context.coverage.olderOmitted?' · '+context.coverage.olderOmitted+' older entries not included':'')+'. Synced records only.</p>':'')+'<button class="ai-refresh" id="crAiRefresh" '+(state.loading?'disabled':'')+'>Refresh brief</button><label class="ai-def"><input type="checkbox" id="crAiDefault"'+(UI_PREFS.contactAiCollapsed?' checked':'')+'> Collapse by default</label></div>';
 }
 
 function wireAiPanel(l){
+  var refresh=document.getElementById("crAiRefresh");if(refresh)refresh.onclick=function(){loadLeadBrief(l.id,true);};
   var fold=document.getElementById("crAiFold");
   if(fold)fold.addEventListener("click",function(){
     var panel=document.getElementById("crAiPanel");
     aiFolded=!panel.classList.contains("folded");
     panel.classList.toggle("folded",aiFolded);
-    var caret=panel.querySelector("h4 span"); if(caret)caret.textContent=aiFolded?"▸":"▾";
+    fold.setAttribute("aria-expanded",String(!aiFolded));
   });
   var def=document.getElementById("crAiDefault");
   if(def)def.addEventListener("change",function(){
@@ -10734,9 +10737,6 @@ function rightStackHTML(l){
     '<div class="rblock"><h5>Marketing</h5>'+
       '<div class="wdg-note" style="margin-bottom:10px">Send postcards, bifolds, trifolds, and snap packs.</div>'+
       '<button class="rbtn" style="background:var(--teal-pill);color:#fff;border-color:var(--teal-pill)">✉ SEND MAIL</button></div>'+
-    '<div class="rblock"><h5>Brivity Home App</h5>'+
-      '<div class="wdg-off">There is no client mobile app connected to this system, so there is no adoption to report here. '+
-        'Nothing on this record can invite a contact to one.</div></div>'+
     '<div class="rblock"><h5>Tasks <button class="mini-pill" id="ldTaskAdd">+ ADD</button></h5>'+
       '<div id="ldTasksBlk" style="font-size:12.5px;color:var(--muted)">Loading…</div></div>'+
     '<div class="rblock"><h5>Auto Plans <button class="mini-pill" id="ldPlanAdd">+ ADD</button></h5>'+
@@ -11027,7 +11027,7 @@ document.querySelectorAll('#view-finance .leads-nav a[data-finm]').forEach(a=>a.
 bindTableClicks("nurtureRows");
 
 /* ═══════════ Full-CRM clickability sweep ═══════════ */
-let dashMode="recent", convGroupMode="all", snapMode="bs", aiTab="about";
+let dashMode="recent", convGroupMode="all", snapMode="bs", aiTab="rec";
 let leadBucket="all", leadSmartKey=null;
 /*
  * SOURCE COUNTS, GENERATED FROM THE LEADS THEMSELVES.
@@ -11664,15 +11664,7 @@ document.addEventListener("click",e=>{
   const goal=e.target.closest("[data-goal], .fcirc .g");
   if(goal){ crmToast("Goals are set with live data - coming online with your numbers"); return; }
 });
-function leadRecs(l){
-  const recs=[];
-  if(!(l.autoPlanEnrollments||[]).length) recs.push("Enroll "+(l.name.split(" ")[0])+" in the New Lead Follow-Up auto plan.");
-  if(!l.email) recs.push("Missing email - ask for it on the next call and add a Listing Alert.");
-  if(l.due&&l.due.label==="Due Today") recs.push("A follow-up touch is due today - call before 6pm for best pickup odds.");
-  if(l.statusDisp==="hot") recs.push("Hot lead: schedule an appointment this week while intent is high.");
-  recs.push("Send the "+((l.criteria&&l.criteria.location)?l.criteria.location.split(",")[0]:"local")+" market report to stay top of mind.");
-  return recs.slice(0,4);
-}
+
 // Filter chip bars: × removes, Save toasts, Clear All resets.
 // lChipBar/pChipBar are owned by the advanced filter (renderAdvChips), whose
 // chips carry their own handlers — the legacy delegate must not touch them.
@@ -13200,3 +13192,4 @@ setInterval(function(){
   }).catch(function(){});
 })();
 </script>
+<link rel="stylesheet" href="/people-workspace.css">

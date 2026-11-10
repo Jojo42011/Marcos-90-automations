@@ -1,0 +1,62 @@
+/* People and contact records: spacious, account-themed work surfaces. */
+@font-face{font-family:Manrope;src:url('/fonts/manrope/Manrope-variable.ttf') format('truetype');font-weight:200 800;font-display:swap}
+:is(#view-people,#view-leads,#view-lead,#view-tx){font-family:Manrope,'Segoe UI',sans-serif;font-size:14px;--sans:Manrope,'Segoe UI',sans-serif}
+:is(#view-people,#view-leads) .leads-nav{width:190px;min-width:190px;padding:24px 12px;border-right:1px solid var(--line);background:var(--card)}
+:is(#view-people,#view-leads) .leads-nav .h{padding:0 12px 24px;font-size:18px;letter-spacing:-.5px}
+:is(#view-people,#view-leads) .leads-nav>a,.people-secondary a{padding:12px;border-radius:6px;margin:3px 0;font-size:12px;line-height:1.5}
+.people-subtabs{display:none!important}.people-secondary{margin:18px 0;border-top:1px solid var(--line);padding-top:12px}.people-secondary summary{padding:10px 12px;cursor:pointer;font-size:12px;color:var(--text-3)}
+:is(#view-people,#view-leads,#view-tx) .leads-main{min-width:0}
+:is(#view-people,#view-leads,#view-tx) .leads-top{padding:25px 28px;gap:18px;flex-wrap:wrap;align-items:center}
+:is(#view-people,#view-leads,#view-tx) .leads-top h1{font-family:inherit;font-size:26px;font-weight:650;letter-spacing:-.8px}
+:is(#view-people,#view-leads,#view-tx) .acts{gap:8px;flex-wrap:wrap}
+:is(#view-people,#view-leads,#view-tx) .pill-btn{border-radius:6px;min-height:35px;font-size:11px;letter-spacing:0;font-weight:600}
+:is(#view-people,#view-leads) table.leads{min-width:1050px;table-layout:auto}
+:is(#view-people,#view-leads,#view-tx) table.leads th{padding:16px 13px;font-size:11px;font-weight:550;text-transform:none;letter-spacing:0;background:var(--card);border-bottom:1px solid var(--line)}
+:is(#view-people,#view-leads,#view-tx) table.leads td{padding:20px 13px;height:74px;font-size:12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+:is(#view-people,#view-leads) .lead-name{font-family:inherit;font-size:13px;font-weight:650;line-height:1.5}
+:is(#view-people,#view-leads) .status{font-size:10px;letter-spacing:0;padding:5px 10px;min-width:90px;border-radius:5px}
+:is(#view-people,#view-leads) .stage{font-size:10px;letter-spacing:0;padding:5px 8px;max-width:150px;white-space:normal;line-height:1.5;border-radius:5px}
+:is(#view-people,#view-leads) .act{width:28px;height:28px;border-radius:6px;background:color-mix(in srgb,var(--accent) 9%,var(--card));color:var(--accent)}
+:is(#view-people,#view-leads) .pager{padding:22px;gap:8px}.people-secondary:focus-within{outline-offset:2px}
+#leadDetail.cr-canvas{margin:0;padding:24px 28px 50px;min-height:calc(100dvh - var(--topbar));font-family:Manrope,'Segoe UI',sans-serif}
+#leadDetail .ld-back{font-size:12px;margin-bottom:22px;padding:8px 0}
+#leadDetail .ld-grid.cr3{grid-template-columns:minmax(250px,290px) minmax(340px,1fr) minmax(240px,280px);gap:24px;align-items:start}
+#leadDetail .cr-col{gap:24px;min-width:0}
+#leadDetail :is(.ld-card,.ai-panel,.acc){border-radius:8px;border:1px solid var(--line);box-shadow:none;min-width:0}
+#leadDetail .ld-prof{padding:24px;text-align:left;position:relative}
+#leadDetail .ld-av{margin:26px 0 18px;width:54px;height:54px;border-radius:14px;font-size:20px;background:color-mix(in srgb,var(--accent) 12%,var(--card));color:var(--text-1)}
+#leadDetail .ld-name{font-family:inherit;font-size:21px;line-height:1.45;text-align:left;overflow-wrap:anywhere}
+#leadDetail .ld-sub{font-size:11px;text-align:left;line-height:1.7;color:var(--text-3)}
+#leadDetail #ldOppTagBtn{height:32px;margin:0 0 14px;padding:0 12px;border-radius:5px;text-transform:none;letter-spacing:0;font-weight:550;float:none}
+#leadDetail .ld-editbtn{position:static;display:flex;justify-content:flex-end;gap:5px}
+#leadDetail .ld-editbtn button{border-radius:5px;min-height:30px;font-size:10px}
+#leadDetail .ld-nav{top:32px;width:26px;height:26px;border-radius:5px}#leadDetail .ld-nav.l{left:24px}#leadDetail .ld-nav.r{left:56px;right:auto}
+#leadDetail .ld-field{display:grid;grid-template-columns:90px minmax(0,1fr);gap:14px;padding:12px 0;align-items:center}
+#leadDetail .ld-field :is(.v,.status,.stage,.ld-intent){max-width:100%;white-space:normal;text-align:right;line-height:1.5}
+#leadDetail .acc-h{padding:18px 20px;gap:10px}#leadDetail .acc-h .ti{font-size:13px;font-weight:650}
+#leadDetail .acc-b{padding:18px 20px}#leadDetail .crx{padding:12px 0;gap:6px;flex-wrap:wrap}#leadDetail .crx .cx-v{flex-basis:100%;font-size:13px}
+#leadDetail .mini-pill{border-radius:5px;text-transform:none;letter-spacing:0;font-size:11px;font-weight:550;min-height:28px}
+#leadDetail .ld-card .rblock{padding:20px;border-bottom:1px solid var(--line)}#leadDetail .ld-card .rblock:last-child{border-bottom:0}
+#leadDetail :is(.rbtn,.addlink){text-transform:none;letter-spacing:0;font-size:11px;line-height:1.6}#leadDetail .rbtn{min-height:34px;border-radius:5px}
+#leadDetail .ld-tabs{gap:5px;padding:16px 0;flex-wrap:wrap}#leadDetail .ld-tabs button{font-size:11px;padding:9px 10px;border-radius:5px;text-transform:capitalize;letter-spacing:0}
+#leadDetail :is(textarea,.ld-input){border-radius:6px;line-height:1.8;padding:12px}#leadDetail textarea{min-height:130px}
+#leadDetail .ai-panel{padding:22px}#leadDetail .ai-top{gap:12px;align-items:center;flex-wrap:wrap}#leadDetail .ai-top h4{font-family:inherit;font-size:15px;color:var(--text-1)}
+#leadDetail .ai-tabs{margin:16px 0;gap:8px}#leadDetail .ai-tabs button{font-size:11px;border-radius:5px;padding:7px 10px;letter-spacing:0}
+#leadDetail .ai-stream{list-style:none;padding:0;max-height:320px;margin:14px 0;font-size:13px;line-height:1.8}#leadDetail .ai-stream li{padding:10px 0;border-bottom:1px solid var(--line-2)}
+#leadDetail .ai-stream li:last-child{border:0}#leadDetail .ai-upd{font-size:10px;color:var(--text-3)}.lead-context-evidence{margin:12px 0}.lead-context-evidence summary{cursor:pointer;font-size:11px;color:var(--text-3)}.lead-context-evidence blockquote{font-size:12px;margin:12px 0;padding:8px 12px;border-left:2px solid var(--accent);white-space:pre-wrap}.lead-context-evidence small{display:block;font-size:10px;color:var(--text-3)}
+#leadDetail .ai-refresh{font:600 11px Manrope,sans-serif;border:1px solid var(--line);color:var(--text-1);background:var(--card);padding:8px 12px;border-radius:5px;cursor:pointer}
+#leadDetail :is(button,a,input,textarea,select,summary):focus-visible,:is(#view-people,#view-leads) :is(button,a,input,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:1250px){#leadDetail .ld-grid.cr3{grid-template-columns:260px minmax(0,1fr)}#leadDetail .cr-col:last-child{grid-column:2;display:grid;grid-template-columns:1fr 1fr}#leadDetail .cr-col:first-child{grid-row:1/3}}
+@media(max-width:800px){#leadDetail.cr-canvas{padding:16px}#leadDetail .ld-grid.cr3{display:flex;flex-direction:column}#leadDetail .cr-col{width:100%}#leadDetail .cr-col:last-child{display:flex}:is(#view-people,#view-leads) .leads-nav{width:150px;min-width:150px}:is(#view-people,#view-leads,#view-tx) .leads-top{padding:20px}}
+@media(max-width:560px){:is(#view-people,#view-leads) .leads-wrap{display:block}:is(#view-people,#view-leads) .leads-nav{width:100%;padding:12px;display:flex;gap:5px;flex-wrap:wrap}:is(#view-people,#view-leads) .leads-nav .h{display:none}:is(#view-people,#view-leads) .leads-nav>a{padding:8px;font-size:11px}.people-secondary{margin:0;border:0;padding:0}.people-secondary[open]{flex-basis:100%}}
+
+#leadDetail .ai-coverage{font-size:11px;line-height:1.6;color:var(--text-3);margin:16px 0}#leadDetail .ai-panel.folded :is(.ai-coverage,#crAiRefresh){display:none}
+
+[data-theme="dark"]{color-scheme:dark}
+:is(#view-people,#view-leads) .ai{background:var(--card)!important;color:var(--text-2)!important;border:1px solid var(--line);border-radius:6px;width:29px;height:29px;display:inline-flex;align-items:center;justify-content:center}
+:is(#view-people,#view-leads) .ai:hover{border-color:var(--accent);color:var(--text-1)!important}
+#leadDetail .rbtn{background:transparent!important;color:var(--text-2)!important;border-color:var(--line)!important}
+#leadDetail .rbtn:hover{border-color:var(--accent)!important}
+#leadDetail .ld-card{margin-top:0}
+
+.people-nav-button{display:block;width:100%;text-align:left;padding:12px;border:0;background:transparent;color:var(--text-2);font:inherit;font-size:12px;cursor:pointer}

@@ -3809,7 +3809,7 @@ app.post("/api/crm/lead/:id/activity", express.json({ limit: "64kb" }), async (r
     const backdated = timestamp < new Date(Date.now() - 60000).toISOString();
     let pin: { lastActivity?: string } | undefined;
     if (backdated) {
-      const { getLeadById, normalizeCrmActivity } = await import("./core/db.js");
+      const { getLeadById, getConversation, normalizeCrmActivity } = await import("./core/db.js");
       const before = await getLeadById(id);
       /* "Last touched" is the most recent REAL touch. Prefer the stored value;
          fall back to the newest activity already on the record; and if there
@@ -5841,6 +5841,16 @@ function timelineCategoryFor(type: string): TimelineCategory {
   return "other";
 }
 
+// Same account-scoped evidence used by the profile and Harvey's CRM tools.
+app.get("/api/crm/lead/:id/brief", async(req,res)=>{
+ if(!dashboardTokenOk(req)){res.status(401).json({error:"Unauthorized"});return;}
+ try{const m=await import('./core/leadBrief.js');const context=await m.leadBriefContext(String(req.params.id));res.json({context,brief:m.cachedLeadBrief(context)});}catch(e){res.status(Number((e as any).status)||500).json({error:(e as Error).message});}
+});
+app.post("/api/crm/lead/:id/brief", async(req,res)=>{
+ if(!dashboardTokenOk(req)){res.status(401).json({error:"Unauthorized"});return;}
+ try{const m=await import('./core/leadBrief.js');const context=await m.leadBriefContext(String(req.params.id));res.json({context,brief:await m.generateLeadBrief(context)});}catch(e){res.status(Number((e as any).status)||503).json({error:(e as Error).message});}
+});
+
 app.get("/api/crm/lead/:id/timeline", async (req, res) => {
   if (!dashboardTokenOk(req)) {
     res.status(401).json({ error: "Unauthorized", hint: "Set DASHBOARD_TOKEN in .env or pass ?token=" });
@@ -5849,7 +5859,7 @@ app.get("/api/crm/lead/:id/timeline", async (req, res) => {
   const id = String(req.params.id || "").trim();
   if (!id) { res.status(400).json({ error: "Missing lead id" }); return; }
   try {
-    const { getLeadById, normalizeCrmActivity } = await import("./core/db.js");
+    const { getLeadById, getConversation, normalizeCrmActivity } = await import("./core/db.js");
     const lead = await getLeadById(id);
     if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
 
@@ -5906,6 +5916,10 @@ app.get("/api/crm/lead/:id/timeline", async (req, res) => {
     } catch (err) {
       console.error("[timeline] SMS thread unavailable:", err);
     }
+
+    // Social DM history is stored independently of CRM activity; include it explicitly.
+    const dmConversation=await getConversation(id);
+    dmConversation.messages.forEach((m,i)=>push({id:"dm_"+(m.providerMessageId||i),category:"text",title:(m.role==="user"?"Message received":"Message sent")+" · "+lead.platform,body:m.text,at:m.at,direction:m.role==="user"?"in":"out",detail:{Source:lead.platform||"DM"}}));
 
     /* ── 3. outreach: what went out, and the opens the pixel measured ── */
     let outreachTracked = 0;
