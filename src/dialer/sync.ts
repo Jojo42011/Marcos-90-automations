@@ -220,6 +220,9 @@ async function sync() {
         dnc: tags.some((t) => /^(do.not.call|dnc)$/i.test(t)),
         archived: false,
         crmLinked: true,
+        tags: [...tags],
+        crmStatus: lead.crmStatus || "new",
+        crmCallQueue: lead.crmCallQueue || "none",
         createdAt: old?.createdAt || lead.createdAt,
         updatedAt: lead.updatedAt,
       });

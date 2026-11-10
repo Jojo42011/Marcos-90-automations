@@ -205,8 +205,114 @@ try {
   assert((await api("/export")).csv.includes("Olivia"));
   assert.equal((await api("/numbers")).purchaseSupported, false);
   assert((await api("/guide")).operations.session.includes("/sessions"));
+  assert((await api("/guide")).operations.queues.includes("GET /queues"));
+
+  // Smart queues migrated from the CRM Dialer.
+  const { upsertLeadQuiet } = require("../dist/src/core/db.js");
+  upsertLeadQuiet({
+    id: "lead-due-1",
+    platform: "crm",
+    userId: "due1",
+    username: null,
+    name: "Due Today Lead",
+    phone: "5125550201",
+    email: null,
+    state: "new",
+    source: "Manual",
+    adCampaign: null,
+    propertyInquired: null,
+    address: null,
+    criteria: null,
+    brivityId: null,
+    crmStatus: "new",
+    crmStage: "new",
+    crmPriority: "normal",
+    crmIntent: "seller",
+    crmCallQueue: "urgent",
+    crmNotes: null,
+    assignedUserId: "marco",
+    assignedUserName: "Marco",
+    tags: [],
+  });
+  upsertLeadQuiet({
+    id: "lead-mojo-1",
+    platform: "crm",
+    userId: "mojo1",
+    username: null,
+    name: "Mojo Expired Lead",
+    phone: "5125550202",
+    email: null,
+    state: "new",
+    source: "Mojo",
+    adCampaign: null,
+    propertyInquired: null,
+    address: null,
+    criteria: null,
+    brivityId: null,
+    crmStatus: "nurture",
+    crmStage: "new",
+    crmPriority: "normal",
+    crmIntent: "seller",
+    crmCallQueue: "none",
+    crmNotes: null,
+    assignedUserId: "marco",
+    assignedUserName: "Marco",
+    tags: ["Expired"],
+  });
+  await syncDialer();
+  const dueContact = store.contacts().find((x) => x.crmId === "lead-due-1");
+  const mojoContact = store.contacts().find((x) => x.crmId === "lead-mojo-1");
+  assert(dueContact);
+  assert.equal(dueContact.crmCallQueue, "urgent");
+  assert.equal(dueContact.crmStatus, "new");
+  assert(mojoContact);
+  assert.deepEqual(mojoContact.tags, ["Expired"]);
+  const queues = (await api("/queues")).queues;
+  assert.equal(queues.find((q) => q.id === "due").count >= 1, true);
+  assert.equal(queues.find((q) => q.id === "mojo").count >= 1, true);
+  assert.equal(queues.find((q) => q.id === "new").count >= 1, true);
+  assert.equal(queues.find((q) => q.id === "nurture").count >= 1, true);
+  assert.equal(
+    (await api("/contacts?queue=mojo")).contacts.some(
+      (x) => x.crmId === "lead-mojo-1",
+    ),
+    true,
+  );
+  assert.equal(
+    (await api("/overview")).queues.some((q) => q.id === "due" && q.count >= 1),
+    true,
+  );
+  const queueSession = (await api("/sessions", { queueId: "due" })).session;
+  assert.equal(queueSession.queueId, "due");
+  assert(queueSession.queue.includes(dueContact.id));
+  await api("/sessions/" + queueSession.id + "/action", { action: "end" });
+  const added = await api("/contacts", {
+    name: "Fresh Dialer Lead",
+    phone: "5125550299",
+    source: "Mojo",
+    tags: ["Expired"],
+    trackSide: "seller",
+  });
+  assert(added.contact.id);
+  assert(added.leadId);
+  assert(added.trackerId);
+  assert.equal(added.contact.crmCallQueue, "urgent");
+  assert.equal(
+    (await api("/contacts?queue=mojo")).contacts.some(
+      (x) => x.id === added.contact.id,
+    ),
+    true,
+  );
+  const dialerHtml = await (
+    await fetch("http://127.0.0.1:" + server.address().port + "/dialer")
+  ).text();
+  const dialerJs = await (
+    await fetch("http://127.0.0.1:" + server.address().port + "/dialer.js")
+  ).text();
+  assert(/Calling queues|data-queue|queueId/.test(dialerHtml + dialerJs));
+
   console.log(
-    "PASS: auth, shared roster/private CRM, CSV preview/dedup, assignment, exclusive sessions, call replay, DNC and activity sync, timezone/conflicts, CRM task replay/completion, metrics, exports, Harvey guide.",
+    "PASS: auth, shared roster/private CRM, CSV preview/dedup, assignment, exclusive sessions, call replay, DNC and activity sync, timezone/conflicts, CRM task replay/completion, metrics, exports, Harvey guide, smart queues, add contact.",
   );
   if (process.argv.includes("--serve")) {
     const names = [
