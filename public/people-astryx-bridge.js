@@ -133,13 +133,16 @@
           oldLead(id);
           break;
 
-        case "messages":
-          document.querySelector('.rail [data-view="messages"]')?.click();
-          {
-            const i = CONVOS.findIndex((c) => c.leadId === id);
-            if (i >= 0) openThread(i);
+        case "messages": {
+          const i = CONVOS.findIndex((c) => c.leadId === id);
+          if (i < 0) {
+            crmToast("No linked conversation is loaded for this contact. Use contact tools to start a new message.");
+            break;
           }
+          document.querySelector('.rail [data-view="messages"]')?.click();
+          openThread(i);
           break;
+        }
       }
     },
   };
