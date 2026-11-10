@@ -68,6 +68,9 @@ const label = (s: any) => {
   );
 };
 
+const stageText = (row: Row, options: {value:string,label:string}[]) =>
+  options.find(o=>o.value === (row.crmStage || row.stage))?.label || label(row.crmStage || row.stage || row.stageLabel);
+
 const date = (s: any) =>
   s && !isNaN(Date.parse(s))
     ? new Intl.DateTimeFormat(undefined, {
@@ -252,7 +255,7 @@ function People({ snapshot }: { snapshot: any }) {
       header: "Pipeline stage",
       width: proportional(1, { minWidth: 150 }),
       renderCell: (r: Row) => (
-        <Text color="secondary">{label(r.stageLabel || r.stage)}</Text>
+        <Text color="secondary">{stageText(r, snapshot.stageOptions)}</Text>
       ),
     },
 
@@ -683,7 +686,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
           <MetadataList>
             <MetadataListItem label="Stage">
               <Text>
-                {label(lead.stageLabel || lead.crmStage || lead.stage)}
+                {stageText(lead, snapshot.stageOptions)}
               </Text>
             </MetadataListItem>
             <MetadataListItem label="Status">
