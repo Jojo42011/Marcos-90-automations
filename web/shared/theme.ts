@@ -15,7 +15,7 @@ export function commandTheme(accent: string) {
 
   const foreground =
     0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2] > 0.179
-      ? "#10171e"
+      ? "#101010"
       : "#ffffff";
 
   return defineTheme({
@@ -43,22 +43,22 @@ export function commandTheme(accent: string) {
 
       "--color-accent-muted": [
         `color-mix(in srgb, ${valid} 8%, white)`,
-        `color-mix(in srgb, ${valid} 16%, #18232e)`,
+        `color-mix(in srgb, ${valid} 16%, #181818)`,
       ],
 
-      "--color-background-muted": ["#eef2f6", "#1c2a36"],
+      "--color-background-muted": ["#eef2f6", "#222222"],
 
-      "--color-background-body": ["#f7f8fa", "#10171e"],
+      "--color-background-body": ["#f7f8fa", "#101010"],
 
-      "--color-background-surface": ["#ffffff", "#18232e"],
+      "--color-background-surface": ["#ffffff", "#181818"],
 
-      "--color-background-card": ["#ffffff", "#18232e"],
+      "--color-background-card": ["#ffffff", "#181818"],
 
-      "--color-text-primary": ["#202d3a", "#edf2f6"],
+      "--color-text-primary": ["#202d3a", "#fafafa"],
 
-      "--color-text-secondary": ["#536170", "#acbac8"],
+      "--color-text-secondary": ["#536170", "#b8b8b8"],
 
-      "--color-border": ["#e1e6eb", "#303e4c"],
+      "--color-border": ["#e1e6eb", "#333333"],
     },
   });
 }

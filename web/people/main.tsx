@@ -50,7 +50,7 @@ import { Collapsible } from "@astryxdesign/core/Collapsible";
 
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 
-import { commandTheme } from "./theme";
+import { commandTheme } from "../shared/theme";
 
 import "@astryxdesign/core/reset.css";
 

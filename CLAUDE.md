@@ -12,7 +12,7 @@ Document implemented behavior separately from plans and live verification. Do no
 
 ## Working in the code
 
-- Most frontend pages are plain HTML/CSS/JavaScript under public. People and lead profiles use React 19 + Astryx in web/people, bundled by npm run build:people into public/astryx. npm run build compiles both server and People UI.
+- Most frontend pages are plain HTML/CSS/JavaScript under public. People, lead profiles and Smart Poster use React 19 + Astryx in web/people and web/smartposter, with a shared account-aware theme in web/shared, bundled by npm run build:people into public/astryx. npm run build compiles the server and both Astryx browser bundles.
 - Domain stores live under src/core. Resolve account-local data through dataPath(); shared stores require an explicit shared path and authorization boundary. Do not copy or merge account data implicitly.
 - Harvey Work stores owner-keyed records in its existing work.db. Preserve owner IDs, chat IDs, profiles and saved connections.
 - Preserve existing data and migration markers. Check source/target ownership and backups before any data repair.

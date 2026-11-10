@@ -19,13 +19,13 @@
   color-scheme: light;
 }
 [data-theme="dark"] {
-  --d-bg: #111a23;
-  --d-panel: #182530;
-  --d-nav: #15212b;
-  --d-text: #eaf0f3;
-  --d-muted: #a5b6c3;
-  --d-line: #2e3e4b;
-  --d-hover: #22333f;
+  --d-bg: #101010;
+  --d-panel: #181818;
+  --d-nav: #161616;
+  --d-text: #fafafa;
+  --d-muted: #b8b8b8;
+  --d-line: #333333;
+  --d-hover: #242424;
   --d-selected: #243f43;
   --d-accent: #8bd3c5;
   --d-danger: #f59da2;
@@ -826,7 +826,7 @@ dialog {
   box-shadow: 0 20px 80px #0005;
 }
 dialog::backdrop {
-  background: #06111baa;
+  background: #000000aa;
   backdrop-filter: blur(3px);
 }
 .dialog-head {

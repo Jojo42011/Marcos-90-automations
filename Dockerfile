@@ -90,7 +90,7 @@ COPY supervisord.conf ./supervisord.conf
 # image still built perfectly — it just contained no application. The first
 # symptom was supervisord crash-looping on `Cannot find module
 # /app/dist/src/server.js` in production, which is far too late to find out.
-RUN test -f /app/public/astryx/people.js && test -f /app/public/astryx/people.css && test -f /app/dist/src/server.js || (echo "BUILD FAILED: dist/src/server.js missing" && exit 1)
+RUN test -f /app/public/astryx/people.js && test -f /app/public/astryx/people.css && test -f /app/public/astryx/smartposter.js && test -f /app/public/astryx/smartposter.css && test -f /app/dist/src/server.js || (echo "BUILD FAILED: dist/src/server.js missing" && exit 1)
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

@@ -11,6 +11,8 @@
   },
   "include": [
     "main.tsx",
-    "theme.ts"
+    "../shared/theme.ts",
+    "../smartposter/main.tsx",
+    "../smartposter/model.ts"
   ]
 }

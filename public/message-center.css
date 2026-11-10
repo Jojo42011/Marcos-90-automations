@@ -1,7 +1,7 @@
 /* Message Center: restrained, task-focused workspace. All rules are scoped. */
 @font-face{font-family:Manrope;src:url('/fonts/manrope/Manrope-variable.ttf') format('truetype');font-weight:200 800;font-style:normal;font-display:swap}
 #view-messages{--mc-canvas:#f2f5f7;--mc-nav:#f8fafb;--mc-panel:#fff;--mc-reading:#f8fafb;--mc-text:#22313f;--mc-muted:#566879;--mc-line:#e2e8ed;--mc-hover:#edf2f5;--mc-selected:#e6f1f0;--mc-accent:#26786e;--mc-outgoing:#e8f1f2;font-family:Manrope,'Segoe UI',sans-serif;color:var(--mc-text);font-size:14px}
-[data-theme=dark] #view-messages{--mc-canvas:#101820;--mc-nav:#17222d;--mc-panel:#1b2733;--mc-reading:#18242f;--mc-text:#eaf0f5;--mc-muted:#a7b5c3;--mc-line:#2d3c49;--mc-hover:#233441;--mc-selected:#253e43;--mc-accent:#8ed6c9;--mc-outgoing:#2a404a;color-scheme:dark}
+[data-theme=dark] #view-messages{--mc-canvas:#101010;--mc-nav:#161616;--mc-panel:#181818;--mc-reading:#141414;--mc-text:#fafafa;--mc-muted:#b8b8b8;--mc-line:#333333;--mc-hover:#242424;--mc-selected:#253e43;--mc-accent:#8ed6c9;--mc-outgoing:#2a404a;color-scheme:dark}
 #view-messages.on{position:fixed;inset:var(--topbar) 0 0 var(--rail);height:calc(100dvh - var(--topbar));padding:0 24px 24px;gap:0;background:var(--mc-canvas)}
 body:has(#view-messages.on){overflow:hidden}
 #view-messages button,#view-messages input,#view-messages textarea,#view-messages select{font-family:inherit;touch-action:manipulation}

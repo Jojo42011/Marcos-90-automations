@@ -1,6 +1,6 @@
 /* Account controls are isolated from each workspace's legacy form styles. */
 .account-settings{--settings-bg:#fff;--settings-text:#202b33;--settings-muted:#77838d;--settings-line:#e9edef;--settings-soft:#f5f7f8;position:fixed;inset:12px 12px 12px auto;margin:0;width:440px;max-width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:none;padding:0;border:1px solid var(--settings-line);border-radius:20px;background:var(--settings-bg);color:var(--settings-text);box-shadow:0 24px 90px #0003;font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:auto}
-[data-theme="dark"] .account-settings{--settings-bg:#191e25;--settings-text:#edf0f3;--settings-muted:#9ba5b1;--settings-line:#2b323b;--settings-soft:#222931}
+[data-theme="dark"] .account-settings{--settings-bg:#181818;--settings-text:#fafafa;--settings-muted:#b8b8b8;--settings-line:#333333;--settings-soft:#242424}
 .account-settings::backdrop{background:rgba(8,14,21,.38);backdrop-filter:blur(5px)}
 .account-settings *{box-sizing:border-box}
 .account-settings button,.account-settings input,.account-settings select{font:inherit;letter-spacing:normal;text-transform:none}

@@ -11,7 +11,7 @@
     document.documentElement.style.colorScheme=dark?'dark':'light';
     try{localStorage.setItem('theme',dark?'dark':'light');localStorage.setItem('accountPreferences',JSON.stringify(p));}catch(_){}
     style.textContent=':root{--accent:'+p.accent+'!important;--teal:'+p.accent+'!important;--teal-strong:'+(dark?'color-mix(in srgb,'+p.accent+' 45%,white)':p.accent)+'!important;--account-font-size:'+p.fontSize+'px}body{font-size:var(--account-font-size)}'+
-      (dark?':root{--bg:#10151d;--surface:#18212c;--panel:#18212c;--card:#18212c;--text:#edf2f7;--ink:#edf2f7;--muted:#a5b2c3;--line:#344255;--soft:#233c46}':'')+
+      (dark?':root{--bg:#101010;--surface:#181818;--panel:#181818;--card:#181818;--text:#fafafa;--ink:#fafafa;--muted:#b8b8b8;--line:#333333;--soft:#242424}':'')+
       (p.density==='compact'?'td,th{padding-top:6px!important;padding-bottom:6px!important}':'')+
       (p.reducedMotion?'*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}':'');
   }

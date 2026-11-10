@@ -29,61 +29,8 @@ assert.ok(analytics.postRows(recent).indexOf('First home') < analytics.postRows(
 analytics.DATA={platforms:[]};
 assert.match(analytics.combinedBody({included:[],excluded:[]}), /connected data/);
 
-const smart = vm.createContext({ Date, Intl, Set, console });
-vm.runInContext(scripts('smartposter').split('document.getElementById("tabs").onclick')[0], smart);
-smart.DATA={today:'2026-11-08',settings:{timezone:'America/Chicago'},accounts:[{id:'a',platform:'instagram'},{id:'b',platform:'instagram'}]};
-assert.equal(smart.weekDates()[0],'2026-11-02'); // Sunday still belongs to Monday's week.
-smart.WEEK_OFFSET=1;assert.equal(smart.weekDates()[0],'2026-11-09');
-smart.FILTER.add('a');
-assert.equal(smart.postMatchesFilter({accountIds:['a'],platforms:['instagram'],status:'ready'}),true);
-assert.equal(smart.postMatchesFilter({accountIds:['b'],platforms:['instagram'],status:'ready'}),false);
-smart.STATUS_FILTER='failed';
-assert.equal(smart.postMatchesFilter({accountIds:['a'],status:'ready'}),false);
-assert.equal(smart.postMatchesFilter({accountIds:['a'],status:'failed'}),true);
-assert.equal(new Date(smart.localInputTime('2026-11-07T16:00:00Z')).toISOString(),'2026-11-07T16:00:00.000Z');
-let error='';smart.drawerError=message=>{error=message;};
-smart.document={getElementById:()=>({classList:{contains:()=>true}})};
-const button={disabled:false};
-await smart.runAction(button,async()=>{throw Error('Try again');});
-assert.equal(error,'Try again');assert.equal(button.disabled,false);
-
-// Scheduling from the drawer must save the current form before sending the post.
-const elements=new Map();
-smart.document={querySelectorAll:()=>[{value:"a"}],getElementById:id=>{
-  if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',checkValidity:()=>true,classList:{contains:()=>true}});
-  return elements.get(id);
-}};
-smart.showDrawer=()=>{};smart.load=async()=>{};
-smart.DATA.posts=[{id:'draft-1',status:'draft',title:'Old title',caption:'Old caption',platforms:['instagram']}];
-const requests=[];smart.api=async(method,path,body)=>{requests.push({method,path,body});return {};};
-smart.openPostDrawer('draft-1');
-elements.get('savePost');
-smart.document.getElementById('editCaption').value='Edited before scheduling';
-smart.document.getElementById('editTitle').value='New title';
-smart.document.getElementById('editDate').value='2026-11-09';
-smart.document.getElementById('editTime').value='10:00';
-await elements.get('schedPost').onclick();
-assert.equal(requests.length,1);
-assert.equal(requests[0].method,'POST');
-assert.equal(requests[0].body.caption,'Edited before scheduling');
-assert.equal(requests[0].body.localDate,'2026-11-09');
-assert.equal(requests[0].body.localTime,'10:00');
-assert.equal(requests[0].body.accountIds.join(','),'a');
-assert.match(requests[0].path,/draft-1\/schedule$/);
-
-// A drop opens the date/time review; it never publishes automatically.
-const dragHandlers={},dayHandlers={};
-const dragCard={dataset:{id:'draft-1'},classList:{add(){},remove(){}},addEventListener:(k,v)=>dragHandlers[k]=v};
-const day={dataset:{day:'2026-11-12'},classList:{add(){},remove(){}},contains:()=>false,addEventListener:(k,v)=>dayHandlers[k]=v};
-const fakeView={innerHTML:'',querySelectorAll:selector=>selector==='[draggable="true"]'?[dragCard]:selector==='[data-day]'?[day]:[]};
-smart.document={getElementById:id=>id==='view'?fakeView:id==='sub'?{}:null,querySelectorAll:()=>[]};
-smart.renderBanner=smart.renderSummary=smart.renderProfiles=()=>{};smart.renderCalendar=()=>'';
-smart.VIEW='calendar';let dropped=null;smart.openPostDrawer=(id,date)=>dropped={id,date};
-smart.render();
-let payload;const transfer={setData:(_,value)=>payload=value,getData:()=>payload};
-dragHandlers.dragstart({dataTransfer:transfer});dayHandlers.drop({preventDefault(){},dataTransfer:transfer});
-assert.deepEqual(dropped,{id:'draft-1',date:'2026-11-12'});
-assert.equal(requests.length,1,'Dropping must not send a publish request');
+// Smart Poster now uses real Astryx components; verify its shared scheduling model.
+await import('./verify-smartposter-ui.mjs');
 analytics.TREND_DAYS=7;analytics.TREND_METRIC='views';
 const daily=[{accountId:'a',dailyPerformance:{days:[{date:'2026-11-06',metrics:{views:30}}]}}];
 let series=analytics.trendSeries(daily,'2026-11-07T20:00:00Z');

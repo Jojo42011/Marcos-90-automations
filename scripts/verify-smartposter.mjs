@@ -81,7 +81,7 @@ check("page + routes + Zernio publish client exist", () => {
   assert(/registerSmartPosterRoutes/.test(read("src/server.ts")));
   assert(/maybeSmartPosterAutoSync|maybeAutoSync/.test(read("src/server.ts")));
   assert(/createZernioPost|\/media\/presign/.test(read("src/integrations/zernio/posts.ts")));
-  assert(/YYYY-MM-DD__platform__slug/.test(read("public/smartposter.html")));
+  assert(/YYYY-MM-DD__platform__slug/.test(read("web/smartposter/main.tsx")));
 });
 
 check("Drive connect uses Composio, not pasted Google client OAuth", () => {
@@ -90,8 +90,8 @@ check("Drive connect uses Composio, not pasted Google client OAuth", () => {
   assert(/GOOGLEDRIVE_FIND_FILE/.test(drive));
   assert(/GOOGLEDRIVE_FIND_FOLDER/.test(drive));
   assert(!/HARVEY_GOOGLE_CLIENT_ID/.test(drive));
-  const page = read("public/smartposter.html");
-  assert(/Connect with Composio/.test(page));
+  const page = read("web/smartposter/main.tsx");
+  assert(/Connect Google Drive/.test(page));
   assert(!/Paste the folder id/.test(page));
   assert(/executeToolkit/.test(read("src/harvey/work/composio.ts")));
 });

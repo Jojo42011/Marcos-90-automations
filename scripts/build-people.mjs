@@ -1,9 +1,12 @@
 import { build } from "esbuild";
 await build({
-  entryPoints: ["web/people/main.tsx"],
+  entryPoints: {
+    people: "web/people/main.tsx",
+    smartposter: "web/smartposter/main.tsx",
+  },
   bundle: true,
   outdir: "public/astryx",
-  entryNames: "people",
+  entryNames: "[name]",
   format: "esm",
   platform: "browser",
   target: ["es2022"],
