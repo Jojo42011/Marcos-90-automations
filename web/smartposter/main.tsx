@@ -4,6 +4,7 @@ import { Theme } from "@astryxdesign/core/theme";
 import {
   Layout,
   LayoutHeader,
+  LayoutFooter,
   LayoutContent,
   LayoutPanel,
   VStack,
@@ -700,153 +701,187 @@ function Editor({
       }}
       purpose="form"
       width="40rem"
+      padding={0}
+      maxHeight="calc(100dvh - 2rem)"
     >
-      <DialogHeader
-        title={readOnly ? "Published post" : "Plan your post"}
-        onOpenChange={(v) => {
-          if (!v && !busy) close();
-        }}
-      />
-      <VStack gap={5}>
-        <Text color="secondary">{post.fileName}</Text>
-        {(error || post.error) && (
-          <Banner
-            status="error"
-            title="Needs attention"
-            description={error || post.error}
-          />
-        )}
-        <TextInput
-          label="Title"
-          value={plan.title}
-          onChange={(v) => update("title", v)}
-          isDisabled={readOnly || busy}
-        />
-        <TextArea
-          label="Caption"
-          value={plan.caption}
-          onChange={(v) => update("caption", v)}
-          isDisabled={readOnly || busy}
-        />
-        <HStack gap={4} wrap="wrap">
-          <DateInput
-            label="Publish date"
-            value={
-              plan.localDate as React.ComponentProps<typeof DateInput>["value"]
-            }
-            onChange={(v) => update("localDate", v || "")}
-            isDisabled={readOnly || busy}
-          />
-          <TimeInput
-            label="Time"
-            value={
-              plan.localTime as React.ComponentProps<typeof TimeInput>["value"]
-            }
-            onChange={(v) => update("localTime", v || "")}
-            isDisabled={readOnly || busy}
-          />
-        </HStack>
-        <Text type="supporting" color="secondary">
-          All times use {plan.timezone}. Saving a plan does not publish it.
-        </Text>
-        <CheckboxList
-          label="Publish to"
-          description="Select only the accounts for this video."
-          value={plan.accountIds}
-          onChange={(v) => update("accountIds", v)}
-          isDisabled={readOnly || busy}
-          hasDividers
-        >
-          {data.accounts.map((a) => (
-            <CheckboxListItem key={a.id} value={a.id} label={accountName(a)} />
-          ))}
-        </CheckboxList>
-        {!data.accounts.length && (
-          <Banner
-            status="warning"
-            title="No publishing accounts available"
-            description="Connect your social accounts before scheduling."
-          />
-        )}
-        {plan.accountIds.some(
-          (id) => !data.accounts.some((a) => a.id === id),
-        ) && (
-          <Banner
-            status="warning"
-            title="An account is no longer available"
-            description="Select the current accounts before saving."
-          />
-        )}
-        {(safeURL(post.mediaUrl) || safeURL(post.platformPostUrl)) && (
-          <Button
-            label={
-              post.platformPostUrl ? "Open published post" : "Preview video"
-            }
-            onClick={() =>
-              window.open(
-                safeURL(post.platformPostUrl) || safeURL(post.mediaUrl),
-                "_blank",
-                "noopener,noreferrer",
-              )
-            }
-          />
-        )}
-        {!readOnly && (
-          <>
-            <Divider />
-            <HStack hAlign="between" wrap="wrap" gap={3}>
-              <Button
-                label="Cancel"
-                variant="ghost"
-                isDisabled={busy}
-                onClick={close}
+      <VStack height="min(48rem, calc(100dvh - 2rem))" gap={0}>
+        <Layout
+          padding={4}
+          header={
+            <LayoutHeader hasDivider>
+              {" "}
+              <DialogHeader
+                title={readOnly ? "Published post" : "Plan your post"}
+                onOpenChange={(v) => {
+                  if (!v && !busy) close();
+                }}
               />
-              <HStack gap={2}>
-                <Button
-                  label={remote(post) ? "Update schedule" : "Save plan"}
-                  isDisabled={busy}
-                  onClick={() => save(false)}
-                />
-                {!remote(post) && (
+            </LayoutHeader>
+          }
+          footer={
+            !readOnly ? (
+              <LayoutFooter hasDivider label="Publishing actions">
+                {" "}
+                <HStack hAlign="between" wrap="wrap" gap={3}>
                   <Button
-                    label="Schedule post"
-                    variant="primary"
-                    isDisabled={busy || !data.accounts.length}
-                    onClick={() => save(true)}
+                    label="Cancel"
+                    variant="ghost"
+                    isDisabled={busy}
+                    onClick={close}
                   />
-                )}
-              </HStack>
-            </HStack>
-            {!remote(post) &&
-              (remove ? (
-                <VStack gap={2}>
-                  <Text>
-                    Remove this video from Smart Poster? The Drive file will
-                    stay in Drive.
-                  </Text>
                   <HStack gap={2}>
                     <Button
-                      label="Keep video"
+                      label={remote(post) ? "Update schedule" : "Save plan"}
                       isDisabled={busy}
-                      onClick={() => setRemove(false)}
+                      onClick={() => save(false)}
                     />
-                    <Button
-                      label="Confirm removal"
-                      isDisabled={busy}
-                      onClick={deletePost}
-                    />
+                    {!remote(post) && (
+                      <Button
+                        label="Schedule post"
+                        variant="primary"
+                        isDisabled={busy || !data.accounts.length}
+                        onClick={() => save(true)}
+                      />
+                    )}
                   </HStack>
-                </VStack>
-              ) : (
-                <Button
-                  label="Remove from inbox"
-                  variant="ghost"
-                  isDisabled={busy}
-                  onClick={() => setRemove(true)}
+                </HStack>
+              </LayoutFooter>
+            ) : undefined
+          }
+        >
+          <LayoutContent isScrollable padding={4}>
+            <VStack gap={5}>
+              <Text color="secondary">{post.fileName}</Text>
+              {(error || post.error) && (
+                <Banner
+                  status="error"
+                  title="Needs attention"
+                  description={error || post.error}
                 />
-              ))}
-          </>
-        )}
+              )}
+              <TextInput
+                label="Title"
+                value={plan.title}
+                onChange={(v) => update("title", v)}
+                isDisabled={readOnly || busy}
+              />
+              <TextArea
+                label="Caption"
+                value={plan.caption}
+                onChange={(v) => update("caption", v)}
+                isDisabled={readOnly || busy}
+              />
+              <HStack gap={4} wrap="wrap">
+                <DateInput
+                  label="Publish date"
+                  value={
+                    plan.localDate as React.ComponentProps<
+                      typeof DateInput
+                    >["value"]
+                  }
+                  onChange={(v) => update("localDate", v || "")}
+                  isDisabled={readOnly || busy}
+                />
+                <TimeInput
+                  presentation="bottom-sheet"
+                  label="Time"
+                  value={
+                    plan.localTime as React.ComponentProps<
+                      typeof TimeInput
+                    >["value"]
+                  }
+                  onChange={(v) => update("localTime", v || "")}
+                  isDisabled={readOnly || busy}
+                />
+              </HStack>
+              <Text type="supporting" color="secondary">
+                All times use {plan.timezone}. Saving a plan does not publish
+                it.
+              </Text>
+              <CheckboxList
+                label="Publish to"
+                description="Select only the accounts for this video."
+                value={plan.accountIds}
+                onChange={(v) => update("accountIds", v)}
+                isDisabled={readOnly || busy}
+                hasDividers
+              >
+                {data.accounts.map((a) => (
+                  <CheckboxListItem
+                    key={a.id}
+                    value={a.id}
+                    label={accountName(a)}
+                  />
+                ))}
+              </CheckboxList>
+              {!data.accounts.length && (
+                <Banner
+                  status="warning"
+                  title="No publishing accounts available"
+                  description="Connect your social accounts before scheduling."
+                />
+              )}
+              {plan.accountIds.some(
+                (id) => !data.accounts.some((a) => a.id === id),
+              ) && (
+                <Banner
+                  status="warning"
+                  title="An account is no longer available"
+                  description="Select the current accounts before saving."
+                />
+              )}
+              {(safeURL(post.mediaUrl) || safeURL(post.platformPostUrl)) && (
+                <Button
+                  label={
+                    post.platformPostUrl
+                      ? "Open published post"
+                      : "Preview video"
+                  }
+                  onClick={() =>
+                    window.open(
+                      safeURL(post.platformPostUrl) || safeURL(post.mediaUrl),
+                      "_blank",
+                      "noopener,noreferrer",
+                    )
+                  }
+                />
+              )}
+              {!readOnly && (
+                <>
+                  <Divider />
+                  {!remote(post) &&
+                    (remove ? (
+                      <VStack gap={2}>
+                        <Text>
+                          Remove this video from Smart Poster? The Drive file
+                          will stay in Drive.
+                        </Text>
+                        <HStack gap={2}>
+                          <Button
+                            label="Keep video"
+                            isDisabled={busy}
+                            onClick={() => setRemove(false)}
+                          />
+                          <Button
+                            label="Confirm removal"
+                            isDisabled={busy}
+                            onClick={deletePost}
+                          />
+                        </HStack>
+                      </VStack>
+                    ) : (
+                      <Button
+                        label="Remove from inbox"
+                        variant="ghost"
+                        isDisabled={busy}
+                        onClick={() => setRemove(true)}
+                      />
+                    ))}
+                </>
+              )}
+            </VStack>
+          </LayoutContent>
+        </Layout>
       </VStack>
     </Dialog>
   );
