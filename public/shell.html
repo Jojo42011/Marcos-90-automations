@@ -347,11 +347,16 @@ function initShell(){
  function toast(m){ toastEl.innerHTML=m; toastEl.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(function(){toastEl.classList.remove("show");},3000); }
 
 
- function activate(key, programmatic){
+ function activate(key, programmatic, path){
    if(TAB_ALIASES[key]) key = TAB_ALIASES[key];
    if(!byKey[key]) return;
    var f = document.getElementById("frame-"+key);
-   if(f && !f.getAttribute("src")) f.src = f.getAttribute("data-src");  // lazy-load on first visit
+   var nextSrc = path || null;
+   if(nextSrc && nextSrc.charAt(0)!=="/") nextSrc = null;
+   if(f){
+     if(nextSrc) f.src = nextSrc;
+     else if(!f.getAttribute("src")) f.src = f.getAttribute("data-src");  // lazy-load on first visit
+   }
    TABS.forEach(function(t){
      document.getElementById("frame-"+t.key).classList.toggle("active", t.key===key);
      var ni = nav.querySelector('.nav-item[data-key="'+t.key+'"]'); if(ni) ni.classList.toggle("active", t.key===key);
@@ -394,7 +399,9 @@ function initShell(){
     accepted here too, so "harvey" still lands somewhere real. */
  window.addEventListener("message", function(e){
    var d = e.data || {};
-   if(d.type===NAV_MESSAGE_TYPE && d.tab){ activate(String(d.tab).toLowerCase(), true); }
+   if(d.type===NAV_MESSAGE_TYPE && d.tab){
+     activate(String(d.tab).toLowerCase(), true, typeof d.src==="string" ? d.src : null);
+   }
  });
 
 

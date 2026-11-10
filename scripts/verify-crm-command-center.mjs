@@ -38,14 +38,16 @@ ok("no OPPS seed loop", !/OPPS\.push\(/.test(html) && !/for\(let i=0;i<16;i\+\+\
 ok("opportunity types are tags", /OPP_TYPE_TAGS\s*=\s*\[/.test(html) && /"FSBO"/.test(html) && /"Pre-Foreclosure"/.test(html));
 ok("profile can add opportunity type", /ldOppTagBtn/.test(html) && /Opportunity type/.test(html));
 
-// 2. Follow-Up / Dialer
-ok("Follow-Up rail button exists", /data-view="followup"/.test(html));
-ok("Follow-Up view + renderer", /id="view-followup"/.test(html) && /function renderFollowUp\(/.test(html));
-ok("Follow-Up matches Due Today or urgent", /due\.label==="Due Today"/.test(html) && /crmCallQueue==="urgent"/.test(html));
-ok("Dialer Mojo expired queue", /data-dq="mojo"/.test(html) && /function dialIsMojoExpired\(/.test(html));
-ok("Dialer From line bar", /id="dlFromBar"/.test(html) && /function paintDialFromBar\(/.test(html));
-ok("Dialer Add lead", /id="dlAddLeadBtn"/.test(html) && /function dialAddLead\(/.test(html));
-ok("Dialer Appointment Set outcome", /Appointment Set/.test(html));
+// 2. Dialer lives in the shell tab — CRM must not keep a second Dialer UI
+ok("no CRM Dialer rail button", !/<button class="r" data-view="followup"/.test(html));
+ok("no CRM Dialer view section", !/id="view-followup"/.test(html));
+ok("no CRM Dialer renderer", !/function renderFollowUp\(/.test(html));
+ok("followup deep-link navigates to shell Dialer", /app-navigate[\s\S]{0,80}tab:"dialer"/.test(html) || /location\.href=target/.test(html));
+ok("crmCallQueue urgent still used for due logic elsewhere", /crmCallQueue==="urgent"/.test(html));
+const dialerHtml = readFileSync(join(root, "public/dialer.html"), "utf8");
+const dialerJs = readFileSync(join(root, "public/dialer.js"), "utf8");
+ok("shell Dialer exposes smart queues", /Calling queues/.test(dialerHtml) && /data-queue/.test(dialerJs));
+ok("shell Dialer starts sessions with queueId", /queueId/.test(dialerJs));
 
 // 3. People merge
 ok("no visible separate Leads rail button", !/<button class="r" data-view="leads"[^>]*title="Leads"><svg/.test(html));

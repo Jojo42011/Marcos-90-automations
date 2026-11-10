@@ -10,6 +10,11 @@ import {
   Session,
 } from "./store.js";
 import { syncDialer } from "./sync.js";
+import {
+  parseQueueId,
+  queueContacts,
+  queueSummaries,
+} from "./queues.js";
 import { getUsers, getDialerTeam, updateUser } from "../core/users.js";
 import { tenantOwner } from "../core/tenantData.js";
 import type { CRMUser } from "../core/types.js";
@@ -18,6 +23,12 @@ import {
   listingCounts,
   lastSuccessfulSync,
 } from "../core/listingsStore.js";
+import { upsertLeadQuiet } from "../core/db.js";
+import { FunnelStage } from "../core/state.js";
+import {
+  createTrackerRecord,
+  getTrackerRecordByLead,
+} from "../core/trackerStore.js";
 export function registerDialer(
   app: Express,
   auth: (r: Request) => boolean,
@@ -45,9 +56,16 @@ export function registerDialer(
               .json({ error: "An active team identity is required." });
           res.json(await fn(req, actor));
         } catch (e) {
-          res
-            .status(Number((e as any).status) || 500)
-            .json({ error: (e as Error).message });
+          const err = e as Error & {
+            status?: number;
+            contactId?: string;
+            crmId?: string;
+          };
+          res.status(Number(err.status) || 500).json({
+            error: err.message,
+            ...(err.contactId ? { contactId: err.contactId } : {}),
+            ...(err.crmId ? { crmId: err.crmId } : {}),
+          });
         }
       },
     );
@@ -107,12 +125,13 @@ export function registerDialer(
       },
       sync: s.all("sync"),
       pendingSync: pending.count,
+      queues: queueSummaries(contacts),
       capabilities: {
         callMode: "external_phone",
         automaticDialing: false,
         numberPurchase: false,
         calendar: "CRM appointments",
-        leadData: "Connected MLS and imported files",
+        leadData: "Connected MLS, CRM smart queues, and imported files",
       },
       help: "GET /api/dialer/guide for operation schemas and provider limits.",
     };
@@ -132,7 +151,11 @@ export function registerDialer(
         "PATCH /contacts/:id {assignedTo,dnc}; POST /assign {contactIds,assignedTo}",
       notes: "POST /contacts/:id/notes {text}",
       session:
-        "POST /sessions {listId?,lineId?,contactIds?}; POST /sessions/:id/action {action:pause|resume|skip|end}; POST /sessions/:id/calls starts a manual attempt; POST /calls/:id/outcome {outcome:talked|no_answer|voicemail|wrong_number|do_not_call|appointment_set|interrupted,notes}",
+        "POST /sessions {listId?,queueId?,lineId?,contactIds?}; POST /sessions/:id/action {action:pause|resume|skip|end}; POST /sessions/:id/calls starts a manual attempt; POST /calls/:id/outcome {outcome:talked|no_answer|voicemail|wrong_number|do_not_call|appointment_set|interrupted,notes}",
+      queues:
+        "GET /queues returns Due today, Mojo expired, New, Nurture, Everyone with callable counts; GET /contacts?queue=due|mojo|new|nurture|everyone filters the same smart queues formerly in the CRM Dialer",
+      contactsCreate:
+        "POST /contacts {name,phone,source?,intent?,tags?,trackSide?:seller|buyer|both} creates a Dialer contact, quiet CRM lead, optional Tracker row",
       appointments:
         "POST /appointments {contactId,title,startAt,endAt,timeZone,assignedTo,location,notes,kind:appointment|follow_up}; PATCH /appointments/:id same fields or status:scheduled|completed|cancelled",
       numbers:
@@ -144,12 +167,19 @@ export function registerDialer(
     limits:
       "Quo has no documented call initiation or number purchase endpoint. Never claim a call connected from opening a phone link. No external calendar invitations are sent. Dates must include timezone offset. All mutations use the signed-in actor.",
   }));
+  register("get", "/queues", async () => {
+    await syncDialer();
+    return { queues: queueSummaries(dialerStore().contacts()) };
+  });
   register("get", "/contacts", (req) => {
     const s = dialerStore();
     let rows = s.contacts();
     const q = text(req.query.q).toLowerCase(),
       listId = text(req.query.listId),
-      assigned = text(req.query.assignedTo);
+      assigned = text(req.query.assignedTo),
+      queueId = parseQueueId(req.query.queue);
+    if (req.query.queue && !queueId) fail("Choose a valid calling queue.");
+    if (queueId) rows = queueContacts(rows, queueId);
     if (listId) {
       const ids = new Set(s.members(listId));
       rows = rows.filter((c) => ids.has(c.id));
@@ -211,6 +241,90 @@ export function registerDialer(
       req.body.apply === true,
     ),
   );
+  register("post", "/contacts", async (req, a) => {
+    const name = text(req.body.name, 120);
+    const phone = text(req.body.phone, 40);
+    const source = text(req.body.source, 80) || "Manual";
+    const intentRaw = text(req.body.intent || req.body.crmIntent, 40);
+    const intent =
+      intentRaw === "buyer" || intentRaw === "buyer_seller"
+        ? intentRaw
+        : "seller";
+    const tags = Array.isArray(req.body.tags)
+      ? req.body.tags.map((t: unknown) => text(t, 40)).filter(Boolean)
+      : [];
+    if (req.body.expired === true && !tags.some((t) => /expired/i.test(t)))
+      tags.push("Expired");
+    const existing = dialerStore()
+      .contacts()
+      .find((c) => c.ownerId === a.id && phoneKey(c.phone) === phoneKey(phone));
+    if (existing) {
+      const err: any = new Error("That phone number is already in your dialer.");
+      err.status = 409;
+      err.contactId = existing.id;
+      err.crmId = existing.crmId;
+      throw err;
+    }
+    const leadPhone = phoneKey(phone);
+    const lead = upsertLeadQuiet({
+      platform: "dialer",
+      userId: "dialer:" + leadPhone,
+      username: null,
+      name,
+      phone,
+      email: text(req.body.email, 120) || null,
+      state: FunnelStage.New,
+      source,
+      adCampaign: null,
+      propertyInquired: null,
+      address: text(req.body.address, 200) || null,
+      criteria: null,
+      brivityId: null,
+      crmStatus: "new",
+      crmStage: "new",
+      crmPriority: "normal",
+      crmIntent: intent === "buyer_seller" ? "buyer_seller" : intent,
+      crmCallQueue: "urgent",
+      crmNotes: null,
+      assignedUserId: a.id,
+      assignedUserName: a.name,
+      tags,
+    });
+    const trackSide = text(req.body.trackSide, 20).toLowerCase();
+    const sides =
+      trackSide === "buyer"
+        ? (["buyer"] as const)
+        : trackSide === "both" || trackSide === "buyer_seller"
+          ? (["buyer", "seller"] as const)
+          : req.body.track === false
+            ? []
+            : (["seller"] as const);
+    let tracker = getTrackerRecordByLead(lead.id);
+    if (!tracker && sides.length) {
+      tracker = createTrackerRecord({
+        leadId: lead.id,
+        name: lead.name || name,
+        phone: lead.phone || phone,
+        email: lead.email || undefined,
+        source: lead.source || source,
+        assignedTo: a.id,
+        sides: [...sides],
+      });
+    }
+    const contact = dialerStore().createContact(a.id, {
+      name,
+      phone,
+      email: lead.email || "",
+      source,
+      intent,
+      tags,
+      crmCallQueue: "urgent",
+      crmStatus: "new",
+      crmId: lead.id,
+      address: lead.address || "",
+    });
+    return { contact, leadId: lead.id, trackerId: tracker?.id || null };
+  });
   register("post", "/lists", (req, a) => ({
     list: dialerStore().createList(
       a.id,
@@ -330,6 +444,7 @@ export function registerDialer(
       text(req.body.listId),
       text(req.body.lineId),
       Array.isArray(req.body.contactIds) ? req.body.contactIds : undefined,
+      text(req.body.queueId) || undefined,
     ),
   }));
   register("post", "/sessions/:id/action", (req, a) => ({

@@ -4,6 +4,7 @@ import { dirname, join } from "path";
 import { randomUUID } from "crypto";
 import { dataPath } from "../core/tenantData.js";
 import { parseCsv } from "../core/transactionImport.js";
+import { isCallable, matchesQueue, parseQueueId } from "./queues.js";
 export type Contact = {
   id: string;
   ownerId: string;
@@ -21,6 +22,10 @@ export type Contact = {
   crmLinked?: boolean;
   latitude?: number;
   longitude?: number;
+  /** Mirrored from CRM so smart queues can filter without a live CRM read. */
+  tags?: string[];
+  crmStatus?: string;
+  crmCallQueue?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,6 +34,8 @@ export type Session = {
   actorId: string;
   actorName: string;
   listId: string;
+  /** Smart queue id when the session was started from Due today / Mojo / etc. */
+  queueId?: string;
   lineId: string;
   queue: string[];
   position: number;
@@ -266,6 +273,7 @@ export class DialerStore {
     listId: string,
     lineId: string,
     ids?: string[],
+    queueId?: string,
   ) {
     return this.tx(() => {
       if (
@@ -274,24 +282,32 @@ export class DialerStore {
         )
       )
         fail("End your existing session before starting another.", 409);
+      const smartQueue = parseQueueId(queueId);
+      if (queueId && !smartQueue) fail("Choose a valid calling queue.");
       const members = listId ? new Set(this.members(listId)) : null;
       if (listId && !this.get("list", listId)) fail("List not found", 404);
       const chosen = ids ? new Set(ids) : null;
       const queue = this.contacts()
         .filter(
           (c) =>
-            !c.dnc &&
-            phoneKey(c.phone).length >= 10 &&
+            isCallable(c) &&
+            (!smartQueue || matchesQueue(c, smartQueue)) &&
             (!members || members.has(c.id)) &&
             (!chosen || chosen.has(c.id)),
         )
         .map((c) => c.id);
-      if (!queue.length) fail("No callable contacts match this list.");
+      if (!queue.length)
+        fail(
+          smartQueue
+            ? "No callable contacts match this queue."
+            : "No callable contacts match this list.",
+        );
       const s: Session = {
         id: uid(),
         actorId,
         actorName,
-        listId,
+        listId: listId || "",
+        queueId: smartQueue || undefined,
         lineId,
         queue,
         position: 0,
@@ -305,8 +321,68 @@ export class DialerStore {
       this.audit(actorId, "session_started", {
         sessionId: s.id,
         total: queue.length,
+        queueId: smartQueue || undefined,
+        listId: listId || undefined,
       });
       return s;
+    });
+  }
+  createContact(
+    actorId: string,
+    input: {
+      name: string;
+      phone: string;
+      email?: string;
+      source?: string;
+      intent?: string;
+      tags?: string[];
+      crmCallQueue?: string;
+      crmStatus?: string;
+      crmId?: string;
+      address?: string;
+      city?: string;
+    },
+  ) {
+    return this.tx(() => {
+      const name = text(input.name, 120);
+      const phone = text(input.phone, 40);
+      const pk = phoneKey(phone);
+      if (!name) fail("Name your contact.");
+      if (!(pk.length >= 10 && pk.length <= 15))
+        fail("Enter a valid phone number.");
+      if (
+        this.contacts().some(
+          (c) => c.ownerId === actorId && phoneKey(c.phone) === pk,
+        )
+      )
+        fail("That phone number is already in your dialer.", 409);
+      const id = uid();
+      const tags = Array.isArray(input.tags)
+        ? input.tags.map((t) => text(t, 40)).filter(Boolean).slice(0, 20)
+        : [];
+      const c: Contact = {
+        id,
+        ownerId: actorId,
+        crmId: text(input.crmId, 80) || "dialer_" + id,
+        name,
+        phone,
+        email: text(input.email, 120).toLowerCase(),
+        address: text(input.address, 200),
+        city: text(input.city, 80),
+        source: text(input.source, 80) || "Manual",
+        assignedTo: actorId,
+        intent: text(input.intent, 40) || "seller",
+        dnc: false,
+        crmLinked: !!input.crmId,
+        tags,
+        crmStatus: text(input.crmStatus, 40) || "new",
+        crmCallQueue: text(input.crmCallQueue, 40) || "urgent",
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      this.put("contact", c);
+      this.audit(actorId, "contact_created", { contactId: c.id, crmId: c.crmId });
+      return c;
     });
   }
   session(id: string, actor: string) {

@@ -56,6 +56,7 @@
     numberData = { numbers: [] },
     view = "home",
     listId = "",
+    queueId = "",
     page = 1,
     q = "",
     assigned = "",
@@ -71,6 +72,8 @@
     map = null,
     refreshing = false,
     requestSerial = 0;
+  const queueLabel = (id) =>
+    overview?.queues?.find((x) => x.id === id)?.label || id;
   const member = (id) =>
       overview?.members.find((u) => u.id === id)?.name || "Unassigned",
     mySession = () =>
@@ -109,6 +112,7 @@
     view = new URLSearchParams(location.search).get("view") || "home";
     if (!titles[view]) view = "home";
     listId = new URLSearchParams(location.search).get("list") || "";
+    queueId = new URLSearchParams(location.search).get("queue") || "";
     $("#nav").innerHTML = Object.keys(titles)
       .map(
         (k) =>
@@ -126,16 +130,39 @@
           "</a>",
       )
       .join("");
-    $("#pageTitle").textContent = listId
-      ? overview?.lists.find((l) => l.id === listId)?.name || "Contacts"
-      : titles[view];
-    $("#sectionLabel").textContent =
-      view === "contacts"
+    $("#pageTitle").textContent = queueId
+      ? queueLabel(queueId)
+      : listId
+        ? overview?.lists.find((l) => l.id === listId)?.name || "Contacts"
+        : titles[view];
+    $("#sectionLabel").textContent = queueId
+      ? "CRM smart queue · opens your phone app"
+      : view === "contacts"
         ? "Shared contacts and calling lists"
         : view === "sessions"
           ? "Team calling activity"
           : "Team prospecting";
     if (overview) {
+      $("#sideQueues").innerHTML =
+        (overview.queues || [])
+          .map(
+            (qq) =>
+              '<a class="' +
+              (queueId === qq.id ? "on" : "") +
+              '" data-queue="' +
+              esc(qq.id) +
+              '" href="?view=contacts&queue=' +
+              encodeURIComponent(qq.id) +
+              '" title="' +
+              esc(qq.description || "") +
+              '"><span>' +
+              esc(qq.label) +
+              "</span><small>" +
+              fmt(qq.count) +
+              "</small></a>",
+          )
+          .join("") ||
+        '<small style="padding:7px 10px">Queues sync from CRM</small>';
       for (const kind of ["list", "group"])
         $("#" + (kind === "list" ? "sideLists" : "sideGroups")).innerHTML =
           overview.lists
@@ -163,12 +190,20 @@
         : "Start session";
     }
   }
-  function go(v, list = "") {
+  function go(v, list = "", queue = "") {
     saveNotes();
     const u = new URL(location.href);
     u.searchParams.set("view", v);
-    if (list) u.searchParams.set("list", list);
-    else u.searchParams.delete("list");
+    if (list) {
+      u.searchParams.set("list", list);
+      u.searchParams.delete("queue");
+    } else if (queue) {
+      u.searchParams.set("queue", queue);
+      u.searchParams.delete("list");
+    } else {
+      u.searchParams.delete("list");
+      u.searchParams.delete("queue");
+    }
     history.pushState({}, "", u);
     page = 1;
     selected.clear();
@@ -252,7 +287,8 @@
             time(s.startedAt) +
             "</small></td><td>" +
             esc(
-              overview.lists.find((l) => l.id === s.listId)?.name ||
+              (s.queueId && queueLabel(s.queueId)) ||
+                overview.lists.find((l) => l.id === s.listId)?.name ||
                 "All contacts",
             ) +
             "</td><td>" +
@@ -298,7 +334,24 @@
       s = mySession();
     $("#workspace").innerHTML =
       stats() +
-      '<div class="home-grid"><section class="panel"><div class="panel-header"><div><h2>Calling activity</h2><p>Logged attempts over the last 7 days</p></div><a href="?view=sessions" data-nav="sessions">View sessions</a></div><div class="chart" role="img" aria-label="' +
+      '<section class="panel queue-home"><div class="panel-header"><div><h2>Calling queues</h2><p>CRM Due today, Mojo expired, New, and Nurture — same rules as the old CRM Dialer</p></div><button data-action="add-contact">Add contact</button></div><div class="queue-grid">' +
+      (overview.queues || [])
+        .map(
+          (qq) =>
+            '<a class="queue-card" data-queue="' +
+            esc(qq.id) +
+            '" href="?view=contacts&queue=' +
+            encodeURIComponent(qq.id) +
+            '"><strong>' +
+            esc(qq.label) +
+            "</strong><b>" +
+            fmt(qq.count) +
+            "</b><span>" +
+            esc(qq.description || "") +
+            "</span></a>",
+        )
+        .join("") +
+      '</div></section><div class="home-grid"><section class="panel"><div class="panel-header"><div><h2>Calling activity</h2><p>Logged attempts over the last 7 days</p></div><a href="?view=sessions" data-nav="sessions">View sessions</a></div><div class="chart" role="img" aria-label="' +
       esc(
         days.map((d) => date(d.d) + ": " + d.count + " attempts").join("; "),
       ) +
@@ -357,8 +410,9 @@
         assignedTo: assigned,
         duplicates: String(duplicates),
         page: String(page),
-      }),
-      d = await api("/contacts?" + p);
+      });
+    if (queueId) p.set("queue", queueId);
+    const d = await api("/contacts?" + p);
     if (serial !== requestSerial || view !== "contacts") return;
     contactRows = d.contacts;
     contactTotal = d.total;
@@ -429,10 +483,18 @@
       "</tbody></table>" +
       (contactRows.length
         ? ""
-        : '<div class="empty"><h2>No matching contacts</h2><p>Try another search or import leads into this list.</p></div>') +
+        : '<div class="empty"><h2>No matching contacts</h2><p>' +
+          (queueId
+            ? esc(
+                overview?.queues?.find((x) => x.id === queueId)?.description ||
+                  "Nothing in this queue yet.",
+              ) +
+              ' Use <button type="button" data-action="add-contact" class="contact-link">Add contact</button> or import a CSV.'
+            : "Try another search or import leads into this list.") +
+          "</p></div>") +
       '</div><div class="pager"><span>' +
       fmt(d.total) +
-      " contacts" +
+      (queueId ? " in " + esc(queueLabel(queueId)) : " contacts") +
       (duplicates ? " with matching phone or email" : "") +
       '</span><div><button data-action="prev" ' +
       (page === 1 ? "disabled" : "") +
@@ -753,13 +815,34 @@
   async function start(selectedOnly = false) {
     const s = mySession();
     if (s) {
-      go("contacts", s.listId);
+      if (s.queueId) go("contacts", "", s.queueId);
+      else go("contacts", s.listId || "");
       return;
     }
     numberData = await api("/numbers");
+    const queueOptions = (overview.queues || [])
+      .map(
+        (qq) =>
+          '<option value="' +
+          esc(qq.id) +
+          '"' +
+          (queueId === qq.id ? " selected" : "") +
+          ">" +
+          esc(qq.label) +
+          " (" +
+          fmt(qq.count) +
+          ")</option>",
+      )
+      .join("");
     modal(
       "Start a calling session",
-      '<p class="form-info">Work through a list, log outcomes, and book appointments. Calls open in your connected phone app; automatic dialing is not available through Quo.</p><form class="detail-grid"><label class="wide">Calling list<select name="listId"><option value="">' +
+      '<p class="form-info">Work a smart queue or list, log outcomes, and book appointments. Calls open in your connected phone app; automatic dialing is not available through Quo.</p><form class="detail-grid"><label class="wide">Calling queue<select name="queueId"><option value="">' +
+        (selectedOnly
+          ? "Use selected contacts only"
+          : "No smart queue") +
+        "</option>" +
+        queueOptions +
+        '</select></label><label class="wide">Calling list<select name="listId"><option value="">' +
         (selectedOnly
           ? selected.size + " selected contacts"
           : "All callable contacts") +
@@ -769,15 +852,41 @@
         options(numberData.numbers) +
         '</select></label><div class="form-actions wide"><button class="primary">Start session</button></div></form>',
       async (f) => {
-        await api("/sessions", {
+        const body = {
           listId: f.get("listId"),
+          queueId: f.get("queueId"),
           lineId: f.get("lineId"),
           ...(selectedOnly ? { contactIds: [...selected] } : {}),
-        });
+        };
+        if (!body.queueId) delete body.queueId;
+        await api("/sessions", body);
         $("#dialog").close();
         notes = "";
         await refresh();
-        go("contacts");
+        if (body.queueId) go("contacts", "", body.queueId);
+        else go("contacts", body.listId || "");
+      },
+    );
+  }
+  function addContact() {
+    modal(
+      "Add contact",
+      '<p class="form-info">Creates a CRM lead, optional Tracker row, and Dialer contact. Calls still open in your phone app.</p><form class="detail-grid"><label>Name<input name="name" required maxlength="120" placeholder="Seller or buyer name"></label><label>Phone<input name="phone" required inputmode="tel" placeholder="(210) 555-0100"></label><label>Source<select name="source"><option>Mojo</option><option>Mojo FL</option><option>Manual</option><option>Expired Listing</option></select></label><label>Pipeline<select name="trackSide"><option value="seller">Seller → Close</option><option value="buyer">Buyer → Close</option><option value="both">Buyer &amp; Seller</option></select></label><label class="wide"><input type="checkbox" name="expired" checked> Tag as Expired (Mojo expired listings)</label><div class="form-actions wide"><button class="primary">Save &amp; open queue</button></div></form>',
+      async (f) => {
+        const body = {
+          name: f.get("name"),
+          phone: f.get("phone"),
+          source: f.get("source"),
+          trackSide: f.get("trackSide"),
+          expired: f.get("expired") === "on",
+        };
+        const d = await api("/contacts", body);
+        $("#dialog").close();
+        toast((d.contact.name || "Contact") + " added to Dialer and CRM");
+        await refresh();
+        const nextQueue =
+          body.expired || /mojo/i.test(String(body.source)) ? "mojo" : "due";
+        go("contacts", "", nextQueue);
       },
     );
   }
@@ -1077,6 +1186,11 @@
         go("contacts", el.dataset.list);
         return;
       }
+      if (el.dataset.queue) {
+        e.preventDefault();
+        go("contacts", "", el.dataset.queue);
+        return;
+      }
       if (el.dataset.contact) {
         await contactDetail(el.dataset.contact);
         return;
@@ -1137,6 +1251,7 @@
       if (action === "start" || action === "start-selected")
         return await start(action === "start-selected");
       if (action === "import") return importFile();
+      if (action === "add-contact") return addContact();
       if (action === "book") return await book();
       if (action === "book-current") return await book(activeContact?.id);
       if (action === "assign" || action === "add-list")
