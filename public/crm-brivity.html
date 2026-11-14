@@ -1845,22 +1845,36 @@ function fmtPoNum(n){
   if(n>=1000) return (Math.round(n/100)/10)+"k";
   return String(n);
 }
+/* Talk time reads like Mojo: hours:minutes:seconds. */
+function fmtPoDuration(sec){
+  sec=Math.max(0,Math.round(Number(sec)||0));
+  var h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+  return h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+}
+function fmtPoStep(s){ return s.format==="duration"?fmtPoDuration(s.count):fmtPoNum(s.count); }
+function poRateHTML(s){ return s.rateFromPrev!=null?'<span class="r">'+esc(String(s.rateFromPrev))+'% of previous</span>':''; }
+var PO_WINDOWS=[["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["90d","Last 90 days"],["all","All time"]];
+var PO_WINDOW=(function(){ try{ var v=localStorage.getItem("poSellerWindow"); return PO_WINDOWS.some(function(w){return w[0]===v;})?v:"30d"; }catch(_){ return "30d"; } })();
 function poFunnelHTML(side){
   if(!side||!side.steps||!side.steps.length)return '<div class="po-empty">No pipeline data yet.</div>';
   var metrics=side.steps.filter(function(s){return s.kind==='metric';});
   var people=side.steps.filter(function(s){return s.kind==='people';});
   var max=Math.max.apply(null,[1].concat(people.map(function(s){return s.count||0;})));
-  return '<div class="po-eyebrow">'+(side.side==='seller'?'Outreach activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){return '<div class="po-metric"><strong title="'+esc(String(s.count))+'">'+esc(fmtPoNum(s.count))+'</strong><span>'+esc(s.label)+'</span></div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
-    // Ratios between heterogeneous social/people sources are not attributed conversion.
-    var prev=i?people[i-1]:null;
-    var ratio=prev&&prev.count>0?Math.round(s.count/prev.count*1000)/10:null;
-    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,s.count/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoNum(s.count))+'</span>'+(ratio!=null?'<span class="r">'+ratio+'% of previous</span>':'')+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
-  }).join('')+'</div><div class="po-note">Bars compare cumulative stage counts within this pipeline. Ratios are stage comparisons, not attributed conversion rates.</div>';
+  return '<div class="po-eyebrow">'+(side.side==='seller'?'Dialer activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){return '<div class="po-metric" data-po-metric="'+esc(s.key)+'"><strong title="'+esc(String(s.count))+'">'+esc(fmtPoStep(s))+'</strong><span>'+esc(s.label)+'</span>'+(s.rateFromPrev!=null?'<em>'+esc(String(s.rateFromPrev))+'%</em>':'')+'</div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
+    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,s.count/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoStep(s))+'</span>'+poRateHTML(s)+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
+  }).join('')+'</div><div class="po-note">'+(side.side==='seller'
+    ?'Dialer numbers come from logged outcomes. Talk time is the time between opening your phone app and saving the outcome, not a carrier record. Stage steps count people who reached that stage or later'+(side.window&&side.window.key!=='all'?' during this window':'')+'.'
+    :'Percentages compare each step with the one before it. Views and Comments are account social totals, so the first ratios are directional rather than per-person attribution.')+'</div>';
+}
+function poWindowHTML(side){
+  if(!side||side.side!=='seller')return '';
+  var cur=(side.window&&side.window.key)||PO_WINDOW;
+  return '<label class="po-window"><span class="po-visually-hidden">Seller time window</span><select data-po-window aria-label="Seller time window">'+PO_WINDOWS.map(function(w){return '<option value="'+w[0]+'"'+(w[0]===cur?' selected':'')+'>'+w[1]+'</option>';}).join('')+'</select></label>';
 }
 function poCardHTML(side){
   var sideKey=side&&side.side==='seller'?'seller':'buyer';
   if(!side)return '<div class="po-card"><div class="po-empty">Pipeline data unavailable.</div></div>';
-  return '<section class="po-card" data-side="'+sideKey+'" aria-label="'+(sideKey==='seller'?'Sellers':'Buyers')+'"><div class="po-card-head"><div><h3>'+(sideKey==='seller'?'Seller pipeline':'Buyer pipeline')+'</h3><span class="po-sub">'+esc(side.subtitle||'')+'</span></div><span class="po-side-icon" aria-hidden="true">'+(sideKey==='seller'?'⌂':'↗')+'</span></div>'+
+  return '<section class="po-card" data-side="'+sideKey+'" aria-label="'+(sideKey==='seller'?'Sellers':'Buyers')+'"><div class="po-card-head"><div><h3>'+(sideKey==='seller'?'Seller pipeline':'Buyer pipeline')+'</h3><span class="po-sub">'+esc(side.subtitle||'')+'</span></div>'+(sideKey==='seller'?poWindowHTML(side):'<span class="po-side-icon" aria-hidden="true">↗</span>')+'</div>'+
     '<div class="po-summary">'+[['all','Tracker contacts',side.inPipeline],['unstaged','Need a stage',side.unstaged],['closed','Closed',side.closed]].map(function(x){return '<button type="button" data-po-meta="'+x[0]+'"><strong>'+esc(fmtPoNum(x[2]))+'</strong><span>'+x[1]+' ↗</span></button>';}).join('')+'</div>'+poFunnelHTML(side)+
     '<div class="po-next"><div><strong>'+(side.unstaged>0?esc(fmtPoNum(side.unstaged))+' contacts need a next step':'Keep your next conversations moving')+'</strong>'+(side.unstaged>0?'Assign a stage so these contacts are visible in your pipeline.':'Open your contacts to review the next follow-up.')+'</div><button type="button" data-po-meta="'+(side.unstaged>0?'unstaged':'all')+'">'+(side.unstaged>0?'Review unstaged':'Open Tracker')+' →</button></div></section>';
 }
@@ -1882,6 +1896,12 @@ function openTrackerFromOverview(side, opts){
 function bindPipelineOverviewClicks(el){
   if(!el||el.__poBound) return;
   el.__poBound=true;
+  el.addEventListener("change",function(e){
+    var sel=e.target.closest("[data-po-window]"); if(!sel)return;
+    PO_WINDOW=sel.value;
+    try{ localStorage.setItem("poSellerWindow",PO_WINDOW); }catch(_){}
+    renderPipelineOverview();
+  });
   el.addEventListener("click",function(e){
     var step=e.target.closest("[data-po-step]");
     var meta=e.target.closest("[data-po-meta]");
@@ -1911,7 +1931,10 @@ function renderPipelineOverview(){
   var request=++PO_REQUEST;
   /* null = All; [] = no agents checked (must not fall back to All / Marco's totals). */
   var agent=USER_FILTER==null?"":(USER_FILTER.length?USER_FILTER.join(","):"__none__");
-  var q=agent?("?agent="+encodeURIComponent(agent)):"";
+  var qp=new URLSearchParams();
+  if(agent) qp.set("agent",agent);
+  qp.set("sellerWindow",PO_WINDOW);
+  var q="?"+qp.toString();
   el.innerHTML='<div class="po-card"><div class="po-empty" role="status">Loading your pipelines…</div></div>';
   fetch(crmApi("/api/crm/pipeline-overview"+q),{headers:{Accept:"application/json"}})
     .then(function(r){ return r.ok?r.json():null; })
