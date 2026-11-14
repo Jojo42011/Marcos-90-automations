@@ -218,6 +218,23 @@ function People({ snapshot }: { snapshot: any }) {
     }
   };
 
+  const [calling, setCalling] = useState(false);
+  const callInDialer = async () => {
+    setCalling(true);
+    try {
+      const name =
+        categories.find((c) => c[0] === bucket)?.[1] || "Archived people";
+      await bridge.callInDialer(
+        rows.map((r: Row) => r.id),
+        query || source !== "all" || status !== "all"
+          ? name + " · filtered"
+          : name,
+      );
+    } finally {
+      setCalling(false);
+    }
+  };
+
   const columns = [
     {
       key: "name",
@@ -361,6 +378,13 @@ function People({ snapshot }: { snapshot: any }) {
                   label={busy ? "Refreshing…" : "Refresh"}
                   isDisabled={busy}
                   onClick={refresh}
+                />
+                <Button
+                  label="Call in Dialer"
+                  isLoading={calling}
+                  isDisabled={!rows.length}
+                  tooltip="Open these people as a Dialer calling list"
+                  onClick={callInDialer}
                 />
                 <Button
                   label="Import people"

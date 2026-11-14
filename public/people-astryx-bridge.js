@@ -101,6 +101,7 @@
     openPeople: () => openPeopleSection("all"),
     url: crmApi,
     refresh: () => loadLive({ force: true }),
+    callInDialer: (ids, label) => openInDialer(ids, label),
     dirty: (value) => {
       dirty = value;
     },
