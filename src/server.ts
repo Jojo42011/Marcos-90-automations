@@ -263,6 +263,7 @@ import {
   updateNote,
 } from "./core/harveyNotes.js";
 import {
+  BUYER_STAGE_LEGACY,
   BUYER_STAGES,
   SELLER_STAGES,
   TRACKER_STATUSES,
@@ -272,6 +273,7 @@ import {
   deleteTrackerRecord,
   getTrackerRecord,
   listTrackerRecords,
+  normalizeBuyerStage,
   setTrackerStage,
   trackerCounts,
   updateTrackerRecord,
@@ -11587,6 +11589,7 @@ app.get("/api/tracker/schema", (_req, res) => {
     statuses: TRACKER_STATUSES,
     buyerStages: BUYER_STAGES,
     sellerStages: SELLER_STAGES,
+    buyerStageLegacy: BUYER_STAGE_LEGACY,
   });
 });
 
@@ -11597,7 +11600,7 @@ app.get("/api/tracker/records", (req, res) => {
   const filter: TrackerFilter = {
     side: q.side === "buyer" || q.side === "seller" ? q.side : undefined,
     status: csv(q.status) as TrackerFilter["status"],
-    buyerStage: csv(q.buyerStage) as TrackerFilter["buyerStage"],
+    buyerStage: csv(q.buyerStage)?.map((k) => normalizeBuyerStage(k)).filter((k): k is NonNullable<typeof k> => !!k),
     sellerStage: csv(q.sellerStage) as TrackerFilter["sellerStage"],
     unstagedOnly: q.unstagedOnly === "1" || q.unstagedOnly === "true",
     source: csv(q.source),
@@ -11622,7 +11625,8 @@ app.get("/api/crm/pipeline-overview", async (req, res) => {
   try {
     const { buildPipelineOverview } = await import("./core/pipelineOverview.js");
     const agent = typeof req.query.agent === "string" ? req.query.agent : null;
-    res.json(await buildPipelineOverview({ agent }));
+    const sellerWindow = typeof req.query.sellerWindow === "string" ? req.query.sellerWindow : null;
+    res.json(await buildPipelineOverview({ agent, sellerWindow }));
   } catch (err) {
     console.warn("[pipeline-overview]", err);
     res.status(500).json({ ok: false, error: "pipeline overview unavailable" });

@@ -30,7 +30,7 @@ const BUYER_FROM_LEGACY: Partial<Record<CrmStage, BuyerStage | undefined>> = {
   hot: "contacted",
   warm: "contacted",
   cold: "contacted",
-  appointment_set: "actively_showing",   // BEST-GUESS: buyers have no "appointment set"
+  appointment_set: "appointment_set",
   showing_set: "actively_showing",
   pending: "under_contract",             // BEST-GUESS: "Pending" is a status in the new model
   under_contract: "under_contract",

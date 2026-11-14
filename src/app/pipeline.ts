@@ -1377,8 +1377,19 @@ export async function run(
 
   await db.updateLead(lead);
 
+  /* A number collected in DMs lands on the Tracker at Not Contacted, so the
+     first call shows up as work to do rather than an untracked lead. */
+  if (hasNewPhone) {
+    try {
+      const { stageTrackerFromPhoneCapture } = await import("../core/trackerEngagement.js");
+      stageTrackerFromPhoneCapture(lead);
+    } catch (err) {
+      console.error("[trackerEngagement] phone capture stage failed:", err);
+    }
+  }
+
   /* When the DM funnel reaches a real two-way state, stage any linked tracker
-     row Unstaged → Contacted (same rules as /api/tracker/stage-from-engagement).
+     row out of Unstaged (same rules as /api/tracker/stage-from-engagement).
      Scoped to this lead only — no full-store scan on every inbound. */
   if (
     lead.state === FunnelStage.CriteriaCollected ||

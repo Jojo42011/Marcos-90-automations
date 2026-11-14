@@ -1044,18 +1044,30 @@ export const TRACKER_STATUSES: TrackerStatus[] = [
   "new", "unqualified", "watch", "nurture", "hot", "pending",
 ];
 
+/** The team's buyer ladder: a DM number lands at Not Contacted, a call moves it on. */
 export type BuyerStage =
+  | "not_contacted"
   | "contacted"
-  | "qualified"
-  | "pre_approved"
-  | "buyer_rep_signed"
+  | "nurture"
+  | "appointment_set"
+  | "appointment_show"
   | "actively_showing"
-  | "offer_submitted"
   | "under_contract"
-  | "option_period"
-  | "clear_to_close"
-  | "closed"
-  | "past_client";
+  | "closed";
+
+/**
+ * Retired buyer keys still stored on older rows. They are read as the stage
+ * they now mean; the stored value is only replaced when someone moves the row.
+ */
+export const BUYER_STAGE_LEGACY: Record<string, BuyerStage> = {
+  qualified: "nurture",
+  pre_approved: "nurture",
+  buyer_rep_signed: "appointment_set",
+  offer_submitted: "actively_showing",
+  option_period: "under_contract",
+  clear_to_close: "under_contract",
+  past_client: "closed",
+};
 
 export type SellerStage =
   | "new"
@@ -1076,17 +1088,14 @@ export type SellerStage =
 
 /** Ordered, with labels, so UI and reporting share one source of truth. */
 export const BUYER_STAGES: Array<{ key: BuyerStage; label: string }> = [
+  { key: "not_contacted", label: "Not Contacted" },
   { key: "contacted", label: "Contacted" },
-  { key: "qualified", label: "Qualified" },
-  { key: "pre_approved", label: "Pre-Approved" },
-  { key: "buyer_rep_signed", label: "Buyer Rep Signed" },
-  { key: "actively_showing", label: "Actively Showing" },
-  { key: "offer_submitted", label: "Offer Submitted" },
+  { key: "nurture", label: "Nurture" },
+  { key: "appointment_set", label: "Appt Set" },
+  { key: "appointment_show", label: "Appt Show" },
+  { key: "actively_showing", label: "Showing" },
   { key: "under_contract", label: "Under Contract" },
-  { key: "option_period", label: "Option Period" },
-  { key: "clear_to_close", label: "Clear to Close" },
   { key: "closed", label: "Closed" },
-  { key: "past_client", label: "Past Client" },
 ];
 
 export const SELLER_STAGES: Array<{ key: SellerStage; label: string }> = [
