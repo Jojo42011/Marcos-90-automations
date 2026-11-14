@@ -5,6 +5,8 @@ import { randomUUID } from "crypto";
 import { dataPath } from "../core/tenantData.js";
 import { parseCsv } from "../core/transactionImport.js";
 import { isCallable, matchesQueue, parseQueueId } from "./queues.js";
+import { parseAccountReference } from "../core/accountFederation.js";
+import { propertyColumns, propertyFromRow, type PropertyFacts } from "./property.js";
 export type Contact = {
   id: string;
   ownerId: string;
@@ -26,9 +28,23 @@ export type Contact = {
   tags?: string[];
   crmStatus?: string;
   crmCallQueue?: string;
+  /** Listing details from an imported Mojo/MLS file or the CRM's exact MLS match. */
+  property?: PropertyFacts;
   createdAt: string;
   updatedAt: string;
 };
+export type DialerList = {
+  id: string;
+  name: string;
+  kind: "list" | "group" | "handoff";
+  /** "appointments" marks the team group contacts move into after an appointment is set. */
+  system?: "appointments";
+  createdBy: string;
+  createdAt: string;
+  /** Handoff lists: CRM ids that had no Dialer contact when the list was made. */
+  missing?: number;
+};
+const HANDOFF_TTL_MS = 86400000;
 export type Session = {
   id: string;
   actorId: string;
@@ -147,6 +163,7 @@ export class DialerStore {
       const i = headers.findIndex((h) => keys.includes(h));
       return i < 0 ? "" : text(r[i], 1000);
     };
+    const propCols = propertyColumns(headers);
     return this.tx(() => {
       if (listId && !this.get("list", listId))
         fail("Calling list not found", 404);
@@ -189,7 +206,8 @@ export class DialerStore {
             : (pk && phones.has(pk)) || (email && emails.has(email))
               ? "duplicate"
               : "create";
-        preview.push({ row: i + 1, name, phone, email, action });
+        const property = propertyFromRow(r, propCols);
+        preview.push({ row: i + 1, name, phone, email, action, ...(property ? { property } : {}) });
         if (action === "invalid") {
           invalid++;
           continue;
@@ -222,6 +240,7 @@ export class DialerStore {
             assignedTo: actor,
             intent: "seller",
             dnc: /^(true|yes|1)$/i.test(field(r, ["dnc", "do not call"])),
+            ...(property ? { property } : {}),
             createdAt: now(),
             updatedAt: now(),
           };
@@ -248,8 +267,93 @@ export class DialerStore {
         invalid,
         total: preview.length,
         sample: preview.slice(0, 10),
+        propertyFields: propCols.map(([k]) => k),
         applied: apply,
       };
+    });
+  }
+  /** Lists shown to this actor: their own recent CRM handoffs, never anyone else's. */
+  visibleLists(actor: string) {
+    return this.all<DialerList>("list").filter(
+      (l) =>
+        l.kind !== "handoff" ||
+        (l.createdBy === actor && Date.now() - Date.parse(l.createdAt) < HANDOFF_TTL_MS),
+    );
+  }
+  /** The single team "Appointments" group, created the first time it is needed. */
+  appointmentsGroup(actor: string): DialerList {
+    const found = this.all<DialerList>("list").find((l) => l.system === "appointments");
+    if (found) return found;
+    const g: DialerList = {
+      id: "system-appointments",
+      name: "Appointments",
+      kind: "group",
+      system: "appointments",
+      createdBy: actor,
+      createdAt: now(),
+    };
+    this.put("list", g);
+    this.audit(actor, "list_created", g);
+    return g;
+  }
+  /**
+   * Move contacts into the Appointments group and, when given, off the calling
+   * list they were worked from. CRM records are untouched.
+   */
+  moveToAppointments(actor: string, ids: string[], fromListId = "") {
+    return this.tx(() => {
+      const g = this.appointmentsGroup(actor);
+      this.addMembers(g.id, ids);
+      const from = fromListId && fromListId !== g.id ? this.get<DialerList>("list", fromListId) : undefined;
+      if (from)
+        for (const id of ids)
+          this.db.prepare("DELETE FROM membership WHERE list_id=? AND contact_id=?").run(from.id, id);
+      this.audit(actor, "moved_to_appointments", { count: ids.length, fromListId: from?.id });
+      return g;
+    });
+  }
+  /**
+   * A private, short-lived calling list from a CRM selection. Combined-view ids
+   * (acct.<owner>.<id>) resolve to that owner's contact; plain ids prefer the
+   * caller's own account.
+   */
+  handoff(actor: string, crmIds: string[], label: string, preferOwner: string) {
+    return this.tx(() => {
+      const contacts = this.contacts();
+      const byOwnerCrm = new Map(contacts.map((c) => [c.ownerId + "\u0000" + c.crmId, c]));
+      const byCrm = new Map<string, Contact[]>();
+      for (const c of contacts) byCrm.set(c.crmId, [...(byCrm.get(c.crmId) || []), c]);
+      const ids = new Set<string>();
+      let missing = 0;
+      for (const raw of crmIds) {
+        const value = text(raw, 300);
+        let ref: { owner: string; id: string } | null = null;
+        try {
+          ref = parseAccountReference(value);
+        } catch {
+          ref = null;
+        }
+        const match = ref
+          ? byOwnerCrm.get(ref.owner + "\u0000" + ref.id)
+          : (byCrm.get(value) || []).sort(
+              (a, b) => Number(b.ownerId === preferOwner) - Number(a.ownerId === preferOwner),
+            )[0];
+        if (match) ids.add(match.id);
+        else missing++;
+      }
+      const list: DialerList = {
+        id: uid(),
+        name: text(label, 80) || "From the CRM",
+        kind: "handoff",
+        createdBy: actor,
+        createdAt: now(),
+        missing,
+      };
+      this.put("list", list);
+      this.addMembers(list.id, [...ids]);
+      const callable = [...ids].filter((id) => isCallable(this.get<Contact>("contact", id)!)).length;
+      this.audit(actor, "handoff_created", { listId: list.id, count: ids.size, missing });
+      return { list: { ...list, count: ids.size }, callable };
     });
   }
   createList(actor: string, name: string, kind: string) {
@@ -487,6 +591,7 @@ export class DialerStore {
         c.updatedAt = now();
         this.put("contact", c);
       }
+      if (outcome === "appointment_set") this.moveToAppointments(actor, [c.id], s.listId);
       delete s.currentCall;
       s.position++;
       s.updatedAt = now();

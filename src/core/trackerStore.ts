@@ -12,7 +12,7 @@ import type {
   TrackerStageMeta,
   TrackerStatus,
 } from "./types.js";
-import { BUYER_STAGES, SELLER_STAGES, TRACKER_STATUSES } from "./types.js";
+import { BUYER_STAGE_LEGACY, BUYER_STAGES, SELLER_STAGES, TRACKER_STATUSES } from "./types.js";
 
 /**
  * Buyers & Sellers Tracker store.
@@ -101,7 +101,7 @@ function rowToRecord(r: Record<string, unknown>): TrackerRecord {
     address: (r.address as string) || undefined,
     source: (r.source as string) || undefined,
     status: (r.status as TrackerStatus) || "new",
-    buyerStage: (r.buyer_stage as BuyerStage) || undefined,
+    buyerStage: normalizeBuyerStage(r.buyer_stage),
     sellerStage: (r.seller_stage as SellerStage) || undefined,
     stageMeta: parseJson<Record<string, TrackerStageMeta>>(r.stage_meta, {}),
     notes: (r.notes as string) || undefined,
@@ -132,7 +132,8 @@ export function normalizeStatus(raw: unknown): TrackerStatus {
 
 export function normalizeBuyerStage(raw: unknown): BuyerStage | undefined {
   const v = String(raw ?? "");
-  return BUYER_KEYS.has(v) ? (v as BuyerStage) : undefined;
+  if (BUYER_KEYS.has(v)) return v as BuyerStage;
+  return BUYER_STAGE_LEGACY[v];
 }
 
 export function normalizeSellerStage(raw: unknown): SellerStage | undefined {
@@ -266,7 +267,7 @@ export function createTrackerRecord(input: TrackerInput): TrackerRecord {
     status: normalizeStatus(input.status),
     buyerStage: normalizeBuyerStage(input.buyerStage),
     sellerStage: normalizeSellerStage(input.sellerStage),
-    stageMeta: input.stageMeta || {},
+    stageMeta: { ...(input.stageMeta || {}) },
     notes: input.notes,
     checklist: input.checklist || [],
     taskIds: input.taskIds || [],
@@ -276,6 +277,14 @@ export function createTrackerRecord(input: TrackerInput): TrackerRecord {
     updatedAt: now,
     legacyStage: input.legacyStage,
   };
+  // Backfilled rows (legacyStage) have no real entry date, so they stay unstamped
+  // and only count in all-time Overview totals.
+  if (!input.legacyStage) {
+    for (const [side, stage] of [["buyer", rec.buyerStage], ["seller", rec.sellerStage]] as const) {
+      const key = `${side}:${stage}`;
+      if (stage && !rec.stageMeta[key]?.enteredAt) rec.stageMeta[key] = { ...(rec.stageMeta[key] || {}), enteredAt: now };
+    }
+  }
   conn
     .prepare(
       `INSERT INTO tracker_records

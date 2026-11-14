@@ -375,7 +375,7 @@ body.selecting #bulkBar{display:flex}
   <select class="fsel" id="bulkStageSel"><option value="">Move to stage…</option></select>
   <button class="tbtn primary" id="bulkApplyBtn" disabled>Apply</button>
   <span class="bulkDivider"></span>
-  <button class="tbtn" id="bulkEngageBtn" title="Stage anyone with a real DM conversation to Contacted">
+  <button class="tbtn" id="bulkEngageBtn" title="Stage buyers who shared a number in DMs to Not contacted, ready for a first call">
     ✨ Auto-stage from conversations
   </button>
   <div style="flex:1"></div>
@@ -425,13 +425,13 @@ var STATUS_META = {
 };
 var SIDE_COLOR = {buyer:"#4F46E5", seller:"#EA580C", both:"#0891B2"};
 /* Stage at which the tracker asks for a timeline date (per the spec). */
-var TIMELINE_STAGE = {buyer:"qualified", seller:"cma_requested"};
+var TIMELINE_STAGE = {buyer:"nurture", seller:"cma_requested"};
 var STALE_DAYS = 14;
 
 /* ================= state ================= */
 var QUICK="all", BOARD_SORT="attention", DATA_VERSION=0, LOAD_VERSION=0, FIRST_LOAD=true, LOADING=false, ADD_STAGE=null;
 var SIDE   = "buyer";          // which pipeline the board is showing
-var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[]};
+var SCHEMA = {statuses:[], buyerStages:[], sellerStages:[], buyerStageLegacy:{}};
 var RECORDS = [];              // everything, unfiltered
 var FILTER  = {status:{}, stage:{}, source:"", assigned:"", from:"", to:"", ifrom:"", ito:"", q:"", contactable:false};
 /* Most of the imported book is Instagram/TikTok handles with no phone or email.
@@ -465,6 +465,16 @@ function api(p,opts){if(opts&&opts.method&&opts.method!=="GET")DATA_VERSION++;re
 function jsonReq(method,body){return {method:method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)};}
 function stages(side){return side==="seller"?SCHEMA.sellerStages:SCHEMA.buyerStages;}
 function stageOf(rec,side){return side==="seller"?(rec.sellerStage||null):(rec.buyerStage||null);}
+/* Buyer stages were shortened; meta saved under a retired key (e.g. a Qualified
+   timeline date) still belongs to the stage that key now reads as. */
+function stageMetaFor(rec,side,key){
+  var all=(rec&&rec.stageMeta)||{};
+  if(all[side+":"+key])return all[side+":"+key];
+  if(side!=="buyer")return {};
+  var legacy=SCHEMA.buyerStageLegacy||{};
+  var old=Object.keys(legacy).filter(function(k){return legacy[k]===key&&all["buyer:"+k];})[0];
+  return old?all["buyer:"+old]:{};
+}
 
 /* ================= combined stage vocabulary =================
    Buyers and sellers do NOT share a stage list — 11 vs 14, overlapping on six
@@ -959,7 +969,7 @@ function reachedStage(side, stageKey){
     if(!passesExceptSide(r)) return;
     var k = stageOf(r, side);
     if(k==null || idx[k]==null || idx[k] < target) return;
-    var meta = (r.stageMeta||{})[side+":"+stageKey];
+    var meta = stageMetaFor(r,side,stageKey); if(!meta.enteredAt&&!meta.timelineDate) meta = null;
     var at = meta && meta.enteredAt;
     if(APPT_FROM || APPT_TO){
       if(!at){ undated++; return; }
@@ -1008,7 +1018,7 @@ function apptFunnel(){
       src:"appointment tasks created" },
     { label:"Appointments Held",n: taskCount("appointment","completed"),
       src:"appointment tasks completed" },
-    { label:"Signed",           v: stageSum({buyer:"buyer_rep_signed", seller:"listing_agreement_signed"}),
+    { label:"Signed",           v: stageSum({seller:"listing_agreement_signed"}),
       src:"pipeline stage" },
     { label:"Pending",          v: stageSum({buyer:"under_contract", seller:"under_contract"}),
       src:"pipeline stage" },
@@ -1250,7 +1260,7 @@ function moveStage(id,stageKey){
   /* The spec asks for a timeline date at Qualified (buyers) / CMA Requested
      (sellers). Ask once, on entry, rather than burying it in the drawer. */
   if(stageKey===TIMELINE_STAGE[SIDE]){
-    var prev=(rec.stageMeta&&rec.stageMeta[SIDE+":"+stageKey]&&rec.stageMeta[SIDE+":"+stageKey].timelineDate)||"";
+    var prev=stageMetaFor(rec,SIDE,stageKey).timelineDate||"";
     var ans=prompt("Timeline for "+rec.name+" — when are they looking to "+
       (SIDE==="buyer"?"buy":"list")+"? (YYYY-MM-DD, or leave blank)",prev);
     if(ans===null)return;                       // cancelled: leave the card put
@@ -1557,16 +1567,16 @@ document.getElementById("bulkEngageBtn").onclick=function(){
   api("/api/tracker/stage-from-engagement",jsonReq("POST",{}))
     .then(function(plan){
       if(!plan.changes.length){
-        toast("Nothing to stage — every record with a real conversation is already staged.");
+        toast("Nothing to stage — everyone with a real conversation already has a stage.");
         return null;
       }
       var people={};
       plan.changes.forEach(function(c){people[c.recordId]=true;});
       var n=Object.keys(people).length;
-      var msg="Move "+n+" "+(n===1?"person":"people")+" from Unstaged to Contacted?\n\n"+
-        "Only people who actually exchanged messages with the DM agent — a phone or "+
-        "criteria was collected, or a property breakdown was sent. Nothing past Contacted is "+
-        "ever guessed; anything further needs a real call.\n\n"+
+      var msg="Stage "+n+" "+(n===1?"person":"people")+" from their DM conversations?\n\n"+
+        "Buyers move to Not contacted (number in hand, first call still to make); sellers move to New. "+
+        "Only people who actually exchanged messages with the DM agent are included. "+
+        "Contacted and later stages need a real call or a manual move.\n\n"+
         "This never touches a stage you've already set by hand.";
       if(!confirm(msg))return null;
       return api("/api/tracker/stage-from-engagement",jsonReq("POST",{apply:true}));
@@ -1575,7 +1585,7 @@ document.getElementById("bulkEngageBtn").onclick=function(){
       if(!result)return;
       var people={};
       result.changes.forEach(function(c){people[c.recordId]=true;});
-      toast("Staged "+Object.keys(people).length+" people to Contacted from real conversations");
+      toast("Staged "+Object.keys(people).length+" people from real conversations — ready for a first call");
       return load(false);
     })
     .catch(function(e){toast("Could not auto-stage: "+e.message);})
@@ -1633,7 +1643,7 @@ function railHtml(side){
   return '<div class="sect"><h4>'+(side==="buyer"?"BUYER PIPELINE":"SELLER PIPELINE")+'</h4>'+
     '<div class="rail '+(side==="buyer"?"b":"s")+'" data-rail="'+side+'">'+
       st.map(function(s,i){
-        var meta=(CUR.stageMeta||{})[side+":"+s.key]||{};
+        var meta=stageMetaFor(CUR,side,s.key);
         var when=meta.timelineDate?("→ "+meta.timelineDate)
                 :(meta.enteredAt?shortDate(meta.enteredAt):"");
         return '<button data-stage="'+esc(s.key)+'" class="'+
@@ -1739,7 +1749,7 @@ function setStageFor(id,side,stageKey){
   if(!rec)return;
   var meta={};
   if(stageKey===TIMELINE_STAGE[side]){
-    var prev=(rec.stageMeta&&rec.stageMeta[side+":"+stageKey]&&rec.stageMeta[side+":"+stageKey].timelineDate)||"";
+    var prev=stageMetaFor(rec,side,stageKey).timelineDate||"";
     var ans=prompt("Timeline for "+rec.name+" — when are they looking to "+
       (side==="buyer"?"buy":"list")+"? (YYYY-MM-DD, or leave blank)",prev);
     if(ans===null)return;
@@ -1979,7 +1989,7 @@ function load(announce,background){
     if(request!==LOAD_VERSION||version!==DATA_VERSION)return;
     if(background&&(CUR||DIRTY||SELECTING||dragId||document.getElementById('addPersonDialog').open))return;
     if(!Array.isArray(res[1].records))throw new Error('The pipeline response could not be read.');
-    SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[]};
+    SCHEMA={statuses:res[0].statuses||[],buyerStages:res[0].buyerStages||[],sellerStages:res[0].sellerStages||[],buyerStageLegacy:res[0].buyerStageLegacy||{}};
     var changed=JSON.stringify(RECORDS)!==JSON.stringify(res[1].records);
     RECORDS=res[1].records;
     if(FIRST_LOAD){applyOverviewQuery();FIRST_LOAD=false;}

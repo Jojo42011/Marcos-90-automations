@@ -902,6 +902,11 @@
   .people-subtabs button{border:1px solid var(--line);background:var(--card);color:var(--text-2);border-radius:6px;padding:6px 12px;
     font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
   .people-subtabs button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .business-subtabs{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 12px;margin:0 0 8px;border-bottom:1px solid var(--line-2)}
+  .business-subtabs button{border:1px solid var(--line);background:var(--card);color:var(--text-2);border-radius:6px;padding:6px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .business-subtabs button:hover{border-color:var(--teal)}
+  .business-subtabs button.on{background:var(--teal-soft);border-color:var(--teal);color:var(--teal-strong)}
+  .business-subtabs button:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
   /* Dialer CSS removed — shell /dialer owns calling UI */
   /* ── type-picker modal (transaction type / document type) ── */
   .tp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -1319,13 +1324,12 @@
   <button class="r" data-view="leads" title="Leads" style="display:none" aria-hidden="true" tabindex="-1"></button>
   <button class="r" data-view="mls" title="MLS · Live SABOR listings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/></svg></button>
   <button class="r" data-view="tracker" title="Buyers &amp; Sellers Tracker"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h6v14H3z"/><path d="M15 5h6v9h-6z"/><path d="M9 9h6"/></svg></button>
-  <button class="r" data-view="tx" title="Transactions"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-  <button class="r" data-view="reporting" title="Reporting"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
+  <button class="r" data-view="tx" title="Business · Transactions, Reporting, Finance" aria-label="Business"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+  <button class="r" data-view="reporting" title="Reporting" style="display:none" aria-hidden="true" tabindex="-1" data-business="reporting"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
   <button class="r" data-view="calendar" title="Calendar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button>
   <button class="r" data-view="email" title="Email"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></button>
-  <button class="r" data-view="nurture" title="Lead Nurture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-4.6-9.2-9A5.4 5.4 0 0 1 12 6.4 5.4 5.4 0 0 1 21.2 12C19 16.4 12 21 12 21z"/></svg></button>
   <button class="r" data-view="plansettings" title="Settings · Auto Plans"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg></button>
-  <button class="r" data-view="finance" title="Finance"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M14.5 8.5c-.6-.8-1.5-1.2-2.5-1.2-1.7 0-3 1-3 2.35C9 12.6 15 11.4 15 14.35c0 1.35-1.3 2.35-3 2.35-1 0-1.9-.4-2.5-1.2M12 5.8v1.5M12 16.7v1.5"/></svg></button>
+  <button class="r" data-view="finance" title="Finance" style="display:none" aria-hidden="true" tabindex="-1" data-business="finance"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M14.5 8.5c-.6-.8-1.5-1.2-2.5-1.2-1.7 0-3 1-3 2.35C9 12.6 15 11.4 15 14.35c0 1.35-1.3 2.35-3 2.35-1 0-1.9-.4-2.5-1.2M12 5.8v1.5M12 16.7v1.5"/></svg></button>
   <span class="sp"></span>
   <button class="r" data-view="dashboard" title="Home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
 </nav>
@@ -1435,7 +1439,7 @@
       <div class="leads-main">
         <div class="leads-top">
           <h1>Leads <small id="ltCount"></small></h1>
-          <div class="acts"><button class="pill-btn ghost">ACTIONS ▾</button><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn" id="lFilterBtn">FILTER</button></div>
+          <div class="acts"><button class="pill-btn" id="leadsCallBtn" title="Open this filtered list as a Dialer calling session">CALL IN DIALER</button><button class="pill-btn ghost">ACTIONS ▾</button><button class="pill-btn ghost">COLUMNS ▾</button><button class="pill-btn ghost">SORT BY ▾</button><button class="pill-btn" id="lFilterBtn">FILTER</button></div>
         </div>
         <div class="filter-bar" id="lChipBar" style="display:none">
         </div>
@@ -1548,7 +1552,8 @@
   <section class="view" id="view-tx">
     <div class="leads-wrap">
       <div class="leads-nav">
-        <div class="h"><b>Transactions</b><span class="add" id="txNavAdd" style="cursor:pointer">+</span></div>
+        <div class="h"><b>Business</b><span class="add" id="txNavAdd" style="cursor:pointer" title="New transaction">+</span></div>
+        <div class="business-subtabs" role="tablist" aria-label="Business"><button type="button" role="tab" data-bsec="tx" class="on" aria-selected="true">Transactions</button><button type="button" role="tab" data-bsec="reporting" aria-selected="false">Reporting</button><button type="button" role="tab" data-bsec="finance" aria-selected="false">Finance</button></div>
         <a class="on" data-txb="all">All <span class="c" id="txAll">0</span></a>
         <a data-txb="draft">Drafts <span class="c" id="txDraft">0</span></a>
         <a data-txb="pipeline">Pipeline <span class="c" id="txPipe">0</span></a>
@@ -1587,7 +1592,8 @@
   <section class="view" id="view-reporting">
     <div class="leads-wrap">
       <div class="leads-nav rep-nav" style="padding-top:16px">
-        <div class="h"><b>Reporting</b></div>
+        <div class="h"><b>Business</b></div>
+        <div class="business-subtabs" role="tablist" aria-label="Business"><button type="button" role="tab" data-bsec="tx" aria-selected="false">Transactions</button><button type="button" role="tab" data-bsec="reporting" class="on" aria-selected="true">Reporting</button><button type="button" role="tab" data-bsec="finance" aria-selected="false">Finance</button></div>
         <a class="on" data-rep="business">Business Dashboard</a>
         <a data-rep="sales_funnel">Sales Funnel Dashboard</a>
         <a data-rep="agent_dash">Agent Dashboard</a>
@@ -1662,7 +1668,8 @@
   <section class="view" id="view-finance">
     <div class="leads-wrap">
       <div class="leads-nav">
-        <div class="h"><b>Finance</b><span class="add">+</span></div>
+        <div class="h"><b>Business</b><span class="add">+</span></div>
+        <div class="business-subtabs" role="tablist" aria-label="Business"><button type="button" role="tab" data-bsec="tx" aria-selected="false">Transactions</button><button type="button" role="tab" data-bsec="reporting" aria-selected="false">Reporting</button><button type="button" role="tab" data-bsec="finance" class="on" aria-selected="true">Finance</button></div>
         <a class="on" data-fb="overview">Overview</a>
         <a data-fb="commissions">Commissions</a>
         <a data-fb="monthly">Monthly GCI</a>
@@ -1845,22 +1852,36 @@ function fmtPoNum(n){
   if(n>=1000) return (Math.round(n/100)/10)+"k";
   return String(n);
 }
+/* Talk time reads like Mojo: hours:minutes:seconds. */
+function fmtPoDuration(sec){
+  sec=Math.max(0,Math.round(Number(sec)||0));
+  var h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+  return h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+}
+function fmtPoStep(s){ return s.format==="duration"?fmtPoDuration(s.count):fmtPoNum(s.count); }
+function poRateHTML(s){ return s.rateFromPrev!=null?'<span class="r">'+esc(String(s.rateFromPrev))+'% of previous</span>':''; }
+var PO_WINDOWS=[["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["90d","Last 90 days"],["all","All time"]];
+var PO_WINDOW=(function(){ try{ var v=localStorage.getItem("poSellerWindow"); return PO_WINDOWS.some(function(w){return w[0]===v;})?v:"30d"; }catch(_){ return "30d"; } })();
 function poFunnelHTML(side){
   if(!side||!side.steps||!side.steps.length)return '<div class="po-empty">No pipeline data yet.</div>';
   var metrics=side.steps.filter(function(s){return s.kind==='metric';});
   var people=side.steps.filter(function(s){return s.kind==='people';});
   var max=Math.max.apply(null,[1].concat(people.map(function(s){return s.count||0;})));
-  return '<div class="po-eyebrow">'+(side.side==='seller'?'Outreach activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){return '<div class="po-metric"><strong title="'+esc(String(s.count))+'">'+esc(fmtPoNum(s.count))+'</strong><span>'+esc(s.label)+'</span></div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
-    // Ratios between heterogeneous social/people sources are not attributed conversion.
-    var prev=i?people[i-1]:null;
-    var ratio=prev&&prev.count>0?Math.round(s.count/prev.count*1000)/10:null;
-    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,s.count/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoNum(s.count))+'</span>'+(ratio!=null?'<span class="r">'+ratio+'% of previous</span>':'')+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
-  }).join('')+'</div><div class="po-note">Bars compare cumulative stage counts within this pipeline. Ratios are stage comparisons, not attributed conversion rates.</div>';
+  return '<div class="po-eyebrow">'+(side.side==='seller'?'Dialer activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){return '<div class="po-metric" data-po-metric="'+esc(s.key)+'"><strong title="'+esc(String(s.count))+'">'+esc(fmtPoStep(s))+'</strong><span>'+esc(s.label)+'</span>'+(s.rateFromPrev!=null?'<em>'+esc(String(s.rateFromPrev))+'%</em>':'')+'</div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
+    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,s.count/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoStep(s))+'</span>'+poRateHTML(s)+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
+  }).join('')+'</div><div class="po-note">'+(side.side==='seller'
+    ?'Dialer numbers come from logged outcomes. Talk time is the time between opening your phone app and saving the outcome, not a carrier record. Stage steps count people who reached that stage or later'+(side.window&&side.window.key!=='all'?' during this window':'')+'.'
+    :'Percentages compare each step with the one before it. Views and Comments are account social totals, so the first ratios are directional rather than per-person attribution.')+'</div>';
+}
+function poWindowHTML(side){
+  if(!side||side.side!=='seller')return '';
+  var cur=(side.window&&side.window.key)||PO_WINDOW;
+  return '<label class="po-window"><span class="po-visually-hidden">Seller time window</span><select data-po-window aria-label="Seller time window">'+PO_WINDOWS.map(function(w){return '<option value="'+w[0]+'"'+(w[0]===cur?' selected':'')+'>'+w[1]+'</option>';}).join('')+'</select></label>';
 }
 function poCardHTML(side){
   var sideKey=side&&side.side==='seller'?'seller':'buyer';
   if(!side)return '<div class="po-card"><div class="po-empty">Pipeline data unavailable.</div></div>';
-  return '<section class="po-card" data-side="'+sideKey+'" aria-label="'+(sideKey==='seller'?'Sellers':'Buyers')+'"><div class="po-card-head"><div><h3>'+(sideKey==='seller'?'Seller pipeline':'Buyer pipeline')+'</h3><span class="po-sub">'+esc(side.subtitle||'')+'</span></div><span class="po-side-icon" aria-hidden="true">'+(sideKey==='seller'?'⌂':'↗')+'</span></div>'+
+  return '<section class="po-card" data-side="'+sideKey+'" aria-label="'+(sideKey==='seller'?'Sellers':'Buyers')+'"><div class="po-card-head"><div><h3>'+(sideKey==='seller'?'Seller pipeline':'Buyer pipeline')+'</h3><span class="po-sub">'+esc(side.subtitle||'')+'</span></div>'+(sideKey==='seller'?poWindowHTML(side):'<span class="po-side-icon" aria-hidden="true">↗</span>')+'</div>'+
     '<div class="po-summary">'+[['all','Tracker contacts',side.inPipeline],['unstaged','Need a stage',side.unstaged],['closed','Closed',side.closed]].map(function(x){return '<button type="button" data-po-meta="'+x[0]+'"><strong>'+esc(fmtPoNum(x[2]))+'</strong><span>'+x[1]+' ↗</span></button>';}).join('')+'</div>'+poFunnelHTML(side)+
     '<div class="po-next"><div><strong>'+(side.unstaged>0?esc(fmtPoNum(side.unstaged))+' contacts need a next step':'Keep your next conversations moving')+'</strong>'+(side.unstaged>0?'Assign a stage so these contacts are visible in your pipeline.':'Open your contacts to review the next follow-up.')+'</div><button type="button" data-po-meta="'+(side.unstaged>0?'unstaged':'all')+'">'+(side.unstaged>0?'Review unstaged':'Open Tracker')+' →</button></div></section>';
 }
@@ -1882,6 +1903,12 @@ function openTrackerFromOverview(side, opts){
 function bindPipelineOverviewClicks(el){
   if(!el||el.__poBound) return;
   el.__poBound=true;
+  el.addEventListener("change",function(e){
+    var sel=e.target.closest("[data-po-window]"); if(!sel)return;
+    PO_WINDOW=sel.value;
+    try{ localStorage.setItem("poSellerWindow",PO_WINDOW); }catch(_){}
+    renderPipelineOverview();
+  });
   el.addEventListener("click",function(e){
     var step=e.target.closest("[data-po-step]");
     var meta=e.target.closest("[data-po-meta]");
@@ -1911,7 +1938,10 @@ function renderPipelineOverview(){
   var request=++PO_REQUEST;
   /* null = All; [] = no agents checked (must not fall back to All / Marco's totals). */
   var agent=USER_FILTER==null?"":(USER_FILTER.length?USER_FILTER.join(","):"__none__");
-  var q=agent?("?agent="+encodeURIComponent(agent)):"";
+  var qp=new URLSearchParams();
+  if(agent) qp.set("agent",agent);
+  qp.set("sellerWindow",PO_WINDOW);
+  var q="?"+qp.toString();
   el.innerHTML='<div class="po-card"><div class="po-empty" role="status">Loading your pipelines…</div></div>';
   fetch(crmApi("/api/crm/pipeline-overview"+q),{headers:{Accept:"application/json"}})
     .then(function(r){ return r.ok?r.json():null; })
@@ -3060,6 +3090,41 @@ function seedDefaultHidden(tkey){
   (DEFAULT_HIDDEN_COLS[tkey]||[]).forEach(function(k){ if(p.hidden.indexOf(k)<0)p.hidden.push(k); });
 }
 
+/* The rows the Leads table shows right now: bucket, smart filter, advanced
+   filter and search together. Calling-list handoffs reuse it so the Dialer
+   gets exactly the list the operator is looking at. */
+function leadsInView(){
+  const hidingParked=!(ADV&&ADV.status&&(ADV.status.indexOf("archived")>=0||ADV.status.indexOf("trashed")>=0));
+  return sortRows(LEADS
+    .filter(l=>!hidingParked||["archived","trashed"].indexOf(l.statusDisp||l.crmStatus)<0)
+    .filter(leadBucketPred).filter(leadSmartPred).filter(advPred).filter(hitRow),"leads");
+}
+function leadsViewLabel(){
+  if(leadSmartKey){
+    var custom=customSmartFilters().find(function(x){return x.key===leadSmartKey;});
+    var a=document.querySelector('#view-leads .sf[data-sf="'+leadSmartKey+'"]');
+    return (custom&&custom.label)||(a&&a.textContent.trim())||"Smart filter";
+  }
+  var b=document.querySelector('#view-leads .leads-nav a[data-lb].on');
+  return b?b.childNodes[0].textContent.trim():"Leads";
+}
+/* Sends contacts to the shared Dialer as a calling list and opens it there.
+   Only CRM ids travel; the Dialer resolves them to its own synced contacts. */
+function openInDialer(ids,label){
+  ids=(ids||[]).filter(Boolean);
+  if(!ids.length){ crmToast("No contacts in this view to call"); return Promise.resolve(); }
+  if(ids.length>2000){ crmToast("Narrow this view to 2,000 contacts or fewer to call it"); return Promise.resolve(); }
+  return fetch("/api/dialer/handoff",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({crmIds:ids,label:label})})
+    .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error||"Could not open the Dialer"); return d; }); })
+    .then(function(d){
+      if(!d.list||!d.callable){ crmToast("None of these contacts has a callable number in the Dialer yet"); return; }
+      var target="/dialer?view=contacts&list="+encodeURIComponent(d.list.id);
+      if(window.parent!==window) window.parent.postMessage({type:"app-navigate",tab:"dialer",src:target},location.origin);
+      else location.href=target;
+    })
+    .catch(function(e){ crmToast(e.message); });
+}
+window.openInDialer=openInDialer;
 function renderLeads(){
   document.getElementById("lnAll").textContent=LEADS.length.toLocaleString();
   /* Both of these counted a single hardcoded source into an element that no
@@ -3069,10 +3134,7 @@ function renderLeads(){
   /* Archived and trashed contacts drop out of the default view but are NOT
      gone: filter for that status and they come straight back. Nothing here
      deletes a record. */
-  const hidingParked=!(ADV&&ADV.status&&(ADV.status.indexOf("archived")>=0||ADV.status.indexOf("trashed")>=0));
-  const src=sortRows(LEADS
-    .filter(l=>!hidingParked||["archived","trashed"].indexOf(l.statusDisp||l.crmStatus)<0)
-    .filter(leadBucketPred).filter(leadSmartPred).filter(advPred).filter(hitRow),"leads");
+  const src=leadsInView();
   const total=src.length;
   document.getElementById("ltCount").textContent="("+total.toLocaleString()+")";
   const pages=Math.max(1,Math.ceil(total/PER));
@@ -3262,6 +3324,13 @@ document.querySelectorAll('.leads-nav a[data-bucket]').forEach(a=>a.addEventList
   renderPeople();
 }));
 
+(function(){
+  var b=document.getElementById("leadsCallBtn"); if(!b)return;
+  b.addEventListener("click",function(){
+    b.disabled=true;
+    openInDialer(leadsInView().map(function(l){return l.id;}),leadsViewLabel()).then(function(){ b.disabled=false; });
+  });
+})();
 // Smart Filters expand/collapse in the Leads sidebar.
 (function(){var t=document.getElementById("smartFiltersToggle"),l=document.getElementById("smartFiltersList");
   if(t&&l)t.addEventListener("click",function(){l.style.display=l.style.display==="none"?"block":"none";});})();
@@ -3938,6 +4007,10 @@ document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("on"));
   var viewEl=document.getElementById("view-"+v);
   if(viewEl) viewEl.classList.add("on");
+  if(v==="tx"||v==="reporting"||v==="finance"){
+    document.querySelectorAll('.rail .r[data-view="tx"]').forEach(x=>x.classList.add("on"));
+    document.querySelectorAll("[data-bsec]").forEach(x=>{var on=x.getAttribute("data-bsec")===v;x.classList.toggle("on",on);x.setAttribute("aria-selected",String(on));});
+  }
   if(v==="email") renderEmail();
   if(v==="tracker"){
     const f=document.getElementById("trackerFrame");
@@ -3948,6 +4021,13 @@ document.querySelectorAll(".rail .r[data-view]").forEach(b=>b.addEventListener("
     if(f && !f.getAttribute("src")) f.setAttribute("src", crmApi("/listings"));
   }
 }));
+/* Business folds Transactions, Reporting and Finance behind one rail button;
+   each keeps its own view and loaders, reached through the hidden rail buttons. */
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-bsec]"); if(!b)return;
+  var target=document.querySelector('.rail .r[data-view="'+b.getAttribute("data-bsec")+'"]');
+  if(target) target.click();
+});
 document.addEventListener("click",function(e){
   var btn=e.target.closest("[data-psec]"); if(!btn)return;
   openPeopleSection(btn.getAttribute("data-psec"));

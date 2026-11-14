@@ -3,7 +3,7 @@
  * Run after `npm run build`: node scripts/verify-tracker-dialer-bump.mjs
  */
 import assert from "assert";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -195,7 +195,7 @@ const buyerContacted = createTrackerRecord({
   buyerStage: "contacted",
 });
 
-check("Appointment Set bumps buyer to actively_showing", () => {
+check("Appointment Set bumps buyer to appointment_set", () => {
   const r = bumpTrackerFromDialerActivity({
     leadId: "lead_buyer_appt",
     outcome: "Appointment Set",
@@ -203,7 +203,25 @@ check("Appointment Set bumps buyer to actively_showing", () => {
     leadIntent: "buyer",
   });
   assert.equal(r.applied, true, JSON.stringify(r));
-  assert.equal(getTrackerRecord(buyerContacted.id).buyerStage, "actively_showing");
+  assert.equal(getTrackerRecord(buyerContacted.id).buyerStage, "appointment_set");
+});
+
+const buyerNotContacted = createTrackerRecord({
+  leadId: "lead_buyer_nc",
+  name: "Buyer Not Contacted",
+  sides: ["buyer"],
+  buyerStage: "not_contacted",
+});
+
+check("buyer Not contacted + Talked advances to contacted", () => {
+  const r = bumpTrackerFromDialerActivity({
+    leadId: "lead_buyer_nc",
+    outcome: "Talked",
+    source: "Dialer",
+    leadIntent: "buyer",
+  });
+  assert.equal(r.applied, true, JSON.stringify(r));
+  assert.equal(getTrackerRecord(buyerNotContacted.id).buyerStage, "contacted");
 });
 
 check("non-Dialer call source is ignored", () => {
@@ -234,7 +252,32 @@ check("planDialerBump never invents Closed", () => {
   const changes = planDialerBump(rec, "contacted", "buyer");
   assert.ok(changes.every((c) => c.to !== "closed"));
   const appt = planDialerBump({ ...rec, buyerStage: "contacted" }, "appointment", "buyer");
-  assert.ok(appt.every((c) => c.to === "actively_showing"));
+  assert.ok(appt.every((c) => c.to === "appointment_set"));
+});
+
+const { stageTrackerFromPhoneCapture } = await import("../dist/src/core/trackerEngagement.js");
+check("DM phone capture puts a new buyer on the Tracker at Not contacted", () => {
+  const r = stageTrackerFromPhoneCapture({ id: "lead_dm_phone", name: "DM Buyer", phone: "(210) 555-0199", crmIntent: "buyer" });
+  assert.equal(r.created, true);
+  const rec = getTrackerRecordByLead("lead_dm_phone");
+  assert.equal(rec.buyerStage, "not_contacted");
+  assert.ok(rec.stageMeta["buyer:not_contacted"]?.enteredAt);
+  assert.equal(stageTrackerFromPhoneCapture({ id: "lead_dm_none", name: "No Phone", phone: "" }), null);
+});
+
+check("DM phone capture never moves a staged side; seller intent stages seller New", () => {
+  const again = stageTrackerFromPhoneCapture({ id: "lead_buyer_appt", name: "Buyer Contacted", phone: "2105550100" });
+  assert.deepEqual(again.changed, []);
+  assert.equal(getTrackerRecordByLead("lead_buyer_appt").buyerStage, "appointment_set");
+  stageTrackerFromPhoneCapture({ id: "lead_dm_seller", name: "DM Seller", phone: "2105550111", crmIntent: "seller" });
+  const seller = getTrackerRecordByLead("lead_dm_seller");
+  assert.deepEqual(seller.sides, ["seller"]);
+  assert.equal(seller.sellerStage, "new");
+});
+
+check("pipeline stages Tracker on new DM phone", () => {
+  const src = readFileSync(new URL("../src/app/pipeline.ts", import.meta.url), "utf8");
+  assert.match(src, /if \(hasNewPhone\) \{[\s\S]{0,200}stageTrackerFromPhoneCapture\(lead\)/);
 });
 
 getTrackerDb().close();

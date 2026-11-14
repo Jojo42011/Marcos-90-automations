@@ -91,6 +91,16 @@ ok("General folder for ungrouped docs", /ensure\("general","General"\)/.test(htm
 
 // 9. Website webhook
 ok("websiteWebhook module refuses when secret unset", /websiteSecretConfigured/.test(websiteWh));
+// Navigation per Marco's call: Nurture lives in the Tracker; Business groups TX/Reporting/Finance.
+ok("no Nurture rail button", !/class="r[^"]*" data-view="nurture"/.test(html));
+ok("Business rail opens Transactions", /data-view="tx" title="Business · Transactions, Reporting, Finance"/.test(html));
+ok("Reporting/Finance rail buttons hidden behind Business tabs",
+  /data-view="reporting"[^>]*style="display:none"[^>]*data-business="reporting"/.test(html) &&
+  /data-view="finance"[^>]*style="display:none"[^>]*data-business="finance"/.test(html));
+ok("Business tabs in all three views", (html.match(/class="business-subtabs" role="tablist"/g) || []).length === 3);
+ok("Leads list hands off to the Dialer", /id="leadsCallBtn"/.test(html) && /function openInDialer\(/.test(html) &&
+  /\/api\/dialer\/handoff/.test(html) && /app-navigate/.test(html));
+
 ok("website secret compared via timingSafeEqual", /timingSafeEqual/.test(websiteWh));
 ok("website source is Website", /source:\s*"Website"/.test(websiteWh));
 ok("server mounts POST /api/website/lead", /app\.post\(\s*"\/api\/website\/lead"/.test(server));

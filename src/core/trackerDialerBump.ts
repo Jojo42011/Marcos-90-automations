@@ -4,7 +4,7 @@
  * When the Dialer logs a call through /api/crm/lead/:id/activity, move a
  * tracker row forward from real contact evidence only:
  *   - Talked / answered → Contacted (never Closed)
- *   - Appointment Set   → seller listing_appointment_set / buyer actively_showing
+ *   - Appointment Set   → seller listing_appointment_set / buyer appointment_set
  *
  * Forward-only: a side already further along is left alone. When the Dialer
  * logs Talked/Appointment and no tracker row exists yet, one is created for
@@ -148,7 +148,7 @@ export function resolveBumpSides(
 export function targetStageForKind(side: TrackerSide, kind: DialerBumpKind): string | null {
   if (kind === "contacted") return "contacted";
   if (kind === "appointment") {
-    return side === "seller" ? "listing_appointment_set" : "actively_showing";
+    return side === "seller" ? "listing_appointment_set" : "appointment_set";
   }
   return null;
 }
@@ -164,12 +164,14 @@ export function planDialerBump(
     const target = targetStageForKind(side, kind);
     if (!target) continue;
     const current = side === "buyer" ? rec.buyerStage : rec.sellerStage;
-    // Talked: only when unstaged (empty) OR seller still at pipeline "new".
-    // Appointment: empty or earlier than the appointment-equivalent step.
+    // Talked: only from unstaged or the side's entry stage (seller New, buyer
+    // Not Contacted). Appointment: empty or earlier than the appointment step.
     if (kind === "contacted") {
       const unstaged = !current;
-      const sellerNew = side === "seller" && current === "new";
-      if (!unstaged && !sellerNew) continue;
+      const atEntry =
+        (side === "seller" && current === "new") ||
+        (side === "buyer" && current === "not_contacted");
+      if (!unstaged && !atEntry) continue;
       if (!canAdvanceStage(side, current, target)) continue;
     } else if (!canAdvanceStage(side, current, target)) {
       continue;

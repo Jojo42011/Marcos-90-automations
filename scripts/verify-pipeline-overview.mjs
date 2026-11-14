@@ -1,5 +1,5 @@
 /**
- * CRM Overview: buyer Views→Close (no Call) / seller Call→Close.
+ * CRM Overview: buyer Views→Close (no Call) / seller Dialer talk time→Sold.
  * Run after `npm run build`: node scripts/verify-pipeline-overview.mjs
  */
 import assert from "assert";
@@ -10,6 +10,14 @@ import { join } from "node:path";
 const tmp = mkdtempSync(join(tmpdir(), "pipe-ov-"));
 process.env.TRACKER_DB_PATH = join(tmp, "tracker.db");
 process.env.DB_JSON_PATH = join(tmp, "db.json");
+process.env.SHARED_DIALER_DB_PATH = join(tmp, "shared-dialer.db");
+writeFileSync(
+  join(tmp, "users.json"),
+  JSON.stringify([
+    { id: "u_marco", name: "Marco Puga", email: "marco@example.test", role: "admin" },
+    { id: "u_wes", name: "Wesley", email: "wes@example.test", role: "agent" },
+  ]),
+);
 writeFileSync(
   join(tmp, "db.json"),
   JSON.stringify({
@@ -87,6 +95,17 @@ writeFileSync(
 );
 
 const { createTrackerRecord, listTrackerRecords, getTrackerDb } = await import("../dist/src/core/trackerStore.js");
+const { dialerStore } = await import("../dist/src/dialer/store.js");
+const daysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString();
+const dial = dialerStore();
+for (const [id, actorId, outcome, elapsedSeconds, endedAt] of [
+  ["c1", "u_marco", "talked", 120, daysAgo(1)],
+  ["c2", "u_wes", "appointment_set", 300, daysAgo(2)],
+  ["c3", "u_wes", "no_answer", 30, daysAgo(3)],
+  ["c4", "u_wes", "interrupted", 5, daysAgo(3)],
+  ["c5", "u_wes", "talked", 60, daysAgo(60)],
+  ["c6", "u_marco", null, 0, undefined],
+]) dial.put("call", { id, actorId, outcome, elapsedSeconds, endedAt, startedAt: endedAt });
 const {
   agentKey,
   buildPipelineOverview,
@@ -167,13 +186,38 @@ createTrackerRecord({
   leadId: "lead_2",
 });
 createTrackerRecord({
+  name: "Old Wesley Sale",
+  sides: ["seller"],
+  assignedTo: "Wesley",
+  sellerStage: "closed",
+  stageMeta: { "seller:closed": { enteredAt: daysAgo(120) }, "seller:listing_appointment_set": { enteredAt: daysAgo(200) } },
+});
+createTrackerRecord({
+  name: "Backfilled Seller",
+  sides: ["seller"],
+  assignedTo: "Wesley",
+  sellerStage: "under_contract",
+  legacyStage: "under_contract",
+});
+const legacyBuyer = createTrackerRecord({ name: "Legacy Buyer", sides: ["buyer"], assignedTo: "Marco Puga" });
+getTrackerDb().prepare("UPDATE tracker_records SET buyer_stage='buyer_rep_signed' WHERE id=?").run(legacyBuyer.id);
+createTrackerRecord({
   name: "Unassigned Buyer",
   sides: ["buyer"],
   buyerStage: "contacted",
 });
 
 check("seeded tracker rows exist", () => {
-  assert.equal(listTrackerRecords({}).length, 3);
+  assert.equal(listTrackerRecords({}).length, 6);
+});
+
+check("legacy buyer stage keys read as the new ladder; new rows get entry stamps", () => {
+  const legacy = listTrackerRecords({}).find((r) => r.name === "Legacy Buyer");
+  assert.equal(legacy.buyerStage, "appointment_set");
+  const wes = listTrackerRecords({}).find((r) => r.name === "Wesley Seller");
+  assert.ok(wes.stageMeta["seller:listing_appointment_set"]?.enteredAt);
+  const backfill = listTrackerRecords({}).find((r) => r.name === "Backfilled Seller");
+  assert.equal(backfill.stageMeta["seller:under_contract"], undefined);
 });
 
 const all = await buildPipelineOverview({});
@@ -208,32 +252,67 @@ check("buyer appt set counts appointment_set / showing tracker", () => {
   assert.ok(showing.count >= 1); // lead_1 tracker actively_showing
 });
 
-check("overview all: seller funnel counts Wesley appointment", () => {
-  const sellers = all.sellers.steps.find((s) => s.key === "sellers");
-  const appt = all.sellers.steps.find((s) => s.key === "appointment");
-  assert.equal(sellers.count, 1);
-  assert.ok(appt.count >= 1);
+const step = (o, key) => o.sellers.steps.find((s) => s.key === key);
+check("seller funnel shape: Dialer metrics then stage steps, default 30-day window", () => {
+  assert.deepEqual(
+    all.sellers.steps.map((s) => s.key),
+    ["talk_time", "called", "conversations", "appt_set", "appt_show", "listed", "contract", "closed"],
+  );
+  assert.equal(all.sellers.window.key, "30d");
+  assert.equal(step(all, "talk_time").format, "duration");
+  assert.equal(step(all, "talk_time").rateFromPrev, null);
+  assert.equal(step(all, "called").rateFromPrev, null);
+  assert.equal(all.sellers.subtitle, "Talk time → Sold");
 });
 
-check("overview all: calls include both agents' call activities", () => {
-  const calls = all.sellers.steps.find((s) => s.key === "calls");
-  assert.equal(calls.count, 3);
+check("overview all: Dialer numbers skip interrupted, unfinished and out-of-window calls", () => {
+  assert.equal(step(all, "called").count, 3);
+  assert.equal(step(all, "talk_time").count, 450);
+  assert.equal(step(all, "conversations").count, 2);
+  assert.equal(step(all, "conversations").rateFromPrev, 66.7);
+});
+
+check("windowed seller stages use entry dates; undated backfills only count all time", () => {
+  assert.equal(step(all, "appt_set").count, 1);
+  assert.equal(step(all, "closed").count, 0);
+  assert.equal(step(all, "contract").count, 0);
+});
+
+const allTime = await buildPipelineOverview({ sellerWindow: "all" });
+check("all-time seller window counts every call and every staged row", () => {
+  assert.equal(allTime.sellers.window.since, null);
+  assert.equal(step(allTime, "called").count, 4);
+  assert.equal(step(allTime, "appt_set").count, 3);
+  assert.equal(step(allTime, "contract").count, 2);
+  assert.equal(step(allTime, "closed").count, 1);
+  assert.equal(step(allTime, "closed").label, "Sold");
+});
+
+const { resolveSellerWindow } = await import("../dist/src/core/pipelineOverview.js");
+check("seller windows: unknown falls back to 30d; month starts at Chicago midnight", () => {
+  assert.equal(resolveSellerWindow("bogus").key, "30d");
+  const w = resolveSellerWindow("month", new Date("2026-11-14T18:00:00Z"));
+  assert.equal(w.since, "2026-11-01T05:00:00.000Z");
+  const summer = resolveSellerWindow("month", new Date("2026-07-03T03:00:00Z"));
+  assert.equal(summer.since, "2026-07-01T05:00:00.000Z");
+  const edge = resolveSellerWindow("month", new Date("2026-12-01T03:00:00Z"));
+  assert.equal(edge.since, "2026-11-01T05:00:00.000Z");
 });
 
 const marco = await buildPipelineOverview({ agent: "Marco Puga" });
 check("Marco filter excludes Wesley seller + unassigned tracker", () => {
   assert.equal(marco.sellers.inPipeline, 0);
-  const calls = marco.sellers.steps.find((s) => s.key === "calls");
-  assert.equal(calls.count, 1);
+  assert.equal(step(marco, "called").count, 1);
+  assert.equal(step(marco, "talk_time").count, 120);
   const dms = marco.buyers.steps.find((s) => s.key === "dms");
   assert.equal(dms.count, 2);
 });
 
 const wes = await buildPipelineOverview({ agent: "Wesley" });
 check("Wesley filter keeps his seller + calls; no Marco social Views", () => {
-  assert.equal(wes.sellers.inPipeline, 1);
-  const calls = wes.sellers.steps.find((s) => s.key === "calls");
-  assert.equal(calls.count, 2);
+  assert.equal(wes.sellers.inPipeline, 3);
+  assert.equal(step(wes, "called").count, 2);
+  assert.equal(step(wes, "conversations").count, 1);
   const dms = wes.buyers.steps.find((s) => s.key === "dms");
   assert.equal(dms.count, 0);
   assert.equal(wes.buyers.steps.find((s) => s.key === "views"), undefined);
@@ -244,7 +323,8 @@ const none = await buildPipelineOverview({ agent: AGENT_FILTER_NONE });
 check("empty agent pick zeros the funnel (unselect Marco must not show All)", () => {
   assert.equal(none.buyers.steps.find((s) => s.key === "dms").count, 0);
   assert.equal(none.buyers.steps.find((s) => s.key === "number").count, 0);
-  assert.equal(none.sellers.steps.find((s) => s.key === "calls").count, 0);
+  assert.equal(step(none, "called").count, 0);
+  assert.equal(step(none, "talk_time").count, 0);
   assert.equal(none.sellers.inPipeline, 0);
   assert.equal(none.buyers.steps.find((s) => s.key === "views"), undefined);
 });

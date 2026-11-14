@@ -270,9 +270,9 @@ try {
       by["Persons Called"].n === 3, JSON.stringify(by["Persons Called"]));
     ok("Appointments Set counts appointments created", by["Appointments Set"].n === 3, JSON.stringify(by["Appointments Set"]));
     ok("Appointments Held counts only the completed ones", by["Appointments Held"].n === 2, JSON.stringify(by["Appointments Held"]));
-    /* Cumulative and across BOTH pipelines: two buyers are at or past Buyer Rep
-       Signed, one seller is at or past Listing Agreement Signed. */
-    ok("Signed comes from the pipeline stages, cumulative across both", by["Signed"].n === 3, JSON.stringify(by["Signed"]));
+    /* The buyer ladder has no signed stage, so Signed is the one seller at or
+       past Listing Agreement Signed. */
+    ok("Signed comes from the seller pipeline stages, cumulative", by["Signed"].n === 1, JSON.stringify(by["Signed"]));
     ok("Sold counts both pipelines' closed records", by["Sold"].n === 2, JSON.stringify(by["Sold"]));
     ok("every row names where its number came from",
       r.every((x) => x.src.length > 0), JSON.stringify(r.map((x) => x.src)));

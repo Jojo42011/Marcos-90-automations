@@ -510,7 +510,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "crm_api",
     description:
-      "Call the CRM dashboard's own API — the same endpoints the CRM / Command Center pages use, so anything a person can do there, you can do here: listing alerts, market reports, Auto Plan enrolments, tasks and appointments, transactions and agreements, contact addresses and documents, tags and sources, CMA sessions, sending a text from a contact's profile, TikTok/DM Agent conversations (/api/dm/...), Analytics pulls, and reading or filing a Knowledge Center document. Use purpose-built tools (get_social_summary, get_social_analytics, update_lead, create_task, search_leads, schedule_message) when one fits — they are clearer and validate their input. Use this for everything else. For dashboard counts use select=[\"totals\",\"accountSummaries\"] to retrieve complete compact figures instead of thousands of lead records. For a contact, GET /api/crm/lead/:id/brief returns owner-scoped DM, SMS, notes, call activity, tasks and coverage; POST the same path generates evidence-linked next steps without taking action. For the shared Operations Dialer, GET /api/dialer/guide gives the exact session, list, import, assignment, appointment and number schemas; GET /api/dialer/overview gives team activity. This shared dialer is an explicit exception to private CRM scope. Quo cannot initiate calls or buy numbers through this API; do not claim otherwise. Call crm_api_index first to find the path; never invent one. GET is free; POST/PATCH/PUT/DELETE CHANGE REAL DATA belonging to real clients, so say what you are about to change and get the operator's agreement before you send one. If the response is an error, report it as it is — never describe a change as done because you called the tool.",
+      "Call the CRM dashboard's own API — the same endpoints the CRM / Command Center pages use, so anything a person can do there, you can do here: listing alerts, market reports, Auto Plan enrolments, tasks and appointments, transactions and agreements, contact addresses and documents, tags and sources, CMA sessions, sending a text from a contact's profile, TikTok/DM Agent conversations (/api/dm/...), Analytics pulls, and reading or filing a Knowledge Center document. Use purpose-built tools (get_social_summary, get_social_analytics, update_lead, create_task, search_leads, schedule_message) when one fits — they are clearer and validate their input. Use this for everything else. For dashboard counts use select=[\"totals\",\"accountSummaries\"] to retrieve complete compact figures instead of thousands of lead records. For a contact, GET /api/crm/lead/:id/brief returns owner-scoped DM, SMS, notes, call activity, tasks and coverage; POST the same path generates evidence-linked next steps without taking action. For the shared Operations Dialer, GET /api/dialer/guide gives the exact session, list, import, assignment, appointment, CRM handoff, Appointments group, Tracker promote, listing-detail prefs and number schemas; GET /api/dialer/overview gives team activity. This shared dialer is an explicit exception to private CRM scope. Quo cannot initiate calls or buy numbers through this API; do not claim otherwise. Call crm_api_index first to find the path; never invent one. GET is free; POST/PATCH/PUT/DELETE CHANGE REAL DATA belonging to real clients, so say what you are about to change and get the operator's agreement before you send one. If the response is an error, report it as it is — never describe a change as done because you called the tool.",
     input_schema: {
       type: "object",
       properties: {
@@ -648,13 +648,18 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_pipeline_overview",
     description:
-      "CRM Overview funnels: buyers Views→Comments→DMs→Number→Appt set→Appt show→Showing→U/C→Closed (no Call) and sellers Call→Close. Optional agent filter (Marco / Wesley / Carlos). Buyer top steps use social + DM/phone counts; people steps combine CRM stages and Tracker. Seller steps are Tracker + call activity. Same numbers as the CRM Dashboard Overview tab.",
+      "CRM Overview funnels: buyers Views→Comments→DMs→Number→Appt set→Appt show→Showing→U/C→Closed (no Call) and sellers Talk time→Numbers called→Conversations→Appts set→Appts shown→Listed/signed→Under contract→Sold. Optional agent filter (Marco / Wesley) and seller window (7d, 30d default, month, 90d, all). Buyer top steps use social + DM/phone counts; people steps combine CRM stages and Tracker. Seller Dialer steps come from saved Dialer outcomes (talk time is the logged span from opening the phone app to saving the outcome, not carrier duration); seller stage steps count Tracker stage entries inside the window. Same numbers as the CRM Dashboard Overview tab.",
     input_schema: {
       type: "object",
       properties: {
         agent: {
           type: "string",
           description: "Optional. One agent name, or comma-separated (e.g. 'Marco Puga' or 'Wesley'). Omit for all.",
+        },
+        sellerWindow: {
+          type: "string",
+          enum: ["7d", "30d", "month", "90d", "all"],
+          description: "Optional seller card window. Defaults to 30d; month is the current calendar month in Central time.",
         },
       },
       required: [],
@@ -1501,7 +1506,10 @@ export async function executePlatformTool(
     }
 
     case "get_pipeline_overview": {
-      const overview = await buildPipelineOverview({ agent: str(input.agent) || null });
+      const overview = await buildPipelineOverview({
+        agent: str(input.agent) || null,
+        sellerWindow: str(input.sellerWindow) || null,
+      });
       return {
         ...overview,
         scope: "tracker",
