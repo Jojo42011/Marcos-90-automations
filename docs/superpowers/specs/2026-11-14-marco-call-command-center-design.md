@@ -11,19 +11,21 @@ The call spans **independent tracks**. Superpowers rule: one spec → one plan �
 
 | Wave | Track | External dependency? | Ships without ops? |
 | --- | --- | --- | --- |
-| **1** | Seller dial metrics + Overview seller funnel | No | Yes |
-| **1** | Dialer Mojo-style session profile (from fields we have + CSV/import extras) | Partial (rich MLS fields need listing link) | Yes for core card |
-| **1** | Buyer Tracker stage vocabulary → call’s short pipeline | No | Yes |
-| **1** | Overview buyer social % conversion chips | No | Yes |
-| **1** | Hide Lead Nurture rail; soft-merge Finance/Reporting/TX nav | No | Yes (IA only) |
+| **1** | Seller dial metrics + Overview seller funnel (honest Dialer/Tracker counts — no fabricated CRM Reporting ratios) | No | Yes |
+| **1** | Dialer Mojo-style session profile (mapped SimplyRETS/`raw` + CSV; skip tax/owner/expire if absent) | Partial | Yes for core card |
+| **1** | Overview buyer social % chips + Tracker/Overview **label** pass toward call ladder | No | Yes |
+| **1** | Hide Lead Nurture rail; soft Finance/Reporting/TX nav | No | Yes (IA only) |
 | **1** | Dialer groups: remove from call queue without deleting CRM | No | Yes |
-| **2** | Follow-up one-at-a-time dialer from Due today / smart filters | No | Yes |
-| **2** | Intentional “Move to CRM/Tracker” from Dialer + stage sync | No | Yes |
+| **1** | Follow-up handoff: CRM Due today / smart filter → Dialer session (`due` queue already exists) | No | Yes |
+| **2** | Buyer Tracker **key** remap/migration (not_contacted / nurture / appt_show as first-class keys) | No | Yes — large |
+| **2** | Intentional “Move to CRM/Tracker” + stage sync polish | No | Yes |
 | **2** | Per-user Dialer profile field prefs | No | Yes |
 | **3** | Expired MLS ingest into Dialer | Yes — MLS provider / SimplyRETS expired | Blocked until source |
 | **3** | Triple-line power dial | Yes — telephony beyond Quo `tel:` | Blocked |
 | **3** | Reverse-prospect TikTok → legal name | Yes — Forewarn/TruePeopleSearch etc. | Blocked |
 | **Ops** | Wesley Quo/onboarding; optional CRM wipe for clean buyer tracking | People/process | Not code-first |
+
+**Master audit note (2026-11-14):** Wave 1 buyer work is **labels + social %**, not a stage-key rewrite (that’s large / Wave 2). Talk time = Dialer session timer, not carrier CDR.
 
 **Recommended first implementation cycle after approval:** **Wave 1 only** (one branch/PR or a thin stack of 2 PRs if CRM IA is split). Wave 2 next. Wave 3 only after a sourcing/telephony decision.
 
@@ -132,51 +134,43 @@ Extend `shared-dialer.db` contact/listing projection, Overview `pipelineOverview
 
 **Tests:** import CSV with MLS columns → contact detail GET returns them; session panel markup hooks in verify.
 
-### 3.3 Buyer Tracker stages (call vocabulary)
+### 3.3 Buyer Overview % + Tracker **labels** (no key migration in Wave 1)
 
-Marco/Carlos agreed Tracker buyer flow:
+Marco/Carlos agreed display ladder:
 
-`not_contacted` → `contacted` → `nurture` → `appointment_set` → `appointment_show` → `showing` → `under_contract` → `closed`
+`Not contacted` → `Contacted` → `Nurture` → `Appt set` → `Appt show` → `Showing` → `U/C` → `Close`
 
-**Today:** long `BUYER_STAGES` (qualified, pre_approved, buyer_rep_signed, …).
+**Wave 1 (small):**
+- Surface `rateFromPrev` on Overview **social/DM** steps (Views→Comments→DMs→Numbers), not only people steps
+- Relabel Tracker/Overview columns to the call vocabulary via a **display map** over existing keys (e.g. unstaged → Not contacted; `buyer_rep_signed` → Appt set; `actively_showing` → Showing). Do **not** rewrite `BuyerStage` enum / migrate SQLite in Wave 1
 
-**Design:**
-- Introduce **Overview/Tracker display ladder** mapped from existing keys (minimize data migration pain):
-  - not_contacted = unstaged / no buyerStage
-  - contacted = `contacted` (ensure key exists or map from engagement)
-  - nurture = map from `qualified` or add `nurture` key
-  - appointment_set = `buyer_rep_signed` (current Overview mapping) **or** new key
-  - appointment_show = CRM `met_with` / new key
-  - showing = `actively_showing`
-  - under_contract / closed = existing
-
-**Prefer:** add missing keys (`not_contacted` as absence, `nurture`, `appointment_set`, `appointment_show`) and **hide** unused long stages in Tracker UI + Overview deep-links; keep old keys readable for legacy rows (forward-only bumps still work).
-
-**Inbound DM:** when phone captured, land Tracker buyer at **not_contacted** (unstaged) not jumped to contacted — align `trackerEngagement` with call (today auto-bumps Unstaged→Contacted on engagement; confirm with product: call said first slot is not contacted when number arrives from DM).
-
-**Decision to confirm on review:** On first DM phone capture, should Tracker create as **not_contacted** (unstaged) and only move to **contacted** after a human/Dialer outcome? Spec assumes **yes**.
+**Wave 2 (large):** first-class keys + engagement rules (phone capture stays **not contacted** until human/Dialer marks contacted) — confirm then.
 
 ### 3.4 CRM IA cleanup (soft)
 
 - Hide `data-view="nurture"` rail button (keep route for 2 weeks if needed; no new work)
-- Rail: keep Transactions; nest Reporting + Finance under one “Business” view **or** single iframe host with tabs — **minimal Wave 1:** hide Nurture only; add “Business” stub that iframes reporting with finance subtab **if** low risk — else Wave 2
 - **Wave 1 minimum:** hide Nurture + stop linking `/lead-nurture` from shell if present
+- Soft-merge Finance/Reporting/TX deferred unless trivial; otherwise Wave 2
 
 ### 3.5 Dialer groups / leave call list
 
-- Existing Dialer **groups** + list membership already exist
-- Add action: **“Remove from this queue/list”** (membership delete) without archiving CRM contact
-- Add action: **“Move to group: Appointments”** (create system group if missing)
-- Outcome `appointment_set` optionally auto-removes from active Mojo/due session queue going forward (membership), does **not** delete contact
+- Existing Dialer **groups** + list membership already exist (`POST /lists/:id/members {remove:true}`)
+- Clarify UX: **“Remove from this queue/list”** without archiving CRM; **“Move to group: Appointments”**
+- Outcome `appointment_set` optionally auto-removes from active Mojo/due list membership
+
+### 3.6 Follow-up handoff (Due today / smart filters → Dialer)
+
+- `due` smart queue already exists; CRM `view=followup` already deep-links to Dialer
+- Wave 1: wire People/Smart Filter “Call this list” → `/dialer?view=contacts&queue=due` (or session start with filtered contactIds) so Marco’s Brivity-style one-at-a-time follow-up works without reopening CRM Dialer
 
 ---
 
 ## 4. Wave 2 design (next cycle)
 
-1. **Follow-up dialer:** Start session from smart queue `due` already exists; add CRM Smart Filter → Dialer handoff (`?queue=due` + filter id) and Brivity-like next/notes UX polish on session panel  
+1. Buyer Tracker **key** remap/migration + phone-capture → not_contacted rule  
 2. **Move to CRM/Tracker** explicit button with side + stage  
-3. **Profile field prefs** in account preferences (show/hide Mojo fields)  
-4. Harder Finance/Reporting/TX merge (one Astryx or CRM view)
+3. **Profile field prefs** in account preferences  
+4. Harder Finance/Reporting/TX merge
 
 ---
 
@@ -214,12 +208,12 @@ Marco/Carlos agreed Tracker buyer flow:
 
 ## 8. Success criteria (Wave 1)
 
-Marco can open Overview and see **seller talk time + conversion chain**, open Dialer session and see a **richer property/contact card** (from CRM + imported MLS columns), use **groups to pull booked leads off the dial list**, see **buyer Tracker stages** matching the short call vocabulary, and **no Lead Nurture tab**. Expired auto-feed and triple dial remain explicit follow-ups.
+Marco can open Overview and see **seller talk time + conversion chain**, open Dialer session and see a **richer property/contact card** (from CRM + imported MLS columns), use **groups to pull booked leads off the dial list**, see **buyer labels + social %** matching the call vocabulary (keys unchanged), start a **Due today / smart-filter Dialer session** from CRM, and see **no Lead Nurture tab**. Expired auto-feed and triple dial remain explicit follow-ups.
 
 ---
 
 ## Review asks
 
-1. Approve Wave 1 scope as above?  
-2. Confirm phone-capture → Tracker starts at **not_contacted** (not auto-contacted)?  
-3. Prefer **one PR for all Wave 1** or split **metrics/Overview** vs **Dialer profile/groups**?
+1. Approve Wave 1 scope as above (labels-first buyer stages; follow-up handoff in Wave 1)?  
+2. Defer phone-capture → **not_contacted** rule to Wave 2 with the key remap?  
+3. Prefer **one PR** for all Wave 1, or split **Overview/metrics** vs **Dialer profile/groups**?

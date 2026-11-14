@@ -1,8 +1,8 @@
-# Wave 1 — Seller metrics, Dialer profile, buyer stages, IA cleanup
+# Wave 1 — Seller metrics, Dialer profile, buyer labels, follow-up handoff, IA cleanup
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans after the human approves the design. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship Marco’s call asks that do **not** need new MLS/telephony vendors: seller dial→close metrics, richer Dialer session card, shortened buyer Tracker vocabulary, Overview %, hide Nurture, Dialer remove-from-list/groups.
+**Goal:** Ship Marco’s call asks that do **not** need new MLS/telephony vendors: seller dial→close metrics, richer Dialer session card, Overview social %, buyer **label** pass (no stage-key migration), hide Nurture, Dialer remove-from-list/groups, Due today / smart-filter → Dialer handoff.
 
 **Architecture:** Extend Dialer contact projection + CSV columns; aggregate Dialer calls/sessions with Tracker seller stages into Overview; remap buyer Tracker display ladder; small CRM rail IA change.
 
@@ -72,18 +72,27 @@
 - [ ] **Step 2:** Optional: on `appointment_set` outcome, remove from current list membership if `listId`/`queue` was mojo/due session source list.
 - [ ] **Step 3:** Pass + commit.
 
-### Task 5: Buyer Tracker stage vocabulary
+### Task 5: Buyer Overview % + Tracker/Overview label map
 
 **Files:**
-- Modify: `src/core/types.ts` (`BUYER_STAGES` / `BuyerStage`)
-- Modify: `src/core/trackerDialerBump.ts`, `trackerEngagement.ts`, `pipelineOverview.ts` mappings
-- Modify: `public/tracker.html` (or Astryx tracker) stage columns/labels
-- Test: tracker + dialer bump + pipeline overview verifies
+- Modify: Overview funnel paint (`public/crm-brivity.html` or current host)
+- Modify: Tracker column labels via display map (prefer UI map over `BuyerStage` enum change)
+- Test: growth/pipeline overview UI verifies
 
-- [ ] **Step 1:** Failing tests for new/visible stage order: not_contacted (unstaged), contacted, nurture, appointment_set, appointment_show, showing, under_contract, closed.
-- [ ] **Step 2:** Map legacy stages; hide unused columns in UI.
-- [ ] **Step 3:** Align phone-capture → create/unstaged **not_contacted** (per approved spec).
-- [ ] **Step 4:** Pass + commit.
+- [ ] **Step 1:** Failing assert social steps show `%` from `rateFromPrev`; Tracker shows call vocabulary labels.
+- [ ] **Step 2:** Implement display map; **do not** migrate SQLite stage keys in Wave 1.
+- [ ] **Step 3:** Pass + commit.
+
+### Task 5b: Smart filter / Due today → Dialer handoff
+
+**Files:**
+- Modify: `public/crm-brivity.html` (People/smart filter call action)
+- Reuse: `/dialer?queue=due` + session start with `contactIds` when filter set is known
+- Test: verify-crm-command-center or dialer workspace string/API checks
+
+- [ ] **Step 1:** Failing assert for handoff URL / postMessage to Dialer with queue or ids.
+- [ ] **Step 2:** Wire “Call list” from Due today / selected smart filter.
+- [ ] **Step 3:** Pass + commit.
 
 ### Task 6: Hide Lead Nurture (+ soft IA note)
 
@@ -110,6 +119,7 @@
 
 ## Deferred (do not implement in Wave 1)
 
+- Buyer Tracker **key** remap / phone-capture not_contacted rule (Wave 2)
 - Expired MLS auto-ingest, triple-line dial, reverse prospect
 - Full Finance/Reporting/TX merge UI
 - Profile field preference editor
@@ -122,6 +132,7 @@
 | 3.1 Seller metrics | T1–T2 |
 | 3.2 Profile card | T3 |
 | 3.5 Groups | T4 |
-| 3.3 Buyer stages | T5 |
+| 3.3 Buyer labels + % | T5 |
+| 3.6 Follow-up handoff | T5b |
 | 3.4 Nurture hide | T6 |
 | Docs / Harvey | T7 |
