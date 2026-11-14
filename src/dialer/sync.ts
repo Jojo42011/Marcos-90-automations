@@ -9,7 +9,10 @@ import {
 } from "../core/db.js";
 import { getTasks, createTask, updateTask } from "../core/tasks.js";
 import { FunnelStage } from "../core/state.js";
-import { bumpTrackerFromDialerActivity } from "../core/trackerDialerBump.js";
+import { bumpTrackerFromDialerActivity, canAdvanceStage } from "../core/trackerDialerBump.js";
+import { createTrackerRecord, getTrackerRecordByLead, setTrackerStage, updateTrackerRecord } from "../core/trackerStore.js";
+import type { TrackerSide } from "../core/types.js";
+import { propertyFromMls } from "./property.js";
 import {
   isQuoConfigured,
   listPhoneNumbers,
@@ -124,6 +127,33 @@ async function sync() {
             ...(event.dnc ? ["do-not-call"] : []),
           ],
         });
+      if (event.type === "promote") {
+        const sides = (event.sides || []).filter((x: string) => x === "buyer" || x === "seller") as TrackerSide[];
+        const stageFor = (side: TrackerSide) => (side === "buyer" ? event.buyerStage : event.sellerStage) || undefined;
+        let rec = getTrackerRecordByLead(lead.id);
+        if (!rec)
+          createTrackerRecord({
+            leadId: lead.id,
+            name: lead.name || c.name,
+            phone: lead.phone || c.phone || undefined,
+            email: lead.email || c.email || undefined,
+            address: lead.address || c.address || undefined,
+            source: lead.source || c.source || "Dialer",
+            assignedTo: lead.assignedUserName || undefined,
+            sides,
+            buyerStage: stageFor("buyer") as never,
+            sellerStage: stageFor("seller") as never,
+          });
+        else {
+          const added = sides.filter((x) => !rec!.sides.includes(x));
+          if (added.length) rec = updateTrackerRecord(rec.id, { sides: [...rec.sides, ...added] }) || rec;
+          for (const side of sides) {
+            const target = stageFor(side);
+            const current = side === "buyer" ? rec.buyerStage : rec.sellerStage;
+            if (target && canAdvanceStage(side, current, target)) setTrackerStage(rec.id, side, target);
+          }
+        }
+      }
       if (event.type === "assignment")
         upsertLeadQuiet({
           ...lead,
@@ -223,6 +253,7 @@ async function sync() {
         tags: [...tags],
         crmStatus: lead.crmStatus || "new",
         crmCallQueue: lead.crmCallQueue || "none",
+        property: { ...(old?.property || {}), ...(propertyFromMls(lead.mlsListingKey) || {}) },
         createdAt: old?.createdAt || lead.createdAt,
         updatedAt: lead.updatedAt,
       });

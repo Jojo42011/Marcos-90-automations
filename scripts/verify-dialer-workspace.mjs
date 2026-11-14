@@ -303,6 +303,87 @@ try {
     ),
     true,
   );
+  // Mojo/MLS columns land on contact.property; only present columns fill fields.
+  const mojoList = (await api("/lists", { name: "Mojo expireds", kind: "list" })).list;
+  const mojoCsv =
+    "Owner Name,Phone,Address,Status,Expired Date,List Price,DOM,MLS #,Subdivision,Listing Agent\n" +
+    "Pat Owner,5125550301,9 Oak St,Expired,2026-10-30,425000,118,1789001,Stone Oak,Jane Agent";
+  const mojoPreview = await api("/import", { csv: mojoCsv, source: "Mojo", listId: mojoList.id, apply: false });
+  assert.deepEqual(mojoPreview.propertyFields, ["status", "expireDate", "listPrice", "daysOnMarket", "mlsId", "subdivision", "listAgent", "ownerName"]);
+  await api("/import", { csv: mojoCsv, source: "Mojo", listId: mojoList.id, apply: true });
+  const pat = store.contacts().find((x) => x.name === "Pat Owner");
+  assert.equal(pat.property.listPrice, "425000");
+  assert.equal(pat.property.status, "Expired");
+  assert.equal(pat.property.beds, undefined);
+  await syncDialer();
+  assert.equal(store.get("contact", pat.id).property.mlsId, "1789001");
+
+  // Per-caller session card fields.
+  const defaults = await api("/prefs");
+  assert(defaults.fields.includes("listPrice"));
+  assert.equal(defaults.catalog.length, 16);
+  assert.equal(defaults.trackerStages.buyer[0].key, "not_contacted");
+  assert.deepEqual((await api("/prefs", { fields: ["beds", "bogus", "listPrice"] }, "PUT")).fields, ["beds", "listPrice"]);
+  assert.deepEqual((await api("/prefs")).fields, ["beds", "listPrice"]);
+
+  // CRM selection → private, short-lived calling list.
+  const { accountReference } = require("../dist/src/core/accountFederation.js");
+  const handoff = await api("/handoff", {
+    crmIds: ["lead-due-1", accountReference("marco", "lead-mojo-1"), "lead-not-in-dialer"],
+    label: "Leads · Hot",
+  });
+  assert.equal(handoff.list.kind, "handoff");
+  assert.equal(handoff.list.count, 2);
+  assert.equal(handoff.list.missing, 1);
+  assert.equal(handoff.callable, 2);
+  assert((await api("/overview")).lists.some((l) => l.id === handoff.list.id && l.count === 2));
+  assert(!store.visibleLists("wesley").some((l) => l.id === handoff.list.id));
+  store.put("list", { ...store.get("list", handoff.list.id), createdAt: new Date(Date.now() - 2 * 86400000).toISOString() });
+  assert(!(await api("/overview")).lists.some((l) => l.id === handoff.list.id));
+  await api("/handoff", { crmIds: [] }, "POST", 400);
+
+  // Appointment Set moves the contact into Appointments and off the worked list.
+  const apptSession = (await api("/sessions", { listId: mojoList.id })).session;
+  const apptCall = (await api("/sessions/" + apptSession.id + "/calls", {})).call;
+  await api("/calls/" + apptCall.id + "/outcome", { outcome: "appointment_set" });
+  const apptGroup = store.all("list").find((l) => l.system === "appointments");
+  assert(apptGroup && apptGroup.kind === "group");
+  assert(store.members(apptGroup.id).includes(pat.id));
+  assert(!store.members(mojoList.id).includes(pat.id));
+  await api("/sessions/" + apptSession.id + "/action", { action: "end" });
+  const patDetail = await api("/contacts/" + pat.id);
+  assert.deepEqual(patDetail.groups.map((g) => g.system), ["appointments"]);
+  await api("/lists/" + mojoList.id + "/members", { contactIds: [dueContact.id] });
+  const moved = await api("/appointments-group/members", { contactIds: [dueContact.id], fromListId: mojoList.id });
+  assert.equal(moved.group.id, apptGroup.id);
+  assert(!store.members(mojoList.id).includes(dueContact.id));
+  assert(store.members(apptGroup.id).includes(dueContact.id));
+
+  // Promote queues a forward-only Tracker update in the owner's CRM.
+  const { getTrackerRecordByLead } = require("../dist/src/core/trackerStore.js");
+  const promoted = await api("/contacts/" + added.contact.id + "/promote", {
+    side: "both",
+    sellerStage: "contacted",
+    buyerStage: "nurture",
+  });
+  assert.equal(promoted.queued, true);
+  await syncDialer();
+  let tr = getTrackerRecordByLead(added.leadId);
+  assert.deepEqual([...tr.sides].sort(), ["buyer", "seller"]);
+  assert.equal(tr.sellerStage, "contacted");
+  assert.equal(tr.buyerStage, "nurture");
+  assert(tr.stageMeta["buyer:nurture"].enteredAt);
+  await api("/contacts/" + added.contact.id + "/promote", { side: "seller", sellerStage: "new" });
+  await syncDialer();
+  assert.equal(getTrackerRecordByLead(added.leadId).sellerStage, "contacted");
+  await api("/contacts/" + added.contact.id + "/promote", { side: "seller", sellerStage: "bogus" }, "POST", 400);
+  await api("/contacts/" + pat.id + "/promote", { side: "seller", sellerStage: "listing_appointment_set" });
+  await syncDialer();
+  tr = getTrackerRecordByLead(pat.crmId);
+  assert.equal(tr.sellerStage, "listing_appointment_set");
+  const guide = (await api("/guide")).operations;
+  assert(guide.handoff && guide.promote && guide.prefs && guide.appointmentsGroup);
+
   const dialerHtml = await (
     await fetch("http://127.0.0.1:" + server.address().port + "/dialer")
   ).text();
@@ -312,7 +393,7 @@ try {
   assert(/Calling queues|data-queue|queueId/.test(dialerHtml + dialerJs));
 
   console.log(
-    "PASS: auth, shared roster/private CRM, CSV preview/dedup, assignment, exclusive sessions, call replay, DNC and activity sync, timezone/conflicts, CRM task replay/completion, metrics, exports, Harvey guide, smart queues, add contact.",
+    "PASS: auth, shared roster/private CRM, CSV preview/dedup, assignment, exclusive sessions, call replay, DNC and activity sync, timezone/conflicts, CRM task replay/completion, metrics, exports, Harvey guide, smart queues, add contact, listing details, field prefs, CRM handoff lists, Appointments group, Tracker promote.",
   );
   if (process.argv.includes("--serve")) {
     const names = [

@@ -8,7 +8,10 @@ import {
   phoneKey,
   Contact,
   Session,
+  type DialerList,
 } from "./store.js";
+import { DEFAULT_PROPERTY_FIELDS, PROPERTY_CATALOG, isPropertyField } from "./property.js";
+import { BUYER_STAGES, SELLER_STAGES } from "../core/types.js";
 import { syncDialer } from "./sync.js";
 import {
   parseQueueId,
@@ -88,7 +91,7 @@ export function registerDialer(
       actor: { id: actor.id, name: actor.name },
       members: roster(),
       lists: s
-        .all("list")
+        .visibleLists(actor.id)
         .map((l) => ({ ...l, count: s.members(l.id).length })),
       sessionCounts: Object.fromEntries(
         sessions.map((s) => [
@@ -142,11 +145,19 @@ export function registerDialer(
       "Shared authenticated team prospecting. CRM ownership and private chats remain separate.",
     operations: {
       contacts:
-        "GET /contacts?q=&listId=&assignedTo=&duplicates=true&page=1; GET /contacts/:id includes shared notes and calls",
+        "GET /contacts?q=&listId=&assignedTo=&duplicates=true&page=1; GET /contacts/:id includes shared notes, calls, groups and property (listing details)",
       import:
-        "POST /import {csv,source,listId,apply:false} preview, then apply:true",
+        "POST /import {csv,source,listId,apply:false} preview, then apply:true. Mojo/MLS columns (status, expired date, list price, DOM, MLS #, property type, beds, baths, sqft, year built, subdivision, MLS area, listing agent/office, owner name, tax ID) fill contact.property",
       lists:
         "POST /lists {name,kind:list|group}; POST /lists/:id/members {contactIds,remove?:true}",
+      handoff:
+        "POST /handoff {crmIds,label} turns a CRM selection (plain or combined-view acct.* ids) into a private calling list for 24 hours; open /dialer?view=contacts&list=<id>",
+      appointmentsGroup:
+        "POST /appointments-group/members {contactIds,fromListId?} moves contacts into the team Appointments group and off fromListId. Saving appointment_set does this automatically for the session's list",
+      promote:
+        "POST /contacts/:id/promote {side:seller|buyer|both,sellerStage?,buyerStage?} queues a forward-only Tracker update in the contact owner's CRM",
+      prefs:
+        "GET /prefs returns {fields,catalog,trackerStages}; PUT /prefs {fields} chooses the listing details shown on your session card",
       assign:
         "PATCH /contacts/:id {assignedTo,dnc}; POST /assign {contactIds,assignedTo}",
       notes: "POST /contacts/:id/notes {text}",
@@ -220,8 +231,13 @@ export function registerDialer(
     const s = dialerStore(),
       contact = s.get("contact", String(req.params.id));
     if (!contact) fail("Contact not found", 404);
+    const groups = s
+      .all<DialerList>("list")
+      .filter((l) => l.kind !== "handoff" && s.members(l.id).includes(contact.id))
+      .map((l) => ({ id: l.id, name: l.name, kind: l.kind, system: l.system }));
     return {
       contact,
+      groups,
       notes: s.all("note").filter((n) => n.contactId === contact.id),
       calls: s
         .all("call")
@@ -324,6 +340,71 @@ export function registerDialer(
       address: lead.address || "",
     });
     return { contact, leadId: lead.id, trackerId: tracker?.id || null };
+  });
+  register("get", "/prefs", (_req, a) => {
+    const saved = dialerStore().get<{ fields?: string[] }>("prefs", a.id);
+    const fields = (saved?.fields || DEFAULT_PROPERTY_FIELDS).filter(isPropertyField);
+    const stages = (list: ReadonlyArray<{ key: string; label: string }>) =>
+      list.map(({ key, label }) => ({ key, label }));
+    return {
+      fields,
+      catalog: PROPERTY_CATALOG,
+      trackerStages: { buyer: stages(BUYER_STAGES), seller: stages(SELLER_STAGES) },
+    };
+  });
+  register("put", "/prefs", (req, a) => {
+    if (!Array.isArray(req.body.fields)) fail("Choose the fields to show.");
+    const fields = [...new Set(req.body.fields.filter(isPropertyField))];
+    dialerStore().put("prefs", { id: a.id, fields, updatedAt: now() });
+    return { fields };
+  });
+  register("post", "/handoff", async (req, a) => {
+    const ids = req.body.crmIds;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 2000)
+      fail("Send 1–2,000 CRM contacts.");
+    await syncDialer();
+    return dialerStore().handoff(a.id, ids, text(req.body.label, 80), tenantOwner() || a.id);
+  });
+  register("post", "/appointments-group/members", (req, a) => {
+    const s = dialerStore(),
+      ids = req.body.contactIds;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 1000)
+      fail("Select 1–1,000 contacts.");
+    return { group: s.moveToAppointments(a.id, ids.map((x: unknown) => text(x, 200)), text(req.body.fromListId)) };
+  });
+  register("post", "/contacts/:id/promote", (req, a) => {
+    const s = dialerStore(),
+      c = s.get<Contact>("contact", String(req.params.id));
+    if (!c || c.archived) fail("Contact not found", 404);
+    const side = text(req.body.side, 10);
+    const sides = side === "both" ? ["buyer", "seller"] : side === "buyer" ? ["buyer"] : side === "seller" ? ["seller"] : [];
+    if (!sides.length) fail("Choose seller, buyer or both.");
+    const pick = (raw: unknown, list: ReadonlyArray<{ key: string }>, label: string) => {
+      const v = text(raw, 40);
+      if (v && !list.some((x) => x.key === v)) fail("Choose a valid " + label + " stage.");
+      return v || undefined;
+    };
+    const sellerStage = sides.includes("seller") ? pick(req.body.sellerStage, SELLER_STAGES, "seller") : undefined;
+    const buyerStage = sides.includes("buyer") ? pick(req.body.buyerStage, BUYER_STAGES, "buyer") : undefined;
+    s.tx(() => {
+      s.queue(c.ownerId, {
+        id: "promote:" + uid(),
+        type: "promote",
+        contactId: c.id,
+        sides,
+        sellerStage,
+        buyerStage,
+        actorId: a.id,
+      });
+      s.audit(a.id, "promote_queued", { contactId: c.id, sides, sellerStage, buyerStage });
+    });
+    return {
+      queued: true,
+      message:
+        c.ownerId === (tenantOwner() || a.id)
+          ? "Sent to your Tracker. It updates within a minute; stages only move forward."
+          : "Sent to the owner's Tracker. It updates when their CRM next syncs; stages only move forward.",
+    };
   });
   register("post", "/lists", (req, a) => ({
     list: dialerStore().createList(

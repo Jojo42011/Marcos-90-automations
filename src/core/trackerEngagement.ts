@@ -125,6 +125,11 @@ export function stageTrackerFromEngagement(
       out.alreadyStaged++;
       continue;
     }
+    const at = new Date().toISOString();
+    const stageMeta = { ...(rec.stageMeta || {}) };
+    if (patch.buyerStage) stageMeta[`buyer:${patch.buyerStage}`] = { enteredAt: at };
+    if (patch.sellerStage) stageMeta[`seller:${patch.sellerStage}`] = { enteredAt: at };
+    patch.stageMeta = stageMeta;
 
     // Real contact happened; the timestamp is worth carrying over if the
     // tracker record does not already have one of its own.
