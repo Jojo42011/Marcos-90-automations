@@ -511,60 +511,90 @@ td.numeric {
   background: color-mix(in srgb, var(--d-danger) 10%, var(--d-panel));
   margin-left: 6px;
 }
-.session-contact {
+/* Mojo-style calling sheet: name, phone, address, then a dense labeled field list. */
+.mojo-profile {
+  margin: 4px 0 12px;
+}
+.mojo-head {
   display: flex;
-  gap: 12px;
+  justify-content: space-between;
   align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
 }
-.session-contact .contact-avatar {
-  flex-shrink: 0;
+.mojo-head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  line-height: 1.2;
 }
-.session-contact .badge.warn {
+.mojo-head .badge {
   margin-left: 0;
 }
-.facts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  margin: 0 0 14px;
-  border: 1px solid var(--d-line);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--d-line);
+.mojo-phone {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--d-text);
+  text-decoration: none;
+  margin: 2px 0 6px;
 }
-.facts div {
-  background: var(--d-panel);
-  padding: 8px 10px;
-  min-width: 0;
+a.mojo-phone:hover {
+  color: var(--d-accent);
 }
-.facts dt {
-  font-size: 10px;
+.mojo-phone.muted {
+  font-size: 16px;
+  font-weight: 600;
   color: var(--d-muted);
-  margin-bottom: 2px;
 }
-.facts dd {
-  margin: 0;
+.mojo-address {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--d-text);
+}
+.mojo-address span {
+  display: block;
+  margin-top: 2px;
   font-size: 12px;
+  color: var(--d-muted);
+}
+.mojo-sheet {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0 0 12px;
+  border-top: 1px solid var(--d-line);
+}
+.mojo-sheet.contact {
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+.mojo-row {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--d-line);
+  align-items: baseline;
+}
+.mojo-row dt {
+  margin: 0;
+  font-size: 11px;
+  color: var(--d-muted);
+  font-weight: 500;
+}
+.mojo-row dd {
+  margin: 0;
+  font-size: 13px;
   font-weight: 600;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
-.facts.contact-lines {
-  grid-template-columns: 1fr;
-}
-.facts-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
+.mojo-row.empty dd {
+  font-weight: 500;
   color: var(--d-muted);
-  margin: 4px 0 8px;
-}
-.facts-empty {
-  font-size: 11px;
-  color: var(--d-muted);
-  line-height: 1.6;
-  margin: 0 0 14px;
 }
 .link-button {
   border: 0;
@@ -573,10 +603,18 @@ td.numeric {
   color: var(--d-accent);
   font-size: 11px;
   min-height: 0;
+  flex-shrink: 0;
 }
 .link-button:hover {
   background: none;
   text-decoration: underline;
+}
+/* Keep legacy class names harmless if any static markup remains. */
+.facts,
+.facts-head,
+.facts-empty,
+.session-contact {
+  display: none;
 }
 .handoff {
   display: flex;
