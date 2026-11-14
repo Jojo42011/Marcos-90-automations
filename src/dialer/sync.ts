@@ -234,6 +234,7 @@ async function sync() {
       const old = byCrm.get(lead.id),
         id = old?.id || "crm:" + owner + ":" + lead.id;
       const tags = lead.tags || [];
+      const property = { ...(old?.property || {}), ...(propertyFromMls(lead.mlsListingKey) || {}) };
       store.put("contact", {
         ...old,
         id,
@@ -253,7 +254,7 @@ async function sync() {
         tags: [...tags],
         crmStatus: lead.crmStatus || "new",
         crmCallQueue: lead.crmCallQueue || "none",
-        property: { ...(old?.property || {}), ...(propertyFromMls(lead.mlsListingKey) || {}) },
+        property: Object.keys(property).length ? property : undefined,
         createdAt: old?.createdAt || lead.createdAt,
         updatedAt: lead.updatedAt,
       });
