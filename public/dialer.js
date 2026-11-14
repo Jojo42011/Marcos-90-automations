@@ -72,6 +72,78 @@
     map = null,
     refreshing = false,
     requestSerial = 0;
+  /* Same catalog the server returns from GET /prefs; used until it loads. */
+  const FIELD_CATALOG = [
+    ["status", "Listing status"],
+    ["expireDate", "Expired / canceled on"],
+    ["listPrice", "List price"],
+    ["daysOnMarket", "Days on market"],
+    ["mlsId", "MLS #"],
+    ["propertyType", "Property type"],
+    ["beds", "Beds"],
+    ["baths", "Baths"],
+    ["sqft", "Sq ft"],
+    ["yearBuilt", "Year built"],
+    ["subdivision", "Subdivision"],
+    ["mlsArea", "MLS area"],
+    ["listAgent", "Listing agent"],
+    ["listOffice", "Brokerage"],
+    ["ownerName", "Owner name"],
+    ["taxId", "Tax ID"],
+  ].map(([key, label]) => ({ key, label }));
+  const DEFAULT_FIELDS = [
+    "status",
+    "expireDate",
+    "listPrice",
+    "daysOnMarket",
+    "mlsId",
+    "propertyType",
+    "subdivision",
+    "listAgent",
+    "listOffice",
+    "ownerName",
+  ];
+  let prefs = { fields: DEFAULT_FIELDS, catalog: FIELD_CATALOG, trackerStages: null };
+  const money = (v) =>
+    Number.isFinite(Number(v)) && String(v).trim() !== ""
+      ? Number(v).toLocaleString(undefined, {
+          style: "currency",
+          currency: "USD",
+          maximumFractionDigits: 0,
+        })
+      : String(v ?? "");
+  const factValue = (key, v) => {
+    if (v == null || String(v).trim() === "") return "";
+    if (key === "listPrice") return money(v);
+    if (key === "expireDate" && !isNaN(Date.parse(v))) return date(v);
+    if (key === "sqft" || key === "daysOnMarket") return fmt(v);
+    return String(v);
+  };
+  /* Only fields with a value render; an empty field is never padded with a guess. */
+  function factsHTML(c, all = false) {
+    const p = c.property || {};
+    const keys = all ? prefs.catalog.map((f) => f.key) : prefs.fields;
+    const rows = keys
+      .map((k) => [prefs.catalog.find((f) => f.key === k)?.label || k, factValue(k, p[k])])
+      .filter(([, v]) => v);
+    if (!rows.length)
+      return '<p class="facts-empty">No listing details on file. Import a Mojo or MLS export with these columns to fill them in.</p>';
+    return (
+      '<dl class="facts">' +
+      rows
+        .map(([l, v]) => "<div><dt>" + esc(l) + "</dt><dd>" + esc(v) + "</dd></div>")
+        .join("") +
+      "</dl>"
+    );
+  }
+  const listingBadge = (c) => {
+    const s = String(c.property?.status || "").trim();
+    if (s) return '<span class="badge warn">' + esc(s) + "</span>";
+    return (c.tags || []).some((t) => /expired|cancel/i.test(t))
+      ? '<span class="badge warn">Expired</span>'
+      : "";
+  };
+  const currentList = () => overview?.lists.find((l) => l.id === listId);
   const queueLabel = (id) =>
     overview?.queues?.find((x) => x.id === id)?.label || id;
   const member = (id) =>
@@ -137,7 +209,9 @@
         : titles[view];
     $("#sectionLabel").textContent = queueId
       ? "CRM smart queue · opens your phone app"
-      : view === "contacts"
+      : currentList()?.kind === "handoff"
+        ? "Sent from the CRM · " + fmt(currentList().count) + " contacts"
+        : view === "contacts"
         ? "Shared contacts and calling lists"
         : view === "sessions"
           ? "Team calling activity"
@@ -222,6 +296,8 @@
     saveNotes();
     try {
       overview = await api("/overview");
+      if (!prefs.loaded)
+        prefs = { ...(await api("/prefs").catch(() => prefs)), loaded: true };
       $("#notice").hidden = true;
       const stale = overview.members.filter(
         (u) =>
@@ -428,7 +504,19 @@
     $("#workspace").innerHTML =
       '<div class="contacts-layout ' +
       (!s ? "no-session" : "") +
-      '"><section class="panel contacts-panel"><form id="searchForm" class="toolbar"><input id="search" name="q" type="search" aria-label="Search contacts" placeholder="Search name, phone, address…" value="' +
+      '"><section class="panel contacts-panel">' +
+      (currentList()?.kind === "handoff" && !s
+        ? '<div class="handoff"><div><strong>' +
+          esc(currentList().name) +
+          "</strong><span>" +
+          fmt(currentList().count) +
+          " contacts sent from the CRM" +
+          (currentList().missing
+            ? " · " + fmt(currentList().missing) + " had no Dialer contact yet"
+            : "") +
+          '</span></div><button class="primary" data-action="start">Call this list</button></div>'
+        : "") +
+      '<form id="searchForm" class="toolbar"><input id="search" name="q" type="search" aria-label="Search contacts" placeholder="Search name, phone, address…" value="' +
       esc(q) +
       '"><select id="assigned" aria-label="Filter by agent"><option value="">All agents</option>' +
       overview.members
@@ -477,7 +565,9 @@
             (c.dnc ? "danger" : "") +
             '">' +
             (c.dnc ? "Do not call" : c.phone ? "Ready" : "No phone") +
-            "</span></td></tr>",
+            "</span>" +
+            listingBadge(c) +
+            "</td></tr>",
         )
         .join("") +
       "</tbody></table>" +
@@ -515,8 +605,11 @@
           selected.size +
           ' selected</span><button data-action="add-list">Add to list / group</button><button data-action="assign">Assign</button>' +
           (listId
-            ? '<button data-action="remove-list">Remove from list</button>'
+            ? '<button data-action="remove-list">Remove from ' +
+              (currentList()?.kind === "group" ? "group" : "list") +
+              "</button>"
             : "") +
+          '<button data-action="bulk-appointments">Move to Appointments</button>' +
           '<button data-action="start-selected">Start session</button></div>'
         : "";
   }
@@ -535,7 +628,7 @@
       Math.min(100, (s.position / s.queue.length) * 100) +
       '%"></i></div>' +
       (c
-        ? '<div class="contact-avatar">' +
+        ? '<div class="session-contact"><div class="contact-avatar">' +
           esc(
             c.name
               .split(/\s+/)
@@ -543,15 +636,29 @@
               .slice(0, 2)
               .join(""),
           ) +
-          "</div><h2>" +
+          "</div><div><h2>" +
           esc(c.name) +
-          '</h2><p class="address">' +
-          esc(c.address || "No property address") +
+          "</h2>" +
+          listingBadge(c) +
+          '</div></div><p class="address">' +
+          esc(
+            [c.address, c.property?.subdivision || c.city]
+              .filter(Boolean)
+              .join(" · ") || "No property address",
+          ) +
           '</p><span class="phone">' +
           esc(c.phone) +
-          "</span><small>Selected line: " +
+          '</span><dl class="facts contact-lines"><div><dt>Calling from</dt><dd>' +
           esc(line?.label || "Default phone app") +
-          '</small><label>Call notes<textarea id="callNotes" placeholder="Motivation, timeline, next step…">' +
+          "</dd></div>" +
+          (c.email
+            ? "<div><dt>Email</dt><dd>" + esc(c.email) + "</dd></div>"
+            : "") +
+          "<div><dt>Source</dt><dd>" +
+          esc(c.source || "Unknown") +
+          '</dd></div></dl><div class="facts-head"><span>Listing details</span><button type="button" class="link-button" data-action="fields">Choose fields</button></div>' +
+          factsHTML(c) +
+          '<label>Call notes<textarea id="callNotes" placeholder="Motivation, timeline, next step…">' +
           esc(notes) +
           "</textarea></label>" +
           (call
@@ -561,7 +668,7 @@
               ">Open phone & log attempt</button>") +
           '<button data-action="book-current">Book appointment</button><button data-contact="' +
           esc(c.id) +
-          '">Contact details</button></div><p class="hint">Calls open in your phone app. Choose the same line there. This timer records time spent, not confirmed talk time.</p>'
+          '">Contact details</button></div><p class="hint">Calls open in your phone app. Choose the same line there. Appointment set moves the contact to your Appointments group and off this calling list; the CRM record stays.</p>'
         : '<div class="empty"><h2>Queue complete</h2><p>End this session to save your team summary.</p></div>') +
       '<div class="session-foot"><button data-session-action="' +
       (s.status === "paused" ? "resume" : "pause") +
@@ -895,7 +1002,7 @@
       previewed = "";
     modal(
       "Import leads",
-      '<p class="form-info">CSV files from Mojo or your own spreadsheets. Matching phone numbers and emails are skipped; original CRM records are preserved.</p><form><div class="dropzone"><label for="importFile">Choose a CSV lead file</label><p><input id="importFile" name="file" type="file" accept=".csv,text/csv" required></p></div><div class="detail-grid"><label>Source<input name="source" value="CSV import" required></label><label>Add to list<select name="listId"><option value="">No list</option>' +
+      '<p class="form-info">CSV files from Mojo or your own spreadsheets. Matching phone numbers and emails are skipped; original CRM records are preserved. Mojo and MLS columns such as List Price, MLS #, Status, Expired Date, DOM, Subdivision, Listing Agent, Listing Office, Owner Name and Tax ID fill the session card.</p><form><div class="dropzone"><label for="importFile">Choose a CSV lead file</label><p><input id="importFile" name="file" type="file" accept=".csv,text/csv" required></p></div><div class="detail-grid"><label>Source<input name="source" value="CSV import" required></label><label>Add to list<select name="listId"><option value="">No list</option>' +
         options(overview.lists, listId) +
         '</select></label></div><div id="importPreview"></div><div class="form-actions"><button id="importGo" class="primary">Review import</button></div></form>',
       async (f) => {
@@ -959,15 +1066,43 @@
         esc(c.address || "No address") +
         "<br>Assigned to " +
         esc(member(c.assignedTo)) +
-        '</p><div class="foot-actions"><button data-book-contact="' +
+        "</p>" +
+        factsHTML(c, true) +
+        '<div class="foot-actions"><button data-book-contact="' +
         esc(c.id) +
-        '">Book appointment</button><button data-dnc="' +
+        '">Book appointment</button><button data-appt-group="' +
+        esc(c.id) +
+        '"' +
+        ((d.groups || []).some((g) => g.system === "appointments")
+          ? " disabled"
+          : "") +
+        ">" +
+        ((d.groups || []).some((g) => g.system === "appointments")
+          ? "In Appointments"
+          : "Move to Appointments") +
+        "</button>" +
+        (listId && (d.groups || []).some((g) => g.id === listId)
+          ? '<button data-leave-list="' +
+            esc(c.id) +
+            '">Remove from ' +
+            esc(currentList()?.name || "this list") +
+            "</button>"
+          : "") +
+        '<button data-promote="' +
+        esc(c.id) +
+        '">Move to CRM / Tracker</button><button data-dnc="' +
         esc(c.id) +
         '" ' +
         (c.dnc ? "disabled" : "") +
         ">" +
         (c.dnc ? "Do not call" : "Mark do not call") +
-        '</button></div><form><label style="display:grid;gap:8px;margin-top:22px">Add a shared note<textarea name="note" required maxlength="4000" placeholder="Context for the next conversation…"></textarea></label><div class="form-actions"><button class="primary">Save note</button></div></form><h3>Recent notes</h3>' +
+        "</button></div>" +
+        ((d.groups || []).length
+          ? '<p class="form-info">On: ' +
+            d.groups.map((g) => esc(g.name)).join(", ") +
+            "</p>"
+          : "") +
+        '<form><label style="display:grid;gap:8px;margin-top:22px">Add a shared note<textarea name="note" required maxlength="4000" placeholder="Context for the next conversation…"></textarea></label><div class="form-actions"><button class="primary">Save note</button></div></form><h3>Recent notes</h3>' +
         d.notes
           .slice(-10)
           .reverse()
@@ -1139,6 +1274,72 @@
       },
     );
   }
+  function fieldPrefs() {
+    modal(
+      "Choose listing fields",
+      '<p class="form-info">Pick what your session card shows while you call. This is saved for your sign-in only; teammates keep their own view.</p><form><fieldset class="field-picks">' +
+        prefs.catalog
+          .map(
+            (f) =>
+              '<label><input type="checkbox" name="f" value="' +
+              esc(f.key) +
+              '"' +
+              (prefs.fields.includes(f.key) ? " checked" : "") +
+              "> " +
+              esc(f.label) +
+              "</label>",
+          )
+          .join("") +
+        '</fieldset><div class="form-actions"><button type="button" data-action="fields-default">Use defaults</button><button class="primary">Save fields</button></div></form>',
+      async (f) => {
+        const d = await api("/prefs", { fields: f.getAll("f") }, "PUT");
+        prefs = { ...prefs, ...d, loaded: true };
+        $("#dialog").close();
+        toast("Session card fields saved.");
+        await render();
+      },
+    );
+  }
+  function promote(id) {
+    const stages = prefs.trackerStages || { buyer: [], seller: [] };
+    const opts = (side) =>
+      (stages[side] || [])
+        .map(
+          (s) =>
+            '<option value="' + esc(s.key) + '">' + esc(s.label) + "</option>",
+        )
+        .join("");
+    modal(
+      "Move to CRM / Tracker",
+      '<p class="form-info">Puts this person on the contact owner’s Buyers &amp; Sellers Tracker. Stages only move forward, so a contact already further along keeps their stage. The change syncs with the owner’s CRM within a minute.</p><form class="detail-grid"><label>Pipeline<select name="side" id="promoteSide"><option value="seller">Seller</option><option value="buyer">Buyer</option><option value="both">Buyer &amp; Seller</option></select></label><label>Seller stage<select name="sellerStage"><option value="">Keep current / unstaged</option>' +
+        opts("seller") +
+        '</select></label><label>Buyer stage<select name="buyerStage"><option value="">Keep current / unstaged</option>' +
+        opts("buyer") +
+        '</select></label><div class="form-actions wide"><button class="primary">Move to Tracker</button></div></form>',
+      async (f) => {
+        const d = await api("/contacts/" + encodeURIComponent(id) + "/promote", {
+          side: f.get("side"),
+          sellerStage: f.get("sellerStage") || undefined,
+          buyerStage: f.get("buyerStage") || undefined,
+        });
+        $("#dialog").close();
+        toast(d.message || "Queued for the Tracker.");
+        await refresh();
+      },
+    );
+  }
+  async function toAppointments(ids, fromList = "") {
+    const d = await api("/appointments-group/members", {
+      contactIds: ids,
+      fromListId: fromList || undefined,
+    });
+    toast(
+      "Moved to " +
+        (d.group?.name || "Appointments") +
+        (fromList ? " and off this list." : "."),
+    );
+    return d;
+  }
   function showMap() {
     const rows = contactRows.filter(
       (c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude),
@@ -1219,6 +1420,29 @@
         await refresh();
         return;
       }
+      if (el.dataset.apptGroup) {
+        el.disabled = true;
+        await toAppointments([el.dataset.apptGroup]);
+        $("#dialog").close();
+        await refresh();
+        return;
+      }
+      if (el.dataset.leaveList) {
+        el.disabled = true;
+        await api("/lists/" + encodeURIComponent(listId) + "/members", {
+          contactIds: [el.dataset.leaveList],
+          remove: true,
+        });
+        $("#dialog").close();
+        toast("Removed from this list. The CRM contact is unchanged.");
+        await refresh();
+        return;
+      }
+      if (el.dataset.promote) {
+        $("#dialog").close();
+        promote(el.dataset.promote);
+        return;
+      }
       if (el.dataset.defaultLine) {
         el.disabled = true;
         await api("/numbers/default", { lineId: el.dataset.defaultLine });
@@ -1257,6 +1481,25 @@
       if (action === "assign" || action === "add-list")
         return chooseBulk(action);
       if (action === "map") return showMap();
+      if (action === "fields") return fieldPrefs();
+      if (action === "fields-default") {
+        $("#dialog")
+          .querySelectorAll("input[name=f]")
+          .forEach((x) => (x.checked = DEFAULT_FIELDS.includes(x.value)));
+        return;
+      }
+      if (action === "bulk-appointments") {
+        await toAppointments(
+          [...selected],
+          currentList()?.kind === "group" &&
+            currentList()?.system === "appointments"
+            ? ""
+            : listId,
+        );
+        selected.clear();
+        await refresh();
+        return;
+      }
       if (action === "remove-list") {
         await api("/lists/" + encodeURIComponent(listId) + "/members", {
           contactIds: [...selected],
@@ -1319,6 +1562,8 @@
         notes = "";
         noteDrafts.delete(activeContact.id);
         if ($("#callNotes")) $("#callNotes").value = "";
+        if (outcome === "appointment_set")
+          toast(activeContact.name + " moved to your Appointments group.");
         await refresh();
         return;
       }
