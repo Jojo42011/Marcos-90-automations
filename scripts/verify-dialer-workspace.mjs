@@ -321,7 +321,9 @@ try {
   // Per-caller session card fields.
   const defaults = await api("/prefs");
   assert(defaults.fields.includes("listPrice"));
-  assert.equal(defaults.catalog.length, 16);
+  assert.equal(defaults.catalog.length, 17);
+  assert(defaults.fields.includes("mlsName"));
+  assert.equal(defaults.fields.length, 17);
   assert.equal(defaults.trackerStages.buyer[0].key, "not_contacted");
   assert.deepEqual((await api("/prefs", { fields: ["beds", "bogus", "listPrice"] }, "PUT")).fields, ["beds", "listPrice"]);
   assert.deepEqual((await api("/prefs")).fields, ["beds", "listPrice"]);
@@ -391,6 +393,9 @@ try {
     await fetch("http://127.0.0.1:" + server.address().port + "/dialer.js")
   ).text();
   assert(/Calling queues|data-queue|queueId/.test(dialerHtml + dialerJs));
+  assert(/mojo-profile|mojo-sheet|mojo-phone/.test(dialerJs), "Mojo calling sheet markup");
+  assert(/MLS name/.test(dialerJs));
+  assert(/mojo-address/.test(dialerJs));
 
   console.log(
     "PASS: auth, shared roster/private CRM, CSV preview/dedup, assignment, exclusive sessions, call replay, DNC and activity sync, timezone/conflicts, CRM task replay/completion, metrics, exports, Harvey guide, smart queues, add contact, listing details, field prefs, CRM handoff lists, Appointments group, Tracker promote.",

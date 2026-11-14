@@ -17,6 +17,7 @@ export const PROPERTY_FIELDS = [
   { key: "listPrice", label: "List price", headers: ["list price", "listing price", "price", "original list price", "last list price"] },
   { key: "daysOnMarket", label: "Days on market", headers: ["dom", "days on market", "cdom", "cumulative dom"] },
   { key: "mlsId", label: "MLS #", headers: ["mls #", "mls", "mls number", "mls id", "mls#", "listing id", "ml#", "ml #"] },
+  { key: "mlsName", label: "MLS name", headers: ["mls name", "mls board", "board", "board name", "listing board"] },
   { key: "propertyType", label: "Property type", headers: ["property type", "type", "prop type", "property subtype"] },
   { key: "beds", label: "Beds", headers: ["beds", "bedrooms", "br", "bd"] },
   { key: "baths", label: "Baths", headers: ["baths", "bathrooms", "ba", "total baths"] },
@@ -33,18 +34,8 @@ export const PROPERTY_FIELDS = [
 export type PropertyFieldKey = (typeof PROPERTY_FIELDS)[number]["key"];
 
 export const PROPERTY_CATALOG = PROPERTY_FIELDS.map(({ key, label }) => ({ key, label }));
-export const DEFAULT_PROPERTY_FIELDS: PropertyFieldKey[] = [
-  "status",
-  "expireDate",
-  "listPrice",
-  "daysOnMarket",
-  "mlsId",
-  "propertyType",
-  "subdivision",
-  "listAgent",
-  "listOffice",
-  "ownerName",
-];
+/** Marco's Mojo calling sheet; callers can hide rows in prefs but this is the default. */
+export const DEFAULT_PROPERTY_FIELDS: PropertyFieldKey[] = PROPERTY_FIELDS.map((f) => f.key);
 const KEYS = new Set<string>(PROPERTY_FIELDS.map((f) => f.key));
 
 export function isPropertyField(key: unknown): key is PropertyFieldKey {

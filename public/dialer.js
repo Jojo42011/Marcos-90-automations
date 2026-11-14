@@ -73,12 +73,15 @@
     refreshing = false,
     requestSerial = 0;
   /* Same catalog the server returns from GET /prefs; used until it loads. */
+  /* Same catalog the server returns from GET /prefs; used until it loads.
+     Order matches Marco's Mojo calling sheet. */
   const FIELD_CATALOG = [
     ["status", "Listing status"],
     ["expireDate", "Expired / canceled on"],
     ["listPrice", "List price"],
     ["daysOnMarket", "Days on market"],
     ["mlsId", "MLS #"],
+    ["mlsName", "MLS name"],
     ["propertyType", "Property type"],
     ["beds", "Beds"],
     ["baths", "Baths"],
@@ -91,18 +94,7 @@
     ["ownerName", "Owner name"],
     ["taxId", "Tax ID"],
   ].map(([key, label]) => ({ key, label }));
-  const DEFAULT_FIELDS = [
-    "status",
-    "expireDate",
-    "listPrice",
-    "daysOnMarket",
-    "mlsId",
-    "propertyType",
-    "subdivision",
-    "listAgent",
-    "listOffice",
-    "ownerName",
-  ];
+  const DEFAULT_FIELDS = FIELD_CATALOG.map((f) => f.key);
   let prefs = { fields: DEFAULT_FIELDS, catalog: FIELD_CATALOG, trackerStages: null };
   const money = (v) =>
     Number.isFinite(Number(v)) && String(v).trim() !== ""
@@ -119,23 +111,6 @@
     if (key === "sqft" || key === "daysOnMarket") return fmt(v);
     return String(v);
   };
-  /* Only fields with a value render; an empty field is never padded with a guess. */
-  function factsHTML(c, all = false) {
-    const p = c.property || {};
-    const keys = all ? prefs.catalog.map((f) => f.key) : prefs.fields;
-    const rows = keys
-      .map((k) => [prefs.catalog.find((f) => f.key === k)?.label || k, factValue(k, p[k])])
-      .filter(([, v]) => v);
-    if (!rows.length)
-      return '<p class="facts-empty">No listing details on file. Import a Mojo or MLS export with these columns to fill them in.</p>';
-    return (
-      '<dl class="facts">' +
-      rows
-        .map(([l, v]) => "<div><dt>" + esc(l) + "</dt><dd>" + esc(v) + "</dd></div>")
-        .join("") +
-      "</dl>"
-    );
-  }
   const listingBadge = (c) => {
     const s = String(c.property?.status || "").trim();
     if (s) return '<span class="badge warn">' + esc(s) + "</span>";
@@ -143,6 +118,88 @@
       ? '<span class="badge warn">Expired</span>'
       : "";
   };
+  const fromLineLabel = (s) => {
+    const line = numberData.numbers.find((n) => n.id === s.lineId);
+    if (!line) return "Default phone app";
+    return line.number || line.label || "Default phone app";
+  };
+  /* Mojo sheet: every selected field stays visible. Empty values stay blank —
+     never invent a number, price or date. */
+  function profileRows(c, all = false) {
+    const p = c.property || {};
+    const keys = all
+      ? prefs.catalog.map((f) => f.key)
+      : prefs.fields.length
+        ? prefs.fields
+        : DEFAULT_FIELDS;
+    return keys.map((k) => ({
+      key: k,
+      label: prefs.catalog.find((f) => f.key === k)?.label || k,
+      value: factValue(k, p[k]),
+    }));
+  }
+  function factsHTML(c, all = false) {
+    const rows = profileRows(c, all);
+    return (
+      '<dl class="mojo-sheet">' +
+      rows
+        .map(
+          (r) =>
+            '<div class="mojo-row' +
+            (r.value ? "" : " empty") +
+            '"><dt>' +
+            esc(r.label) +
+            "</dt><dd>" +
+            (r.value ? esc(r.value) : "—") +
+            "</dd></div>",
+        )
+        .join("") +
+      "</dl>"
+    );
+  }
+  function mojoProfileHTML(c, opts = {}) {
+    const from = opts.fromLine || "";
+    const phone = c.phone
+      ? '<a class="mojo-phone" href="tel:' +
+        esc(c.phone.replace(/[^\d+]/g, "")) +
+        '">' +
+        esc(c.phone) +
+        "</a>"
+      : '<span class="mojo-phone muted">No phone</span>';
+    return (
+      '<div class="mojo-profile">' +
+      '<div class="mojo-head"><div><h2>' +
+      esc(c.name) +
+      "</h2>" +
+      listingBadge(c) +
+      '</div><button type="button" class="link-button" data-action="fields">Fields</button></div>' +
+      phone +
+      '<p class="mojo-address">' +
+      esc(c.address || "No property address") +
+      (c.city || c.property?.subdivision
+        ? "<span>" +
+          esc([c.property?.subdivision, c.city].filter(Boolean).join(" · ")) +
+          "</span>"
+        : "") +
+      "</p>" +
+      '<dl class="mojo-sheet contact">' +
+      (opts.detail
+        ? ""
+        : '<div class="mojo-row"><dt>Calling from</dt><dd>' +
+          esc(from || "Default phone app") +
+          "</dd></div>") +
+      '<div class="mojo-row' +
+      (c.email ? "" : " empty") +
+      '"><dt>Email</dt><dd>' +
+      (c.email ? esc(c.email) : "—") +
+      "</dd></div>" +
+      '<div class="mojo-row"><dt>Source</dt><dd>' +
+      esc(c.source || "Unknown") +
+      "</dd></div></dl>" +
+      factsHTML(c, !!opts.allFields) +
+      "</div>"
+    );
+  }
   const currentList = () => overview?.lists.find((l) => l.id === listId);
   const queueLabel = (id) =>
     overview?.queues?.find((x) => x.id === id)?.label || id;
@@ -615,8 +672,7 @@
   }
   function sessionPanel(s) {
     const c = activeContact,
-      call = overview.calls.find((c) => c.id === s.currentCall),
-      line = numberData.numbers.find((n) => n.id === s.lineId);
+      call = overview.calls.find((c) => c.id === s.currentCall);
     return (
       '<aside class="panel session-panel"><div class="session-heading"><strong>Your session</strong><span class="badge good">' +
       esc(s.status) +
@@ -628,36 +684,7 @@
       Math.min(100, (s.position / s.queue.length) * 100) +
       '%"></i></div>' +
       (c
-        ? '<div class="session-contact"><div class="contact-avatar">' +
-          esc(
-            c.name
-              .split(/\s+/)
-              .map((n) => n[0])
-              .slice(0, 2)
-              .join(""),
-          ) +
-          "</div><div><h2>" +
-          esc(c.name) +
-          "</h2>" +
-          listingBadge(c) +
-          '</div></div><p class="address">' +
-          esc(
-            [c.address, c.property?.subdivision || c.city]
-              .filter(Boolean)
-              .join(" · ") || "No property address",
-          ) +
-          '</p><span class="phone">' +
-          esc(c.phone) +
-          '</span><dl class="facts contact-lines"><div><dt>Calling from</dt><dd>' +
-          esc(line?.label || "Default phone app") +
-          "</dd></div>" +
-          (c.email
-            ? "<div><dt>Email</dt><dd>" + esc(c.email) + "</dd></div>"
-            : "") +
-          "<div><dt>Source</dt><dd>" +
-          esc(c.source || "Unknown") +
-          '</dd></div></dl><div class="facts-head"><span>Listing details</span><button type="button" class="link-button" data-action="fields">Choose fields</button></div>' +
-          factsHTML(c) +
+        ? mojoProfileHTML(c, { fromLine: fromLineLabel(s) }) +
           '<label>Call notes<textarea id="callNotes" placeholder="Motivation, timeline, next step…">' +
           esc(notes) +
           "</textarea></label>" +
@@ -1059,15 +1086,11 @@
     const d = await api("/contacts/" + encodeURIComponent(id)),
       c = d.contact;
     modal(
-      c.name,
-      '<p class="form-info">' +
-        esc(c.phone || "No phone") +
-        "<br>" +
-        esc(c.address || "No address") +
-        "<br>Assigned to " +
+      "Contact",
+      mojoProfileHTML(c, { allFields: true, detail: true }) +
+        '<p class="form-info">Assigned to ' +
         esc(member(c.assignedTo)) +
         "</p>" +
-        factsHTML(c, true) +
         '<div class="foot-actions"><button data-book-contact="' +
         esc(c.id) +
         '">Book appointment</button><button data-appt-group="' +
@@ -1277,7 +1300,7 @@
   function fieldPrefs() {
     modal(
       "Choose listing fields",
-      '<p class="form-info">Pick what your session card shows while you call. This is saved for your sign-in only; teammates keep their own view.</p><form><fieldset class="field-picks">' +
+      '<p class="form-info">Mojo-style sheet: every checked field stays on your calling card, blank when the contact has no value. Saved for your sign-in only.</p><form><fieldset class="field-picks">' +
         prefs.catalog
           .map(
             (f) =>
