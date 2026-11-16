@@ -37,10 +37,12 @@ import {
   Post,
   Plan,
   api,
+  formatCover,
   localParts,
   matches,
   payload,
   planFor,
+  previewSrc,
   safeURL,
   weekDates,
 } from "./model";
@@ -50,6 +52,7 @@ import "@astryxdesign/core/astryx.css";
 type Settings = {
   driveFolderId: string;
   driveFolderName: string;
+  driveFolderUrl?: string;
   timezone: string;
   ingestHour: number;
   ingestIntervalMinutes: number;
@@ -215,7 +218,9 @@ function App() {
         </Text>
         <Text>
           {data?.drive.connected
-            ? data.settings.driveFolderName || "Choose a folder"
+            ? data.settings.driveFolderUrl
+              ? "Folder linked"
+              : data.settings.driveFolderName || "Paste a folder link"
             : "Not connected"}
         </Text>
         <Text type="supporting" color="secondary">
@@ -651,10 +656,18 @@ function Editor({
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [remove, setRemove] = useState(false);
+    [remove, setRemove] = useState(false),
+    [previewError, setPreviewError] = useState("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const media = previewSrc(post);
   const readOnly = !editable(post);
-  const update = (key: keyof Plan, value: string | string[]) =>
+  const update = (key: keyof Plan, value: string | string[] | number | null) =>
     setPlan((p) => ({ ...p, [key]: value }));
+  function setCoverFromPlayhead() {
+    const el = videoRef.current;
+    if (!el || !Number.isFinite(el.currentTime)) return;
+    update("coverOffsetMs", Math.max(0, Math.round(el.currentTime * 1000)));
+  }
   async function save(schedule: boolean) {
     setBusy(true);
     setError("");
@@ -759,6 +772,77 @@ function Editor({
                   description={error || post.error}
                 />
               )}
+              {media ? (
+                <VStack gap={3}>
+                  <Text weight="semibold">Preview & cover</Text>
+                  <Text type="supporting" color="secondary">
+                    Scrub to the frame you want, then set it as the cover for
+                    Instagram and TikTok.
+                  </Text>
+                  {/* Native video is required for scrubbing + cover pick. */}
+                  <video
+                    ref={videoRef}
+                    src={media}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    style={{
+                      width: "100%",
+                      maxHeight: "22rem",
+                      borderRadius: "var(--radius-md, 0.5rem)",
+                      background: "var(--color-background-secondary, #111)",
+                    }}
+                    onLoadedMetadata={() => {
+                      const el = videoRef.current;
+                      if (!el || plan.coverOffsetMs == null) return;
+                      el.currentTime = Math.min(
+                        plan.coverOffsetMs / 1000,
+                        Number.isFinite(el.duration) ? el.duration : 0,
+                      );
+                    }}
+                    onError={() =>
+                      setPreviewError(
+                        "Could not load this video preview. Check Drive access, then try again.",
+                      )
+                    }
+                  />
+                  {previewError && (
+                    <Banner
+                      status="warning"
+                      title="Preview unavailable"
+                      description={previewError}
+                    />
+                  )}
+                  <HStack gap={2} wrap="wrap" vAlign="center">
+                    <Text type="supporting" color="secondary">
+                      Cover: {formatCover(plan.coverOffsetMs)}
+                    </Text>
+                    {!readOnly && (
+                      <>
+                        <Button
+                          label="Use current frame"
+                          isDisabled={busy}
+                          onClick={setCoverFromPlayhead}
+                        />
+                        {plan.coverOffsetMs != null && (
+                          <Button
+                            label="Clear cover"
+                            variant="ghost"
+                            isDisabled={busy}
+                            onClick={() => update("coverOffsetMs", null)}
+                          />
+                        )}
+                      </>
+                    )}
+                  </HStack>
+                </VStack>
+              ) : (
+                <Banner
+                  status="warning"
+                  title="No preview yet"
+                  description="This post has no Drive file linked. Sync from Drive to preview and pick a cover."
+                />
+              )}
               <TextInput
                 label="Title"
                 value={plan.title}
@@ -830,16 +914,12 @@ function Editor({
                   description="Select the current accounts before saving."
                 />
               )}
-              {(safeURL(post.mediaUrl) || safeURL(post.platformPostUrl)) && (
+              {safeURL(post.platformPostUrl) && (
                 <Button
-                  label={
-                    post.platformPostUrl
-                      ? "Open published post"
-                      : "Preview video"
-                  }
+                  label="Open published post"
                   onClick={() =>
                     window.open(
-                      safeURL(post.platformPostUrl) || safeURL(post.mediaUrl),
+                      safeURL(post.platformPostUrl),
                       "_blank",
                       "noopener,noreferrer",
                     )
@@ -896,8 +976,10 @@ function SettingsDialog({
   close: () => void;
   saved: () => Promise<void>;
 }) {
-  const [form, setForm] = useState({ ...data.settings }),
-    [folders, setFolders] = useState<{ id: string; name: string }[]>([]),
+  const [form, setForm] = useState({
+      ...data.settings,
+      driveFolderUrl: data.settings.driveFolderUrl || "",
+    }),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [disconnect, setDisconnect] = useState(false);
@@ -982,51 +1064,25 @@ function SettingsDialog({
         </VStack>
         <Divider />
         <TextInput
-          label="Video folder"
-          value={form.driveFolderName || ""}
-          onChange={(v) => {
-            setForm((f) => ({ ...f, driveFolderName: v, driveFolderId: "" }));
-            setFolders([]);
-          }}
-          placeholder="Search your Drive folders"
+          label="Drive folder link"
+          value={form.driveFolderUrl || ""}
+          onChange={(v) =>
+            setForm((f) => ({
+              ...f,
+              driveFolderUrl: v,
+              driveFolderId: "",
+            }))
+          }
+          placeholder="https://drive.google.com/drive/folders/…"
           isDisabled={!data.drive.connected || busy}
         />
-        <Button
-          label="Find folders"
-          isDisabled={
-            !data.drive.connected || busy || !form.driveFolderName.trim()
-          }
-          onClick={() =>
-            run(async () => {
-              const r = await api(
-                "GET",
-                "/api/smartposter/drive/folders?q=" +
-                  encodeURIComponent(form.driveFolderName),
-              );
-              setFolders(r.folders || []);
-              if (!r.folders?.length)
-                throw Error("No folders found. Try another name.");
-            })
-          }
-        />
-        {!!folders.length && (
-          <Selector
-            label="Choose folder"
-            value={form.driveFolderId || ""}
-            onChange={(id) => {
-              const folder = folders.find((f) => f.id === id)!;
-              setForm((f) => ({
-                ...f,
-                driveFolderId: id,
-                driveFolderName: folder.name,
-              }));
-            }}
-            options={folders.map((f) => ({ value: f.id, label: f.name }))}
-          />
-        )}
-        {form.driveFolderId && (
+        <Text type="supporting" color="secondary">
+          Paste the shared folder link, save, then Sync Drive. No folder picker
+          required.
+        </Text>
+        {form.driveFolderId && !form.driveFolderUrl && (
           <Text type="supporting" color="secondary">
-            Selected: {form.driveFolderName}
+            Current folder id: {form.driveFolderId}
           </Text>
         )}
         <Selector
@@ -1076,11 +1132,17 @@ function SettingsDialog({
                 new Intl.DateTimeFormat("en-US", {
                   timeZone: form.timezone,
                 }).format();
-                if (data.drive.connected && !form.driveFolderId)
-                  throw Error("Find and select a Drive folder first.");
+                if (
+                  data.drive.connected &&
+                  !String(form.driveFolderUrl || "").trim() &&
+                  !form.driveFolderId
+                ) {
+                  throw Error("Paste a Google Drive folder link first.");
+                }
                 await api("PATCH", "/api/smartposter/settings", {
+                  driveFolderUrl: form.driveFolderUrl || "",
                   driveFolderId: form.driveFolderId,
-                  driveFolderName: form.driveFolderName,
+                  driveFolderName: form.driveFolderName || "Drive folder",
                   timezone: form.timezone,
                   ingestIntervalMinutes: Number(
                     form.ingestIntervalMinutes || 0,

@@ -27,6 +27,8 @@ export type SmartPosterStatus =
 export interface SmartPosterSettings {
   driveFolderId: string;
   driveFolderName: string;
+  /** Full Google Drive folder URL; preferred over name search when set. */
+  driveFolderUrl: string;
   timezone: string;
   /** HH:MM local times used to space posts across the day. */
   slots: string[];
@@ -61,6 +63,8 @@ export interface SmartPosterPost {
   scheduledFor: string | null;
   timezone: string;
   mediaUrl: string | null;
+  /** Video cover frame offset in milliseconds (Instagram thumbOffset / TikTok cover). */
+  coverOffsetMs: number | null;
   zernioPostId: string | null;
   platformPostUrl: string | null;
   error: string | null;
@@ -114,6 +118,12 @@ function initSchema(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_sp_posts_scheduled ON smart_poster_posts(scheduled_for);
     CREATE INDEX IF NOT EXISTS idx_sp_posts_drive ON smart_poster_posts(drive_file_id);
   `);
+  const cols = database
+    .prepare(`PRAGMA table_info(smart_poster_posts)`)
+    .all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "cover_offset_ms")) {
+    database.exec(`ALTER TABLE smart_poster_posts ADD COLUMN cover_offset_ms INTEGER`);
+  }
 }
 
 export function getSmartPosterDb(): Database.Database {
@@ -128,6 +138,7 @@ function defaultSettings(): SmartPosterSettings {
   return {
     driveFolderId: "",
     driveFolderName: "SmartPoster",
+    driveFolderUrl: "",
     timezone: "America/Chicago",
     slots: [...DEFAULT_SLOTS],
     autoSchedule: false,
@@ -259,6 +270,10 @@ function mapPost(row: Record<string, unknown>): SmartPosterPost {
     scheduledFor: row.scheduled_for != null ? String(row.scheduled_for) : null,
     timezone: String(row.timezone || "America/Chicago"),
     mediaUrl: row.media_url != null ? String(row.media_url) : null,
+    coverOffsetMs:
+      row.cover_offset_ms != null && Number.isFinite(Number(row.cover_offset_ms))
+        ? Math.max(0, Math.floor(Number(row.cover_offset_ms)))
+        : null,
     zernioPostId: row.zernio_post_id != null ? String(row.zernio_post_id) : null,
     platformPostUrl: row.platform_post_url != null ? String(row.platform_post_url) : null,
     error: row.error != null ? String(row.error) : null,
@@ -328,6 +343,10 @@ export function upsertPost(
       input.scheduledFor !== undefined ? input.scheduledFor : existing?.scheduledFor ?? null,
     timezone: input.timezone || existing?.timezone || getSettings().timezone,
     mediaUrl: input.mediaUrl !== undefined ? input.mediaUrl : existing?.mediaUrl ?? null,
+    coverOffsetMs:
+      input.coverOffsetMs !== undefined
+        ? input.coverOffsetMs
+        : existing?.coverOffsetMs ?? null,
     zernioPostId:
       input.zernioPostId !== undefined ? input.zernioPostId : existing?.zernioPostId ?? null,
     platformPostUrl:
@@ -342,9 +361,9 @@ export function upsertPost(
     .prepare(
       `INSERT INTO smart_poster_posts (
         id, drive_file_id, file_name, title, caption, platforms, account_ids,
-        status, target_date, scheduled_for, timezone, media_url, zernio_post_id,
-        platform_post_url, error, created_at, updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        status, target_date, scheduled_for, timezone, media_url, cover_offset_ms,
+        zernio_post_id, platform_post_url, error, created_at, updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(id) DO UPDATE SET
         drive_file_id=excluded.drive_file_id,
         file_name=excluded.file_name,
@@ -357,6 +376,7 @@ export function upsertPost(
         scheduled_for=excluded.scheduled_for,
         timezone=excluded.timezone,
         media_url=excluded.media_url,
+        cover_offset_ms=excluded.cover_offset_ms,
         zernio_post_id=excluded.zernio_post_id,
         platform_post_url=excluded.platform_post_url,
         error=excluded.error,
@@ -375,6 +395,7 @@ export function upsertPost(
       post.scheduledFor,
       post.timezone,
       post.mediaUrl,
+      post.coverOffsetMs,
       post.zernioPostId,
       post.platformPostUrl,
       post.error,

@@ -72,6 +72,13 @@ assert.equal(
   model.safeURL("https://example.com/video"),
   "https://example.com/video",
 );
+assert.equal(plan.coverOffsetMs, null);
+assert.equal(
+  model.previewSrc({ id: "draft-1", driveFileId: "file-1" }),
+  "/api/smartposter/posts/draft-1/media",
+);
+assert.equal(model.formatCover(65000), "1:05");
+assert.equal(model.formatCover(null), "Not set");
 const originalFetch = globalThis.fetch,
   requests = [];
 try {

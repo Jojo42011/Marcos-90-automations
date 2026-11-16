@@ -62,9 +62,29 @@ export async function updateSmartPosterPost(id: string, body: Record<string, unk
       const accounts = await listZernioAccounts();
       if (!accounts.ok) throw new Error(accounts.error || "Could not check social accounts");
       const targets = selectedTargets(next.accountIds, accounts.accounts);
+      const coverMs = next.coverOffsetMs;
       const result = await updateZernioPost(current.zernioPostId, {
         content: next.caption || next.title, scheduledFor: next.scheduledFor!, timezone: "UTC",
-        platforms: targets.map(t => ({...t, ...(t.platform === "youtube" ? {platformSpecificData:{title:next.title.slice(0,100),visibility:"public"}} : {})})),
+        platforms: targets.map(t => {
+          const platformSpecificData: Record<string, unknown> = {};
+          if (t.platform === "youtube") {
+            platformSpecificData.title = next.title.slice(0, 100);
+            platformSpecificData.visibility = "public";
+          }
+          if (coverMs != null) {
+            if (t.platform === "instagram" || t.platform === "instagram-reels" || t.platform === "ig") {
+              platformSpecificData.thumbOffset = coverMs;
+            }
+            if (t.platform === "tiktok") {
+              platformSpecificData.video_cover_timestamp_ms = coverMs;
+              platformSpecificData.coverOffsetMs = coverMs;
+            }
+          }
+          return {
+            ...t,
+            ...(Object.keys(platformSpecificData).length ? { platformSpecificData } : {}),
+          };
+        }),
       });
       if (!result.ok) throw new Error(result.error || "Zernio could not update this schedule; your existing schedule is unchanged locally.");
       return upsertPost({...next, status:"scheduled", error:null});
@@ -154,6 +174,7 @@ async function publishPost(
       content: post.caption || post.title || post.fileName,
       mediaUrl: uploaded.publicUrl,
       mediaType: "video",
+      coverOffsetMs: post.coverOffsetMs,
       platforms,
       scheduledFor: post.scheduledFor,
       timezone: "UTC",
@@ -204,8 +225,12 @@ async function syncInbox(opts?: {
     saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: false, scanned: 0, created: 0, scheduled: 0, skipped: 0, failed: 0, note, posts: [] };
   }
-  if (!settings.driveFolderName.trim() && !settings.driveFolderId.trim()) {
-    const note = "Pick a Drive folder by name in SmartPoster settings.";
+  if (
+    !settings.driveFolderUrl.trim()
+    && !settings.driveFolderId.trim()
+    && !settings.driveFolderName.trim()
+  ) {
+    const note = "Paste a Google Drive folder link in SmartPoster settings.";
     saveSettings({ lastSyncAt: new Date().toISOString(), lastSyncNote: note });
     return { ok: false, scanned: 0, created: 0, scheduled: 0, skipped: 0, failed: 0, note, posts: [] };
   }
@@ -222,6 +247,7 @@ async function syncInbox(opts?: {
       owner,
       settings.driveFolderName || "SmartPoster",
       settings.driveFolderId || undefined,
+      settings.driveFolderUrl || undefined,
     );
     if (folder.id !== settings.driveFolderId || folder.name !== settings.driveFolderName) {
       saveSettings({ driveFolderId: folder.id, driveFolderName: folder.name });

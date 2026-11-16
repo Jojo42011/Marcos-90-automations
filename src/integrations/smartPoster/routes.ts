@@ -5,6 +5,7 @@
 import type { Express, Request, Response } from "express";
 import express from "express";
 import path from "path";
+import { Readable } from "stream";
 import { tenantOwner } from "../../core/tenantData.js";
 import {
   deletePost,
@@ -13,9 +14,11 @@ import {
   listPosts,
   saveSettings,
 } from "../../core/smartPosterStore.js";
+import { driveFolderIdFromUrl } from "./driveFolderUrl.js";
 import {
   disconnectComposioDrive,
   getComposioDriveStatus,
+  openDriveVideo,
   searchDriveFolders,
   startComposioDriveConnect,
 } from "./drive.js";
@@ -74,6 +77,39 @@ export function registerSmartPosterRoutes(
     } catch (err) { res.status(400).json({error:err instanceof Error ? err.message : String(err)}); }
   });
 
+  /** Range-capable Drive video stream for in-app preview + cover picking. */
+  app.get("/api/smartposter/posts/:id/media", async (req, res) => {
+    try {
+      const post = getPost(String(req.params.id));
+      if (!post?.driveFileId) {
+        res.status(404).json({ error: "No Drive video for this post" });
+        return;
+      }
+      const range = typeof req.headers.range === "string" ? req.headers.range : undefined;
+      const media = await openDriveVideo(ownerOf(req, sessionUser), post.driveFileId, { range });
+      res.status(media.status);
+      media.headers.forEach((value, key) => {
+        const lower = key.toLowerCase();
+        if (lower === "transfer-encoding" || lower === "connection") return;
+        res.setHeader(key, value);
+      });
+      if (!res.getHeader("Accept-Ranges")) res.setHeader("Accept-Ranges", "bytes");
+      if (!res.getHeader("Content-Type")) res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Cache-Control", "private, max-age=60");
+      if (!media.body) {
+        res.end();
+        return;
+      }
+      Readable.fromWeb(media.body as import("stream/web").ReadableStream).pipe(res);
+    } catch (err) {
+      if (!res.headersSent) {
+        res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+      } else {
+        res.destroy(err instanceof Error ? err : undefined);
+      }
+    }
+  });
+
   app.post("/api/smartposter/posts/:id/schedule", express.json({ limit: "200kb" }), async (req, res) => {
     try {
       if (!getPost(String(req.params.id))) { res.status(404).json({error:"Post not found"}); return; }
@@ -121,7 +157,24 @@ export function registerSmartPosterRoutes(
       if (b.driveFolderName != null) {
         patch.driveFolderName = String(b.driveFolderName).trim();
         /* Changing the name invalidates a prior cached id unless a new id is sent. */
-        if (b.driveFolderId == null) patch.driveFolderId = "";
+        if (b.driveFolderId == null && b.driveFolderUrl == null) patch.driveFolderId = "";
+      }
+      if (b.driveFolderUrl != null) {
+        const url = String(b.driveFolderUrl).trim();
+        patch.driveFolderUrl = url;
+        const id = driveFolderIdFromUrl(url);
+        if (url && !id) {
+          res.status(400).json({
+            error: "Paste a full Google Drive folder link (drive.google.com/drive/folders/…).",
+          });
+          return;
+        }
+        if (id) {
+          patch.driveFolderId = id;
+          if (b.driveFolderName == null) patch.driveFolderName = "Drive folder";
+        } else if (b.driveFolderId == null) {
+          patch.driveFolderId = "";
+        }
       }
       if (b.driveFolderId != null) patch.driveFolderId = String(b.driveFolderId).trim();
       if (b.timezone != null) patch.timezone = String(b.timezone).trim();

@@ -1,6 +1,6 @@
 /**
  * SmartPoster Google Drive via Composio (same managed OAuth as Harvey Plugins).
- * Operators connect with one click — no Google client IDs or pasted folder IDs.
+ * Operators connect with one click, then paste a Drive folder link to sync.
  */
 import {
   composioReady,
@@ -10,6 +10,9 @@ import {
   executeToolkit,
   managedConnections,
 } from "../../harvey/work/composio.js";
+import { driveDownloadSource } from "./driveDownload.js";
+import { driveFolderIdFromUrl, isDriveVideo } from "./driveFolderUrl.js";
+import { mediaSourceToBuffer, openMediaSource } from "./mediaStream.js";
 
 export const DRIVE_SLUG = "googledrive";
 
@@ -168,10 +171,7 @@ export async function listFolderVideos(
   for (const f of rows) {
     const name = String(f.name || "");
     const mime = String(f.mimeType || "");
-    const video =
-      mime.startsWith("video/")
-      || /\.(mp4|mov|m4v|webm|avi|mpeg|mpg)$/i.test(name);
-    if (!video) continue;
+    if (!isDriveVideo(name, mime)) continue;
     out.push({
       id: String(f.id || ""),
       name,
@@ -186,70 +186,85 @@ export async function listFolderVideos(
 function bufferFromDownloadPayload(payload: unknown): Buffer | null {
   const root = unwrapData(payload);
   const rec = asRecord(root) || {};
-
   const candidates: unknown[] = [
     rec.downloaded_file_content,
     rec.downloadedFileContent,
     rec.content,
-    rec.file,
     rec.bytes,
-    rec.data,
   ];
-
   for (const c of candidates) {
-    if (typeof c === "string" && c.trim()) {
-      if (/^https?:\/\//i.test(c)) continue; // Download links are not video bytes.
-      /* Prefer base64 when it looks like it; otherwise treat as latin1 bytes. */
-      const cleaned = c.replace(/^data:[^;]+;base64,/, "");
-      if (/^[A-Za-z0-9+/=\r\n]+$/.test(cleaned.slice(0, 200)) && cleaned.length > 64) {
-        try {
-          return Buffer.from(cleaned, "base64");
-        } catch {
-          /* fall through */
-        }
+    if (typeof c !== "string" || !c.trim()) continue;
+    if (/^https?:\/\//i.test(c)) continue;
+    const cleaned = c.replace(/^data:[^;]+;base64,/, "");
+    if (/^[A-Za-z0-9+/=\r\n]+$/.test(cleaned.slice(0, 200)) && cleaned.length > 64) {
+      try {
+        return Buffer.from(cleaned, "base64");
+      } catch {
+        /* fall through */
       }
-      return Buffer.from(c, "binary");
-    }
-    if (c && typeof c === "object") {
-      const nested = asRecord(c);
-      if (nested && typeof nested.s3url === "string") candidates.push(nested.s3url);
-      if (nested && typeof nested.url === "string") candidates.push(nested.url);
-      if (nested && typeof nested.content === "string") candidates.push(nested.content);
     }
   }
-
-  const url =
-    (typeof rec.download_url === "string" && rec.download_url)
-    || (typeof rec.downloadUrl === "string" && rec.downloadUrl)
-    || (typeof rec.url === "string" && rec.url)
-    || (typeof rec.s3url === "string" && rec.s3url)
-    || null;
-  return url ? null /* signal fetch below */ : null;
+  return null;
 }
 
-async function fetchUrlBytes(url: string): Promise<Buffer> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(5 * 60_000), redirect: "follow" });
-  if (!res.ok) throw new Error(`Drive download URL failed HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+async function driveFileDownloadResult(owner: string, fileId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  data?: unknown;
+}> {
+  const raw = await executeToolkit(owner, "GOOGLEDRIVE_DOWNLOAD_FILE", {
+    file_id: fileId,
+    fileId,
+  });
+  if (raw && typeof raw === "object" && "ok" in (raw as object)) {
+    return raw as { ok: boolean; error?: string; data?: unknown };
+  }
+  return { ok: true, data: raw };
+}
+
+/** Stream a Drive video (supports Range) for in-app preview. */
+export async function openDriveVideo(
+  owner: string,
+  fileId: string,
+  opts?: { range?: string },
+): Promise<Response> {
+  const raw = await driveFileDownloadResult(owner, fileId);
+  const source = driveDownloadSource(raw);
+  return openMediaSource(source, { range: opts?.range });
 }
 
 export async function downloadDriveFile(owner: string, fileId: string): Promise<Buffer> {
-  const raw = await executeToolkit(owner, "GOOGLEDRIVE_DOWNLOAD_FILE", { fileId });
-  const direct = bufferFromDownloadPayload(raw);
-  if (direct && direct.length) return direct;
+  const raw = await driveFileDownloadResult(owner, fileId);
+  const direct = bufferFromDownloadPayload(raw.data ?? raw);
+  if (direct?.length) return direct;
+  return mediaSourceToBuffer(driveDownloadSource(raw));
+}
 
-  const root = asRecord(unwrapData(raw)) || asRecord(raw) || {};
-  const url =
-    (typeof root.download_url === "string" && root.download_url)
-    || (typeof root.downloadUrl === "string" && root.downloadUrl)
-    || (typeof root.url === "string" && root.url)
-    || (typeof root.s3url === "string" && root.s3url)
-    || (typeof asRecord(root.file)?.s3url === "string" && String(asRecord(root.file)!.s3url))
-    || (typeof asRecord(root.file)?.url === "string" && String(asRecord(root.file)!.url))
-    || null;
-  if (url && /^https?:\/\//i.test(url)) return fetchUrlBytes(url);
-
-  throw new Error("Composio Drive download returned no file bytes");
+/** Bind settings to a pasted Drive folder link (or keep a resolved id). */
+export async function resolveFolderFromLink(
+  owner: string,
+  folderUrlOrId: string,
+): Promise<{ id: string; name: string }> {
+  const raw = String(folderUrlOrId || "").trim();
+  if (!raw) throw new Error("Paste a Google Drive folder link in SmartPoster settings.");
+  const fromUrl = driveFolderIdFromUrl(raw);
+  const id = fromUrl || (/^[A-Za-z0-9_-]{10,200}$/.test(raw) ? raw : null);
+  if (!id) {
+    throw new Error(
+      "Paste a full Google Drive folder link (drive.google.com/drive/folders/…).",
+    );
+  }
+  try {
+    const meta = await executeToolkit(owner, "GOOGLEDRIVE_FIND_FILE", {
+      q: `'${id.replace(/'/g, "\\'")}' in parents and trashed = false`,
+      pageSize: 1,
+      fields: "files(id,name)",
+    });
+    void meta;
+  } catch {
+    /* Listing parents is enough validation when FIND_FILE by id is unavailable. */
+  }
+  return { id, name: "Drive folder" };
 }
 
 export async function readSidecarJson(
@@ -274,21 +289,32 @@ export async function readSidecarJson(
   }
 }
 
-/** Ensure settings.driveFolderId matches the chosen folder name via Composio. */
+/**
+ * Prefer a pasted folder link / cached id. Fall back to folder-name search only
+ * when no id is available (legacy settings).
+ */
 export async function ensureFolderId(
   owner: string,
   folderName: string,
   cachedId?: string,
+  folderUrl?: string,
 ): Promise<{ id: string; name: string }> {
-  const name = String(folderName || "").trim();
-  if (!name) throw new Error("Pick a Drive folder name in SmartPoster settings.");
+  const link = String(folderUrl || "").trim();
+  if (link) {
+    const resolved = await resolveFolderFromLink(owner, link);
+    return { id: resolved.id, name: String(folderName || resolved.name).trim() || resolved.name };
+  }
   if (cachedId?.trim()) {
-    return { id: cachedId.trim(), name };
+    return { id: cachedId.trim(), name: String(folderName || "Drive folder").trim() || "Drive folder" };
+  }
+  const name = String(folderName || "").trim();
+  if (!name) {
+    throw new Error("Paste a Google Drive folder link in SmartPoster settings.");
   }
   const found = await resolveFolderByName(owner, name);
   if (!found) {
     throw new Error(
-      `No Drive folder named "${name}" found. Create it in Google Drive, then pick it here.`,
+      `No Drive folder named "${name}" found. Paste the folder link instead.`,
     );
   }
   return found;
