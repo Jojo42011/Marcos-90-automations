@@ -16,9 +16,11 @@ export type Post = {
   targetDate?: string | null;
   timezone?: string;
   mediaUrl?: string | null;
+  coverOffsetMs?: number | null;
   platformPostUrl?: string | null;
   zernioPostId?: string | null;
   error?: string | null;
+  driveFileId?: string | null;
 };
 export type Plan = {
   title: string;
@@ -27,6 +29,7 @@ export type Plan = {
   localDate: string;
   localTime: string;
   timezone: string;
+  coverOffsetMs: number | null;
 };
 export function weekDates(today: string, offset = 0) {
   const date = new Date(today + "T12:00:00Z");
@@ -85,6 +88,10 @@ export function planFor(post: Post, timezone: string, day?: string): Plan {
     timezone,
     localDate: day || local.localDate || post.targetDate || "",
     localTime: local.localTime,
+    coverOffsetMs:
+      post.coverOffsetMs != null && Number.isFinite(post.coverOffsetMs)
+        ? Math.max(0, Math.floor(post.coverOffsetMs))
+        : null,
   };
 }
 export function payload(plan: Plan, schedule = false) {
@@ -98,6 +105,19 @@ export function payload(plan: Plan, schedule = false) {
   return localDate
     ? { ...rest, localDate, localTime }
     : { ...rest, scheduledFor: null };
+}
+/** In-app preview stream when the post still has a Drive file. */
+export function previewSrc(post: Post) {
+  return post.driveFileId
+    ? `/api/smartposter/posts/${encodeURIComponent(post.id)}/media`
+    : safeURL(post.mediaUrl);
+}
+export function formatCover(ms: number | null | undefined) {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "Not set";
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 export function safeURL(value?: string | null) {
   try {

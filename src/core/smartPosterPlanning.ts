@@ -54,6 +54,14 @@ export function planPatch(post: SmartPosterPost, body: Record<string, unknown>):
     new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date());
     next.timezone = timezone;
   }
+  if (body.coverOffsetMs !== undefined) {
+    if (body.coverOffsetMs === null || body.coverOffsetMs === "") next.coverOffsetMs = null;
+    else {
+      const ms = Number(body.coverOffsetMs);
+      if (!Number.isFinite(ms) || ms < 0) throw new Error("Cover frame must be a non-negative time.");
+      next.coverOffsetMs = Math.floor(ms);
+    }
+  }
   if (body.localDate !== undefined || body.localTime !== undefined) {
     next.scheduledFor = plannerTime(String(body.localDate || ""), String(body.localTime || ""), next.timezone);
   }

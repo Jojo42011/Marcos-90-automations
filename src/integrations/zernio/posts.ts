@@ -134,6 +134,8 @@ export interface CreateZernioPostInput {
   content: string;
   mediaUrl: string;
   mediaType?: "video" | "image";
+  /** Cover frame offset in ms — maps to Instagram thumbOffset / TikTok cover timestamp. */
+  coverOffsetMs?: number | null;
   platforms: Array<{ platform: string; accountId: string; platformSpecificData?: Record<string, unknown> }>;
   scheduledFor?: string;
   timezone?: string;
@@ -156,15 +158,34 @@ export async function createZernioPost(input: CreateZernioPostInput): Promise<{
     return { ok: false, error: "At least one platform target is required" };
   }
 
+  const coverMs =
+    input.coverOffsetMs != null && Number.isFinite(input.coverOffsetMs) && input.coverOffsetMs >= 0
+      ? Math.floor(input.coverOffsetMs)
+      : null;
+  const mediaItem: Record<string, unknown> = {
+    url: input.mediaUrl,
+    type: input.mediaType || "video",
+  };
+  if (coverMs != null) mediaItem.thumbOffset = coverMs;
+
+  const targetPlatforms = input.platforms.map((p) => {
+    if (coverMs == null) return p;
+    const platform = String(p.platform || "").toLowerCase();
+    const extra: Record<string, unknown> = { ...(p.platformSpecificData || {}) };
+    if (platform === "instagram" || platform === "instagram-reels" || platform === "ig") {
+      extra.thumbOffset = coverMs;
+    }
+    if (platform === "tiktok") {
+      extra.video_cover_timestamp_ms = coverMs;
+      extra.coverOffsetMs = coverMs;
+    }
+    return { ...p, platformSpecificData: Object.keys(extra).length ? extra : p.platformSpecificData };
+  });
+
   const body: Record<string, unknown> = {
     content: input.content,
-    mediaItems: [
-      {
-        url: input.mediaUrl,
-        type: input.mediaType || "video",
-      },
-    ],
-    platforms: input.platforms,
+    mediaItems: [mediaItem],
+    platforms: targetPlatforms,
     timezone: input.timezone || "America/Chicago",
   };
   if (input.title) body.title = input.title;
@@ -189,9 +210,11 @@ export async function createZernioPost(input: CreateZernioPostInput): Promise<{
     message?: string;
   };
   const post = root.post || (r.json as Record<string, unknown>);
-  const platforms = Array.isArray(post?.platforms) ? (post.platforms as Record<string, unknown>[]) : [];
+  const resultPlatforms = Array.isArray(post?.platforms)
+    ? (post.platforms as Record<string, unknown>[])
+    : [];
   const firstUrl =
-    platforms.map((p) => String(p.platformPostUrl || p.url || "")).find(Boolean) || null;
+    resultPlatforms.map((p) => String(p.platformPostUrl || p.url || "")).find(Boolean) || null;
   return {
     ok: true,
     postId: String(post?._id ?? post?.id ?? ""),

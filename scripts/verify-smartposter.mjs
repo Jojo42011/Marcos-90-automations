@@ -89,11 +89,44 @@ check("Drive connect uses Composio, not pasted Google client OAuth", () => {
   assert(/composioReady|executeToolkit|googledrive/i.test(drive));
   assert(/GOOGLEDRIVE_FIND_FILE/.test(drive));
   assert(/GOOGLEDRIVE_FIND_FOLDER/.test(drive));
+  assert(/openDriveVideo|resolveFolderFromLink|driveFolderIdFromUrl/.test(drive));
   assert(!/HARVEY_GOOGLE_CLIENT_ID/.test(drive));
   const page = read("web/smartposter/main.tsx");
   assert(/Connect Google Drive/.test(page));
+  assert(/Drive folder link/.test(page));
+  assert(/Use current frame/.test(page));
+  assert(/posts\/\$\{encodeURIComponent\(post\.id\)\}\/media|previewSrc/.test(page + read("web/smartposter/model.ts")));
   assert(!/Paste the folder id/.test(page));
   assert(/executeToolkit/.test(read("src/harvey/work/composio.ts")));
+});
+
+check("Media preview route and cover offset schedule path ship", () => {
+  const routes = read("src/integrations/smartPoster/routes.ts");
+  assert(/posts\/:id\/media/.test(routes));
+  assert(/openDriveVideo/.test(routes));
+  assert(/driveFolderUrl/.test(routes));
+  const posts = read("src/integrations/zernio/posts.ts");
+  assert(/coverOffsetMs|thumbOffset/.test(posts));
+  const store = read("src/core/smartPosterStore.ts");
+  assert(/cover_offset_ms|coverOffsetMs/.test(store));
+  assert(/driveFolderUrl/.test(store));
+  const folderUrl = read("src/integrations/smartPoster/driveFolderUrl.ts");
+  assert(/drive\.google\.com/.test(folderUrl));
+});
+
+const folderUrl = await import("../dist/src/integrations/smartPoster/driveFolderUrl.js");
+check("Drive folder URL parser accepts only Google Drive folder links", () => {
+  assert.equal(
+    folderUrl.driveFolderIdFromUrl("https://drive.google.com/drive/folders/abcDEF12345_-"),
+    "abcDEF12345_-",
+  );
+  assert.equal(
+    folderUrl.driveFolderIdFromUrl("https://evil.example/drive/folders/abcDEF12345_-"),
+    null,
+  );
+  assert.equal(folderUrl.driveFolderIdFromUrl("https://drive.google.com/file/d/x/view"), null);
+  assert.equal(folderUrl.isDriveVideo("clip.mp4", "application/octet-stream"), true);
+  assert.equal(folderUrl.isDriveVideo("notes.pdf", "application/pdf"), false);
 });
 
 check("Harvey get_smartposter ships with the surface", () => {
