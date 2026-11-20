@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-20: Harvey Plugins lists one Connected row per Composio account (multiple Gmail/Drive logins), connects with `allowMultiple`, and disconnects by `accountId`. Plugins page layout is denser/cleaner (account list + quieter catalog). Checks: build, verify-harvey-composio, verify-harvey-plugins-ui, verify-harvey-work.
+
 - 2026-11-16: SmartPoster ports Systemize’s clean Drive→preview→schedule path (no variants, daily queue, numbers panel, or background timer). Settings accept a pasted `drive.google.com/drive/folders/…` link (`driveFolderUrl` → folder id). Plan dialog streams `/api/smartposter/posts/:id/media` with Range for in-app preview; operators scrub and set `coverOffsetMs` for Instagram `thumbOffset` / TikTok cover on Zernio create/update. Drive download prefers Composio download URLs via `driveDownloadSource` + `mediaStream`. CRM People/SmartPoster stay on shared `commandTheme` (Marco brand). Checks: build, verify-smartposter, verify-smartposter-ui, verify-growth-ui.
 
 - 2026-11-14: Dialer session card is a Mojo-style calling sheet — name, large phone (`tel:`), address, Calling from (Quo number when set), email, source, then the full listing field list in fixed order (status, expire date, list price, DOM, MLS #, MLS name, property type, beds/baths/sqft/year, subdivision, MLS area, listing agent, brokerage, owner name, tax ID). Empty values stay as "—"; never invented. Defaults show every field; per-caller prefs can hide rows. Contact detail uses the same sheet. Checks: build, verify-dialer-workspace.

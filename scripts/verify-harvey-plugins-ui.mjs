@@ -26,7 +26,10 @@ try {
           const q=u.searchParams.get('search')||'',cursor=u.searchParams.get('cursor');
           if(q==='slow')return new Promise(resolve=>window.pending.push(()=>resolve({ok:true,data:{enabled:true,items:[app('Stale result')],cursor:null}})));
           if(q==='error')return {ok:false,error:'Fixture catalog unavailable'};
-          data={enabled:true,connected:window.fixtureConnected?[{...app('Canva'),scope:'owner',connection:{isActive:true}}]:[],
+          data={enabled:true,connected:window.fixtureConnected?[
+              {...app('gmail'),name:'Gmail',scope:'owner',accountId:'g1',label:'marco@example.com',connection:{isActive:true}},
+              {...app('gmail'),name:'Gmail',scope:'owner',accountId:'g2',label:'wesley@example.com',connection:{isActive:true}},
+            ]:[],
             items:q==='video'?(cursor?[app('VideoDB')]:[app('Captions')]):(cursor?[app('Drive'),app('Canva')]:[app('Gmail'),app('Drive')]),cursor:cursor?null:'second-page'};
         }
         return {ok:true,data};
@@ -64,7 +67,11 @@ try {
   await page.evaluate(()=>window.pending.shift()());
   assert(!(await page.locator('#managedGrid').textContent()).includes('Stale result'));
   assert((await page.locator('.plugin-intro').textContent()).includes('scheduled agents'));
-  console.log('ok returning from authorization refreshes connected apps and invalidates the previous catalog');
+  assert.equal(await page.locator('.plugin-account-row').count(),2);
+  assert((await page.locator('.plugin-account-list').textContent()).includes('marco@example.com'));
+  assert((await page.locator('.plugin-account-list').textContent()).includes('wesley@example.com'));
+  assert((await page.locator('.plugin-account-row').first().locator('[data-work-action="managed-connect"]').textContent()).includes('Add account'));
+  console.log('ok returning from authorization refreshes connected apps and shows multiple accounts per plugin');
   await page.locator('#managedGrid [data-work-action="managed-connect"]').first().click();
   await page.waitForURL('**/authorize');
   assert.deepEqual(errors,[]);
