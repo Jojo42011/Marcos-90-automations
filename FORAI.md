@@ -22,6 +22,8 @@ A real estate business platform for Marco, Wesley and Carlos with CRM, social le
 
 ## Recent changes
 
+- 2026-11-20: Harvey chat recovers Mercury text-only turns after tool use. Explicit no-tools/setup requests withhold schemas; a same-model one-shot retry strips tools on prompt-token/context 400s (including within-turn finals) instead of the generic AI-service failure. Explicit model picks, account isolation and safety checks are unchanged. Checks: build, verify-harvey-reliability.
+
 - 2026-11-20: Harvey Plugins lists one Connected row per Composio account (multiple Gmail/Drive logins), connects with `allowMultiple`, and disconnects by `accountId`. Plugins page layout is denser/cleaner (account list + quieter catalog). Checks: build, verify-harvey-composio, verify-harvey-plugins-ui, verify-harvey-work.
 
 - 2026-11-16: SmartPoster ports Systemize’s clean Drive→preview→schedule path (no variants, daily queue, numbers panel, or background timer). Settings accept a pasted `drive.google.com/drive/folders/…` link (`driveFolderUrl` → folder id). Plan dialog streams `/api/smartposter/posts/:id/media` with Range for in-app preview; operators scrub and set `coverOffsetMs` for Instagram `thumbOffset` / TikTok cover on Zernio create/update. Drive download prefers Composio download URLs via `driveDownloadSource` + `mediaStream`. CRM People/SmartPoster stay on shared `commandTheme` (Marco brand). Checks: build, verify-smartposter, verify-smartposter-ui, verify-growth-ui.

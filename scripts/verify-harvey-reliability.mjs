@@ -137,6 +137,21 @@ const model=http.createServer((req,res)=>{if(req.url==='/key'){res.setHeader('Co
  }
  else if(user.includes('SLOW_FIXTURE')){slowStarted();await slowHold;response={role:'assistant',content:'Slow fixture completed.'};}
  else if(user.includes('TRANSIENT_FIXTURE')){if(++transientCalls===1){res.statusCode=504;res.end(JSON.stringify({error:{message:'Upstream idle timeout exceeded'}}));return;}response={role:'assistant',content:'Transient provider recovered.'};}
+ else if(user.includes('TEXT_ONLY_SETUP')||JSON.stringify(b.messages).includes('TEXT_ONLY_SETUP')){
+  if((b.tools||[]).length){res.statusCode=400;res.end(JSON.stringify({error:{message:'Prompt tokens exceed the free-tier limit for this model when tools are attached',code:400}}));return;}
+  response={role:'assistant',content:'Acknowledged. DFW buyer intake fields noted. Fictional digest: 1 Listing A, 2 Listing B.'};
+ }
+ else if(user.includes('TOOL_THEN_TEXT_FIXTURE')||JSON.stringify(b.messages).includes('TOOL_THEN_TEXT_FIXTURE')){
+  if(n===0 && user.includes('TOOL_THEN_TEXT_FIXTURE'))response=tc('COMPOSIO_MULTI_EXECUTE_TOOL',{tools:[{tool_slug:'GMAIL_FETCH'}]});
+  else if(n>0 && (b.tools||[]).length){res.statusCode=400;res.end(JSON.stringify({error:{message:'Prompt tokens exceed the free-tier limit for this model when tools are attached',code:400}}));return;}
+  else response={role:'assistant',content:n>0?'Subjects retrieved; final answer without tools.':'Follow-up answer after tools withheld.'};
+ }
+ else if(JSON.stringify(b.messages).includes('MERCURY_TEXT_AFTER_HISTORY') && (b.tools||[]).length){
+  res.statusCode=400;res.end(JSON.stringify({error:{message:'Prompt tokens exceed the free-tier limit for this model when tools are attached',code:400}}));return;
+ }
+ else if(JSON.stringify(b.messages).includes('MERCURY_TEXT_AFTER_HISTORY')){
+  response={role:'assistant',content:'Plain follow-up after prior tool history, tools stripped.'};
+ }
  else if(user.includes('BROWSER_VISION_FIXTURE')){
   if(n===1)assert(!JSON.stringify(b.messages).includes('image_url'),'Text-only model must not receive image input');
   response=n<2?tc('computer',{action:'call',tool:n?'browser_mouse_click_xy':'browser_take_screenshot',arguments:n?{x:20,y:20}:{}}):n===2?tc('report_verification',{status:'needs_verification',evidenceIds:[],checks:['Model capability checked'],limitations:['Visual input unsupported']}):{role:'assistant',content:'Use semantic controls.'};
@@ -312,6 +327,55 @@ try{
  ok('empty and pseudo-tool output repairs into a usable answer without executing text',()=>{assert.match(formatRepaired.speech,/Recovered/);assert(!formatRepaired.modelError);});
  const empty=await runAgentLoop({message:'ALWAYS_EMPTY_FIXTURE',fullMode:true,workRuntime:repairRuntime,modelOverride:'inception/mercury-2.5'});
  ok('persistent empty replies return an honest nonempty failure after bounded repair',()=>{assert(empty.modelError);assert(empty.speech.length>20);});
+ const {textOnlyRequest,executionRequest}=require(join(root,'harvey/work/execution.js'));
+ ok('explicit no-tools setup is text-only and not an execution request',()=>{
+  assert.equal(textOnlyRequest('TEXT_ONLY_SETUP no tools. Acknowledge intake fields only.'),true);
+  assert.equal(executionRequest('TEXT_ONLY_SETUP no tools. Acknowledge intake fields only.'),false);
+  assert.equal(textOnlyRequest('Read my inbox subjects now'),false);
+ });
+ let textOnlyToolRuns=0;
+ const textOnlyAfterTools=await runAgentLoop({
+  message:'TEXT_ONLY_SETUP no tools. Acknowledge and list DFW buyer intake fields only.',
+  modelOverride:'inception/mercury-2.5',
+  fullMode:true,
+  job:'agent',
+  history:[{role:'user',content:'Earlier GMAIL tool turn'},{role:'assistant',content:'Subjects: A, B, and C.'}],
+  workRuntime:{context:'Fixture',pendingWork:()=>false,tools:[{name:'COMPOSIO_MULTI_EXECUTE_TOOL',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{textOnlyToolRuns++;return {ok:true};}}
+ });
+ ok('Mercury text-only setup after a tool turn withholds tools and answers without AI-service failure',()=>{
+  assert.equal(textOnlyToolRuns,0);
+  assert(!textOnlyAfterTools.modelError,textOnlyAfterTools.modelError);
+  assert.match(textOnlyAfterTools.speech,/Acknowledged|intake|Digest/i);
+  assert(!/couldn.?t get a response from the AI service/i.test(textOnlyAfterTools.speech));
+ });
+ let historyStripRuns=0;
+ const historyStrip=await runAgentLoop({
+  message:'Please continue the plan for MERCURY_TEXT_AFTER_HISTORY after the inbox check.',
+  modelOverride:'inception/mercury-2.5',
+  fullMode:true,
+  job:'agent',
+  history:[{role:'user',content:'Earlier tool turn MERCURY_TEXT_AFTER_HISTORY'},{role:'assistant',content:'Subjects retrieved.'}],
+  workRuntime:{context:'Fixture',pendingWork:()=>false,tools:[{name:'COMPOSIO_MULTI_EXECUTE_TOOL',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{historyStripRuns++;return {ok:true};}}
+ });
+ ok('Mercury follow-up after tool history strips tools once on prompt-token 400 without swapping models',()=>{
+  assert.equal(historyStripRuns,0);
+  assert(!historyStrip.modelError,historyStrip.modelError);
+  assert.match(historyStrip.speech,/Plain follow-up|tools stripped/i);
+  assert.equal(historyStrip.modelUsed||historyStrip.model,'inception/mercury-2.5');
+ });
+ let withinToolRuns=0;
+ const withinTurn=await runAgentLoop({
+  message:'TOOL_THEN_TEXT_FIXTURE read subjects then finish',
+  modelOverride:'inception/mercury-2.5',
+  fullMode:true,
+  job:'agent',
+  workRuntime:{context:'Fixture',pendingWork:()=>false,tools:[{name:'COMPOSIO_MULTI_EXECUTE_TOOL',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{withinToolRuns++;return {subjects:['A','B','C']};}}
+ });
+ ok('within-turn Mercury text after tools recovers by withholding tools on token-limit 400',()=>{
+  assert.equal(withinToolRuns,1);
+  assert(!withinTurn.modelError,withinTurn.modelError);
+  assert.match(withinTurn.speech,/Subjects retrieved|final answer|without tools/i);
+ });
  for(const unknownWrite of [false,true]){
    let actions=0;
    const recovered=await runAgentLoop({message:'Finish BROKEN_BATCH_FIXTURE '+(unknownWrite?'UNKNOWN_WRITE':''),fullMode:true,allowContinuation:true,modelOverride:'inception/mercury-2.5',workRuntime:{context:'Fixture',pendingWork:()=>true,tools:[{name:'computer',description:'Fixture',input_schema:{type:'object',properties:{}}}],execute:async()=>{actions++;return {text:'Source account and destination account inspected; completed batch retained.'};}}});
