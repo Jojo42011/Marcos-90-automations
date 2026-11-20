@@ -86,7 +86,7 @@ export function createWorkRouter(authorize: (req: Request) => boolean, owner: Ow
   });
   route("get", "/work/managed", async(q,res,o)=>res.json(await managedCatalog(o,q.query.projectId?String(q.query.projectId):null,String(q.query.search||""),q.query.cursor?String(q.query.cursor):undefined)));
   route("post", "/work/managed/connect", async(q,res,o)=>res.json(await connectManaged(o,q.body.projectId||null,String(q.body.service))));
-  route("post", "/work/managed/disconnect", async(q,res,o)=>res.json(await disconnectManaged(o,q.body.projectId||null,String(q.body.service),q.body.scope?String(q.body.scope):undefined)));
+  route("post", "/work/managed/disconnect", async(q,res,o)=>res.json(await disconnectManaged(o,q.body.projectId||null,String(q.body.service),q.body.scope?String(q.body.scope):undefined,q.body.accountId?String(q.body.accountId):undefined)));
   route("get", "/work/plugins", (_q,res,o) => res.json({ catalog:catalog(), connections:connections(o).map(publicConnection) }));
   route("post", "/work/plugins/oauth", (q,res,o) => { const result = startOAuth(o,q.body.service,q.body.projectId || null,q.body.allowWrites === true); res.cookie("harvey_oauth_state",result.state,{ httpOnly:true,sameSite:"lax",secure:q.secure,maxAge:600000,path:"/api/harvey/work/oauth" }); res.json({url:result.url}); });
   route("post", "/work/plugins/mcp", async (q,res,o) => res.status(201).json(await addMcp(o,q.body)));

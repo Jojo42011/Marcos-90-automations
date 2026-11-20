@@ -37,25 +37,48 @@
   }
   function pluginIcon(service) {
     var url=service.logo||'';try{if(new URL(url).hostname!=='logos.composio.dev')url='';}catch(_){url='';}
-    return '<div class="plugin-logo">'+(url?'<img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span>'+esc(service.name[0])+'</span>')+'</div>';
+    return '<div class="plugin-logo">'+(url?'<img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span>'+esc((service.name||service.slug||'?')[0])+'</span>')+'</div>';
   }
-  function pluginCards(items, connected) {
-    return items.map(function(s){var active=!!(s.connection&&s.connection.isActive);return '<article class="plugin-card">'+pluginIcon(s)+'<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+(active?'Connected':s.isNoAuth?'No sign-in needed':'Connect your account')+'</p></div><div class="plugin-card-actions">'+(connected?'<span class="connected-badge">Connected</span>'+button('Disconnect','managed-disconnect',s.slug+'|'+s.scope):button(active?'Add account':s.isNoAuth?'Use in Work':'Connect',s.isNoAuth?'managed-use':'managed-connect',s.slug))+'</div></article>';}).join('');
+  function connectedRows(items) {
+    if(!items.length)return '<div class="plugin-empty">Connect an app below. Harvey will ask you to sign in and approve access.</div>';
+    return '<div class="plugin-account-list">'+items.map(function(s){
+      var label=s.label||s.alias||'Connected account';
+      var id=[s.slug,s.scope||'',s.accountId||(s.connection&&s.connection.connectedAccount&&s.connection.connectedAccount.id)||''].join('|');
+      return '<article class="plugin-account-row">'+pluginIcon(s)+
+        '<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+esc(label)+'</p></div>'+
+        '<div class="plugin-card-actions"><span class="connected-badge">Connected</span>'+
+        button('Add account','managed-connect',s.slug)+
+        button('Disconnect','managed-disconnect',id)+
+        '</div></article>';
+    }).join('')+'</div>';
+  }
+  function catalogCards(items) {
+    return items.map(function(s){
+      var active=!!(s.connection&&s.connection.isActive);
+      return '<article class="plugin-card">'+pluginIcon(s)+
+        '<div class="plugin-card-copy"><h3>'+esc(s.name)+'</h3><p>'+(active?'Connected · add another account':s.isNoAuth?'No sign-in needed':'Connect your account')+'</p></div>'+
+        '<div class="plugin-card-actions">'+
+        button(active?'Add account':s.isNoAuth?'Use in Work':'Connect',s.isNoAuth?'managed-use':'managed-connect',s.slug)+
+        '</div></article>';
+    }).join('');
   }
   async function pluginsView() {
     var version=++pluginViewVersion, project=h.state.projectId||'', query='?projectId='+encodeURIComponent(project);
     function current(){return version===pluginViewVersion&&activeView==='plugins'&&h.state.view==='work'&&(h.state.projectId||'')===project;}
     var results=await Promise.all([api('/work/managed'+query),api('/work/plugins')]),managed=results[0],legacy=results[1];if(!current())return;connections=legacy.connections;services=legacy.catalog;
-    $('workTitle').textContent='Plugins';$('workSubtitle').textContent='Your favorite apps, ready to work with Harvey.';
-    $('workBody').innerHTML='<div class="plugin-intro"><span>'+esc('Connected apps are available to Harvey across your chats and scheduled agents')+'</span>'+button('Custom connector','custom')+'</div>'+
+    var connected=managed.connected||[];
+    $('workTitle').textContent='Plugins';$('workSubtitle').textContent='Connect the apps Harvey can use in your chats.';
+    $('workBody').innerHTML='<div class="plugin-shell">'+
+      '<div class="plugin-intro"><div class="plugin-intro-copy"><p>'+esc('Connected apps are available to Harvey across your chats and scheduled agents. Add more than one account per app when you need it.')+'</p></div>'+button('Custom connector','custom')+'</div>'+
       (!managed.enabled?'<div class="panel">Managed connections are not configured yet.</div>':'')+
-      '<section class="plugin-section"><h2>Connected <span class="plugin-count">'+(managed.connected||[]).length+'</span></h2><div class="plugin-cards">'+((managed.connected||[]).length?pluginCards(managed.connected,true):'<div class="plugin-empty">Connect an app below. Harvey will ask you to sign in and approve access.</div>')+'</div></section>'+
-      '<section class="plugin-section"><div class="plugin-catalog-head"><h2>Explore all apps</h2><input id="pluginSearch" type="search" placeholder="Search all Composio apps…" maxlength="100" aria-label="Search apps"></div><div id="managedGrid" class="plugin-cards">'+pluginCards(managed.items||[],false)+'</div><p id="pluginSearchStatus" class="work-hint" role="status"></p><button type="button" id="pluginLoadMore" class="work-button" hidden>Load more apps</button></section>'+
-      (connections.length?'<details class="plugin-advanced"><summary>Custom and existing connections</summary>'+connections.map(function(c){return '<article class="panel"><h3>'+esc(c.name)+'</h3><p class="work-hint">'+(c.allowWrites?'Actions enabled':'Read only')+'</p>'+button(c.allowWrites?'Set read only':'Enable actions','permissions',c.id)+button('Disconnect','disconnect',c.id)+'</article>';}).join('')+'</details>':'');
+      '<section class="plugin-section"><div class="plugin-section-head"><h2>Connected</h2><span class="plugin-count">'+(connected.length)+'</span></div>'+connectedRows(connected)+'</section>'+
+      '<section class="plugin-section"><div class="plugin-catalog-head"><div class="plugin-section-head"><h2>Explore apps</h2></div><input id="pluginSearch" type="search" placeholder="Search apps…" maxlength="100" aria-label="Search apps"></div><div id="managedGrid" class="plugin-cards">'+catalogCards(managed.items||[])+'</div><p id="pluginSearchStatus" class="work-hint" role="status"></p><button type="button" id="pluginLoadMore" class="work-button" hidden>Load more</button></section>'+
+      (connections.length?'<details class="plugin-advanced"><summary>Custom connectors</summary>'+connections.map(function(c){return '<article class="plugin-account-row"><div class="plugin-card-copy"><h3>'+esc(c.name)+'</h3><p>'+(c.allowWrites?'Actions enabled':'Read only')+'</p></div><div class="plugin-card-actions">'+button(c.allowWrites?'Set read only':'Enable actions','permissions',c.id)+button('Disconnect','disconnect',c.id)+'</div></article>';}).join('')+'</details>':'')+
+      '</div>';
     var timer,sequence=0,items=managed.items||[],cursor=managed.cursor||null,search='',loading=false;
     var grid=$('managedGrid'),message=$('pluginSearchStatus'),more=$('pluginLoadMore');
     function render(){
-      grid.innerHTML=pluginCards(items,false);
+      grid.innerHTML=catalogCards(items);
       message.textContent=items.length?items.length+' apps shown'+(cursor?' · Load more or search by name.':'.'):'No apps found. Try another name or add a custom connector.';
       more.hidden=!cursor;more.disabled=loading;
     }
@@ -120,7 +143,17 @@
   async function act(action,id) {
     if(action==='managed-use'){h.newChat();h.state.mode='work';syncControls();h.showView('chat');$('input').value='Help me use '+id;$('input').dispatchEvent(new Event('input'));return;}
     if(action==='managed-connect'){try{sessionStorage.setItem('harvey_plugin_project',h.state.projectId||'');}catch(_){}var link=await api('/work/managed/connect','POST',{projectId:h.state.projectId,service:id});if(!link.url)throw new Error('The service did not return a sign-in link');window.top.location.assign(link.url);return;}
-    if(action==='managed-disconnect'){if(!confirm('Disconnect this account from this workspace?'))return;await api('/work/managed/disconnect','POST',{projectId:h.state.projectId,service:id.split('|')[0],scope:id.split('|')[1]});return pluginsView();}
+    if(action==='managed-disconnect'){
+      if(!confirm('Disconnect this account from this workspace?'))return;
+      var parts=String(id||'').split('|');
+      await api('/work/managed/disconnect','POST',{
+        projectId:h.state.projectId,
+        service:parts[0],
+        scope:parts[1]||undefined,
+        accountId:parts[2]||undefined
+      });
+      return pluginsView();
+    }
     if(action==="upload")return uploadFile();
     if(action==="custom")return modal("Add custom MCP connector",field("Name","name")+field("HTTPS MCP URL","endpoint","","url")+'<label class="work-field">Bearer token (optional)<input name="token" type="password" autocomplete="new-password"></label>'+scope()+actionsCheckbox(),async function(d){d.projectId=h.state.projectId;await api("/work/plugins/mcp","POST",d);await pluginsView();});
     if(action==="connect") {var s=services.find(function(s){return s.id===id;});if(!s.ready)return modal(s.name+" setup",'<p>Configure '+esc(s.setup)+' on the server, along with HARVEY_PUBLIC_URL and HARVEY_VAULT_KEY. Register the OAuth callback ending in <code>/api/harvey/work/oauth/callback</code>.</p><p>Once configured, this service gets a Connect button.</p>',async function(){});return modal("Connect "+s.name,scope()+actionsCheckbox()+'<p>You’ll continue to the service to choose your account and approve access.</p>',async function(d){var result=await api("/work/plugins/oauth","POST",{service:id,projectId:h.state.projectId,allowWrites:d.allowWrites});window.top.location.assign(result.url);});}
