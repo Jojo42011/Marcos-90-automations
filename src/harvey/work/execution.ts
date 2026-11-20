@@ -1,9 +1,10 @@
-/** Explicit text-only / no-tools setup: answer from context, never attach schemas. */
+/** Explicit no-tools / text-only setup: withhold schemas. Broader "just discuss/plan"
+ *  phrasing stays a non-execution request but still receives tools when Chat/Work
+ *  needs them available (verify-harvey-work Chat fixture). */
 export function textOnlyRequest(message:string):boolean {
   const q=message.trim();
   if(!q)return false;
-  return /\b(?:no tools|without tools|text[\s-]?only|don'?t use (?:any )?tools|do not use (?:any )?tools|tools?\s+off|without (?:calling|using) (?:any )?tools)\b/i.test(q)
-    || /\b(?:just|only) (?:answer|explain|plan|discuss|diagnose|acknowledge|reply)\b/i.test(q);
+  return /\b(?:no tools|without tools|text[\s-]?only|don'?t use (?:any )?tools|do not use (?:any )?tools|tools?\s+off|without (?:calling|using) (?:any )?tools)\b/i.test(q);
 }
 
 /** Status/planning/stop requests never authorize another execution segment. */
