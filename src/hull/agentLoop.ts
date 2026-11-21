@@ -1,7 +1,7 @@
 import {createHash} from 'crypto';
 import {formatSourceValue} from '../harvey/work/valueFormats.js';
 import Anthropic from "@anthropic-ai/sdk";
-import { segmentLimit, executionRequest, promisesImmediateCheck, recoveryReviewPolicy, outcomeReviewPolicy } from "../harvey/work/execution.js";
+import { segmentLimit, executionRequest, textOnlyRequest, promisesImmediateCheck, recoveryReviewPolicy, outcomeReviewPolicy } from "../harvey/work/execution.js";
 import {computerArguments} from '../harvey/work/computerArguments.js';
 import {unsupportedCapabilityClaim} from '../harvey/work/capabilities.js';
 import { RELIABILITY_RULES, hasWorkReceipts, canResumeFromReceipts, stableCallKey, isObservation, isDiscovery, TurnVerification, VERIFICATION_TOOL, SOURCE_CHECK_TOOL, OUTCOME_REVIEW_TOOL, OUTCOME_REVIEW_SYSTEM, outcomeVerdict, type Verification, type Receipt } from "../harvey/reliability.js";
@@ -282,6 +282,11 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
      operational prompt half is dead weight on exactly the turns that need to
      feel most human. Anything ambiguous falls through to the full path. */
   const socialTurn = isSocialTurn(opts.message);
+  /* Setup / planning turns that forbid tools must not ship the ~14k schema
+     preamble. Mercury stress: after a successful tool turn, an explicit
+     "no tools" follow-up still attached every Work tool and OpenRouter
+     returned HTTP 400; the catch path surfaced the generic AI-service speech. */
+  const textOnly = textOnlyRequest(opts.message);
   const factLimit = opts.fastMode ? 4 : 8;
   /* "What about him?" carries zero retrievable keywords — short or deictic
      messages blend the prior user turns in so retrieval can see the referent. */
@@ -354,6 +359,7 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
     sonnetTools || ownerWhatsAppTools || voiceTools || nurtureIntent || opts.ownerMode;
   const toolsEnabled =
     !socialTurn &&
+    !textOnly &&
     (Boolean(opts.fullMode) || sonnetTools || ownerWhatsAppTools || voiceTools || gmailTools || nurtureTools);
 
   let system = buildFounderSystemPrompt(memoryPacket, {
@@ -394,8 +400,15 @@ export async function runAgentLoop(opts: AgentLoopOptions): Promise<AgentLoopRes
 SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identity overrides historical Marco-specific persona examples. Address this person by their own name. Only use verified data available to this account. Social, TikTok, DM and CRM tools already scope to this account — call them; do not refuse because prompts mention Marco. ${process.env.TENANT_MEMBER === "carlos" ? "Carlos assists both Marco and Wesley; use crm_api collection endpoints for combined business statistics, never infer totals from personal legacy tools." : "Business records are private to this account; team SOPs and Knowledge Center training are shared."}`;
   if (opts.workRuntime) system = opts.workRuntime.context;
   system += "\n\n" + RELIABILITY_RULES;
+  if (textOnly) {
+    system += "\n\nTEXT-ONLY REQUEST: The user forbade tools for this turn. Answer in plain language from current context and history only. Do not call tools, claim new external actions ran, or invent live mailbox/CRM facts beyond what this chat already shows.";
+  }
   const verification = new TurnVerification();
-  const activeTools = opts.workRuntime ? [...opts.workRuntime.tools, VERIFICATION_TOOL, SOURCE_CHECK_TOOL] : toolsEnabled ? hullTools : undefined;
+  let activeTools = opts.workRuntime
+    ? (textOnly ? undefined : [...opts.workRuntime.tools, VERIFICATION_TOOL, SOURCE_CHECK_TOOL])
+    : toolsEnabled
+      ? hullTools
+      : undefined;
   /* Voice turns are 1-3 sentences; a large reserve both wastes budget and
      removes the hard backstop on rambling (playbook §7.5). */
   const maxTokens = opts.fastMode ? 512 : opts.voiceMode ? 320 : getMaxTokens();
@@ -816,6 +829,7 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
     }catch(error){opts.signal?.throwIfAborted();const detail=error instanceof ModelLayerError?error.summary:error instanceof BudgetRefusedError?error.message:'The recovery consultation was unavailable';opts.onEvent?.({type:'tool',name:'recovery_review',status:'error',detail});system+='\nRecovery consultation unavailable: '+JSON.stringify(detail)+'. Retain the actual tool diagnostics; this does not prove a website limitation or change authorization.';return false;}
   };
   let providerRetries=0;
+  let toolsStrippedForRecovery=false;
   for (let step = 0; step < stepBudget; step++) {
     opts.signal?.throwIfAborted();
     if(!uninterrupted && opts.allowContinuation && opts.checkpointAt && Date.now()>=opts.checkpointAt && step<stepBudget-3)step=stepBudget-3;
@@ -877,6 +891,22 @@ SIGNED-IN ACCOUNT: The current user is ${process.env.TENANT_MEMBER}. This identi
       const detail = err instanceof ModelLayerError ? err.summary : err instanceof Error ? err.message : String(err);
       if(opts.workRuntime && !opts.signal?.aborted && providerRetries<3 && /timeout|timed out|\b(?:429|50[0234]|529)\b|temporarily unavailable|overloaded|ECONNRESET|fetch failed/i.test(detail)){
         providerRetries++;step--;await new Promise(resolve=>setTimeout(resolve,Math.min(1000 * 2 ** (providerRetries-1),4000)));continue;
+      }
+      /* Same explicit model, tools stripped once: recovers Mercury/OpenRouter
+         400s where the tool preamble alone exceeds a prompt-token cap after a
+         prior tool turn, and finishes a within-turn answer after tools already
+         ran. Never swaps the operator's selected model. */
+      const stripToolsRecovery = !!stepTools?.length && !toolsStrippedForRecovery && !opts.signal?.aborted && (
+        textOnly ||
+        toolRounds > 0 ||
+        /token|context length|prompt.{0,40}(?:limit|exceed)|tools? (?:are |were )?(?:attached|too large)|maximum context|reduce the length/i.test(detail)
+      );
+      if(stripToolsRecovery){
+        toolsStrippedForRecovery=true;
+        activeTools=undefined;
+        system+="\nRuntime recovery: the previous model call failed while tools were attached. Answer in plain language from current context only; no tools are available on this retry. Keep completed work; do not claim new actions ran.";
+        step--;
+        continue;
       }
       console.error("[agentLoop] model call failed:", detail);
       return {
