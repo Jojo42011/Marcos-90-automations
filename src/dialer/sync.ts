@@ -13,6 +13,7 @@ import { bumpTrackerFromDialerActivity, canAdvanceStage } from "../core/trackerD
 import { createTrackerRecord, getTrackerRecordByLead, setTrackerStage, updateTrackerRecord } from "../core/trackerStore.js";
 import type { TrackerSide } from "../core/types.js";
 import { propertyFromMls } from "./property.js";
+import { earliestFollowUpDueDate } from "./followUpDue.js";
 import {
   isQuoConfigured,
   listPhoneNumbers,
@@ -227,6 +228,7 @@ async function sync() {
     }
   }
   const leads = await listAllLeads();
+  const crmTasks = getTasks();
   store.tx(() => {
     const known = store.all<Contact>("contact").filter((c) => owns(c.ownerId));
     const byCrm = new Map(known.map((c) => [c.crmId, c]));
@@ -235,6 +237,7 @@ async function sync() {
         id = old?.id || "crm:" + owner + ":" + lead.id;
       const tags = lead.tags || [];
       const property = { ...(old?.property || {}), ...(propertyFromMls(lead.mlsListingKey) || {}) };
+      const followUpDueDate = earliestFollowUpDueDate(crmTasks, lead.id) || undefined;
       store.put("contact", {
         ...old,
         id,
@@ -254,6 +257,7 @@ async function sync() {
         tags: [...tags],
         crmStatus: lead.crmStatus || "new",
         crmCallQueue: lead.crmCallQueue || "none",
+        followUpDueDate,
         property: Object.keys(property).length ? property : undefined,
         createdAt: old?.createdAt || lead.createdAt,
         updatedAt: lead.updatedAt,

@@ -269,6 +269,7 @@ try {
   assert.deepEqual(mojoContact.tags, ["Expired"]);
   const queues = (await api("/queues")).queues;
   assert.equal(queues.find((q) => q.id === "due").count >= 1, true);
+  assert.equal(queues.some((q) => q.id === "overdue"), true);
   assert.equal(queues.find((q) => q.id === "mojo").count >= 1, true);
   assert.equal(queues.find((q) => q.id === "new").count >= 1, true);
   assert.equal(queues.find((q) => q.id === "nurture").count >= 1, true);
@@ -360,6 +361,9 @@ try {
   assert.equal(moved.group.id, apptGroup.id);
   assert(!store.members(mojoList.id).includes(dueContact.id));
   assert(store.members(apptGroup.id).includes(dueContact.id));
+  // CRM record persists after leaving the cold calling list.
+  assert.equal((await getLeadById(dueContact.crmId)).name, "Due Today Lead");
+  assert.equal((await getLeadById(dueContact.crmId)).phone, "5125550201");
 
   // Promote queues a forward-only Tracker update in the owner's CRM.
   const { getTrackerRecordByLead } = require("../dist/src/core/trackerStore.js");

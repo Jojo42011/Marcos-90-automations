@@ -256,18 +256,24 @@ const step = (o, key) => o.sellers.steps.find((s) => s.key === key);
 check("seller funnel shape: Dialer metrics then stage steps, default 30-day window", () => {
   assert.deepEqual(
     all.sellers.steps.map((s) => s.key),
-    ["talk_time", "called", "conversations", "appt_set", "appt_show", "listed", "contract", "closed"],
+    ["attempt_elapsed", "connected_talk", "called", "conversations", "appt_set", "appt_show", "listed", "contract", "closed"],
   );
   assert.equal(all.sellers.window.key, "30d");
-  assert.equal(step(all, "talk_time").format, "duration");
-  assert.equal(step(all, "talk_time").rateFromPrev, null);
+  assert.equal(step(all, "attempt_elapsed").format, "duration");
+  assert.equal(step(all, "attempt_elapsed").label, "Attempt elapsed");
+  assert.equal(step(all, "attempt_elapsed").rateFromPrev, null);
+  assert.equal(step(all, "connected_talk").format, "unavailable");
+  assert.equal(step(all, "connected_talk").count, null);
+  assert.equal(step(all, "connected_talk").label, "Connected talk");
   assert.equal(step(all, "called").rateFromPrev, null);
-  assert.equal(all.sellers.subtitle, "Talk time → Sold");
+  assert.equal(all.sellers.subtitle, "Attempt elapsed → Sold");
+  assert.match(all.notes.join("\n"), /attempt elapsed/i);
+  assert.match(all.notes.join("\n"), /Connected talk is unavailable/i);
 });
 
 check("overview all: Dialer numbers skip interrupted, unfinished and out-of-window calls", () => {
   assert.equal(step(all, "called").count, 3);
-  assert.equal(step(all, "talk_time").count, 450);
+  assert.equal(step(all, "attempt_elapsed").count, 450);
   assert.equal(step(all, "conversations").count, 2);
   assert.equal(step(all, "conversations").rateFromPrev, 66.7);
 });
@@ -303,7 +309,8 @@ const marco = await buildPipelineOverview({ agent: "Marco Puga" });
 check("Marco filter excludes Wesley seller + unassigned tracker", () => {
   assert.equal(marco.sellers.inPipeline, 0);
   assert.equal(step(marco, "called").count, 1);
-  assert.equal(step(marco, "talk_time").count, 120);
+  assert.equal(step(marco, "attempt_elapsed").count, 120);
+  assert.equal(step(marco, "connected_talk").count, null);
   const dms = marco.buyers.steps.find((s) => s.key === "dms");
   assert.equal(dms.count, 2);
 });
@@ -324,7 +331,8 @@ check("empty agent pick zeros the funnel (unselect Marco must not show All)", ()
   assert.equal(none.buyers.steps.find((s) => s.key === "dms").count, 0);
   assert.equal(none.buyers.steps.find((s) => s.key === "number").count, 0);
   assert.equal(step(none, "called").count, 0);
-  assert.equal(step(none, "talk_time").count, 0);
+  assert.equal(step(none, "attempt_elapsed").count, 0);
+  assert.equal(step(none, "connected_talk").count, null);
   assert.equal(none.sellers.inPipeline, 0);
   assert.equal(none.buyers.steps.find((s) => s.key === "views"), undefined);
 });
@@ -335,6 +343,8 @@ check("Overview UI: agents are Marco+Wesley only; filter uses __none__", () => {
   assert(/USER_FILTER==null/.test(crm));
   assert(/__none__/.test(crm));
   assert(!/const TEAM=\["Marco Puga","Wesley","Carlos"\]/.test(crm));
+  assert(/format==="unavailable"\|\|s\.count==null/.test(crm));
+  assert(/Attempt elapsed/.test(crm));
 });
 
 check("Harvey tool + CRM route + Overview UI exist", () => {
@@ -342,6 +352,8 @@ check("Harvey tool + CRM route + Overview UI exist", () => {
   const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   const crm = readFileSync(new URL("../public/crm-brivity.html", import.meta.url), "utf8");
   assert(/get_pipeline_overview/.test(tools));
+  assert(/Attempt elapsed/.test(tools));
+  assert(/call\.completed alone is not connected evidence/.test(tools));
   assert(/\/api\/crm\/pipeline-overview/.test(server));
   assert(/pipeOverview/.test(crm));
   assert(/renderPipelineOverview/.test(crm));

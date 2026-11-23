@@ -1852,13 +1852,16 @@ function fmtPoNum(n){
   if(n>=1000) return (Math.round(n/100)/10)+"k";
   return String(n);
 }
-/* Talk time reads like Mojo: hours:minutes:seconds. */
+/* Attempt elapsed reads like Mojo: hours:minutes:seconds. Unavailable ≠ zero. */
 function fmtPoDuration(sec){
   sec=Math.max(0,Math.round(Number(sec)||0));
   var h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
   return h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
 }
-function fmtPoStep(s){ return s.format==="duration"?fmtPoDuration(s.count):fmtPoNum(s.count); }
+function fmtPoStep(s){
+  if(s.format==="unavailable"||s.count==null) return "—";
+  return s.format==="duration"?fmtPoDuration(s.count):fmtPoNum(s.count);
+}
 function poRateHTML(s){ return s.rateFromPrev!=null?'<span class="r">'+esc(String(s.rateFromPrev))+'% of previous</span>':''; }
 var PO_WINDOWS=[["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["90d","Last 90 days"],["all","All time"]];
 var PO_WINDOW=(function(){ try{ var v=localStorage.getItem("poSellerWindow"); return PO_WINDOWS.some(function(w){return w[0]===v;})?v:"30d"; }catch(_){ return "30d"; } })();
@@ -1867,10 +1870,10 @@ function poFunnelHTML(side){
   var metrics=side.steps.filter(function(s){return s.kind==='metric';});
   var people=side.steps.filter(function(s){return s.kind==='people';});
   var max=Math.max.apply(null,[1].concat(people.map(function(s){return s.count||0;})));
-  return '<div class="po-eyebrow">'+(side.side==='seller'?'Dialer activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){return '<div class="po-metric" data-po-metric="'+esc(s.key)+'"><strong title="'+esc(String(s.count))+'">'+esc(fmtPoStep(s))+'</strong><span>'+esc(s.label)+'</span>'+(s.rateFromPrev!=null?'<em>'+esc(String(s.rateFromPrev))+'%</em>':'')+'</div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
-    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,s.count/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoStep(s))+'</span>'+poRateHTML(s)+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
+  return '<div class="po-eyebrow">'+(side.side==='seller'?'Dialer activity':'Content & conversation')+'</div><div class="po-metrics">'+metrics.map(function(s){var val=fmtPoStep(s);var title=s.format==="unavailable"||s.count==null?"Unavailable — no trustworthy connected-talk source":String(s.count);return '<div class="po-metric" data-po-metric="'+esc(s.key)+'"><strong title="'+esc(title)+'">'+esc(val)+'</strong><span>'+esc(s.label)+'</span>'+(s.rateFromPrev!=null?'<em>'+esc(String(s.rateFromPrev))+'%</em>':'')+'</div>';}).join('')+'</div><div class="po-eyebrow">Pipeline progression · open a stage to follow up</div><div class="po-funnel">'+people.map(function(s,i){
+    return '<button type="button" class="po-step go" data-po-step="'+esc(s.key)+'" aria-label="'+esc(s.label)+': '+esc(String(s.count))+'. Open in Tracker"><span class="po-stage-fill" style="width:'+Math.max(0,(s.count||0)/max*100)+'%" aria-hidden="true"></span><span class="po-index">'+String(i+1).padStart(2,'0')+'</span><span class="l">'+esc(s.label)+'</span><span class="po-stage-value"><span class="n">'+esc(fmtPoStep(s))+'</span>'+poRateHTML(s)+'</span><span class="po-chevron" aria-hidden="true">↗</span></button>';
   }).join('')+'</div><div class="po-note">'+(side.side==='seller'
-    ?'Dialer numbers come from logged outcomes. Talk time is the time between opening your phone app and saving the outcome, not a carrier record. Stage steps count people who reached that stage or later'+(side.window&&side.window.key!=='all'?' during this window':'')+'.'
+    ?'Dialer numbers come from logged outcomes. Attempt elapsed is phone-app open → outcome saved, not connected talk. Connected talk shows — when no trustworthy provider duration exists. Stage steps count people who reached that stage or later'+(side.window&&side.window.key!=='all'?' during this window':'')+'.'
     :'Percentages compare each step with the one before it. Views and Comments are account social totals, so the first ratios are directional rather than per-person attribution.')+'</div>';
 }
 function poWindowHTML(side){

@@ -648,7 +648,7 @@ export const PLATFORM_TOOL_DEFINITIONS: Tool[] = [
   {
     name: "get_pipeline_overview",
     description:
-      "CRM Overview funnels: buyers Views→Comments→DMs→Number→Appt set→Appt show→Showing→U/C→Closed (no Call) and sellers Talk time→Numbers called→Conversations→Appts set→Appts shown→Listed/signed→Under contract→Sold. Optional agent filter (Marco / Wesley) and seller window (7d, 30d default, month, 90d, all). Buyer top steps use social + DM/phone counts; people steps combine CRM stages and Tracker. Seller Dialer steps come from saved Dialer outcomes (talk time is the logged span from opening the phone app to saving the outcome, not carrier duration); seller stage steps count Tracker stage entries inside the window. Same numbers as the CRM Dashboard Overview tab.",
+      "CRM Overview funnels: buyers Views→Comments→DMs→Number→Appt set→Appt show→Showing→U/C→Closed (no Call) and sellers Attempt elapsed→Connected talk→Numbers called→Conversations→Appts set→Appts shown→Listed/signed→Under contract→Sold. Optional agent filter (Marco / Wesley) and seller window (7d, 30d default, month, 90d, all). Buyer top steps use social + DM/phone counts; people steps combine CRM stages and Tracker. Seller Dialer attempt elapsed is phone-app open → outcome saved (not connected talk); connected talk is unavailable unless a trustworthy provider duration exists (Quo call.completed alone is not connected evidence); seller stage steps count Tracker stage entries inside the window. Same numbers as the CRM Dashboard Overview tab.",
     input_schema: {
       type: "object",
       properties: {

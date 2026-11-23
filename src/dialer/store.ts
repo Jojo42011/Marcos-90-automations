@@ -28,6 +28,8 @@ export type Contact = {
   tags?: string[];
   crmStatus?: string;
   crmCallQueue?: string;
+  /** Earliest open CRM call/follow_up due date (YYYY-MM-DD) for due/overdue queues. */
+  followUpDueDate?: string;
   /** Listing details from an imported Mojo/MLS file or the CRM's exact MLS match. */
   property?: PropertyFacts;
   createdAt: string;
