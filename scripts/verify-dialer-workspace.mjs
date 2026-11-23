@@ -405,6 +405,33 @@ try {
   );
   assert.equal((await getLeadById("lead-mojo-1")).name, "Mojo Expired Lead");
   assert.equal((await getLeadById("lead-mojo-1")).phone, "5125550202");
+  // Booked + explicit open follow-up still appears in Due today / Everyone.
+  const { createTask: createFollowTask } = require("../dist/src/core/tasks.js");
+  const { centralDateKey } = require("../dist/src/dialer/followUpDue.js");
+  createFollowTask({
+    title: "Booked lead still due today",
+    type: "call",
+    priority: "normal",
+    source: "manual",
+    dueDate: centralDateKey(),
+    leadId: "lead-mojo-1",
+    assignedUserId: "marco",
+    status: "pending",
+  });
+  await syncDialer();
+  assert.equal(
+    (await api("/contacts?queue=mojo")).contacts.some((x) => x.crmId === "lead-mojo-1"),
+    false,
+  );
+  assert.equal(
+    (await api("/contacts?queue=due")).contacts.some((x) => x.crmId === "lead-mojo-1"),
+    true,
+    "booked contact with open due-today task stays in Due today",
+  );
+  assert.equal(
+    (await api("/contacts?queue=everyone")).contacts.some((x) => x.crmId === "lead-mojo-1"),
+    true,
+  );
 
   await api("/lists/" + mojoList.id + "/members", { contactIds: [dueContact.id] });
   const moved = await api("/appointments-group/members", { contactIds: [dueContact.id], fromListId: mojoList.id });

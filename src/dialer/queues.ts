@@ -83,15 +83,19 @@ export function isCallable(c: Contact): boolean {
   return !c.dnc && !c.archived && phoneKey(c.phone).length >= 10;
 }
 
-/** Cold prospecting queues — booked Appointments-group contacts stay out. */
-const COLD_QUEUES = new Set<QueueId>(["due", "overdue", "mojo", "new", "nurture"]);
+/**
+ * Cold prospecting queues only. Booked Appointments-group contacts stay out of
+ * these. Due today / Overdue remain available when an open qualifying follow-up
+ * exists; Everyone stays callable (DNC/archive still apply).
+ */
+const PROSPECTING_QUEUES = new Set<QueueId>(["mojo", "new", "nurture"]);
 
-export function isColdQueue(queueId: string): boolean {
-  return COLD_QUEUES.has(queueId as QueueId);
+export function isProspectingQueue(queueId: string): boolean {
+  return PROSPECTING_QUEUES.has(queueId as QueueId);
 }
 
 /**
- * @param bookedIds contact ids in the team Appointments group (left the cold queue).
+ * @param bookedIds contact ids in the team Appointments group (left prospecting).
  */
 export function matchesQueue(
   c: Contact,
@@ -100,7 +104,7 @@ export function matchesQueue(
 ): boolean {
   if (!QUEUE_DEFS.some((q) => q.id === queueId)) return false;
   if (queueId === "everyone") return isCallable(c) || (!!phoneKey(c.phone) && !c.archived);
-  if (isColdQueue(queueId) && bookedIds.has(c.id)) return false;
+  if (isProspectingQueue(queueId) && bookedIds.has(c.id)) return false;
   if (!phoneKey(c.phone)) return false;
   if (queueId === "due") return followUpBucket(c) === "due";
   if (queueId === "overdue") return followUpBucket(c) === "overdue";

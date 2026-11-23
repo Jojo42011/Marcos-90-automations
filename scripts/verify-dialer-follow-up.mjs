@@ -266,8 +266,10 @@ check("sync stamps followUpDueDate onto Dialer contacts", () => {
   assert.equal(
     matchesQueue(mojoBook, "mojo", booked),
     false,
-    "booked lead must leave Mojo Expired cold queue after reload/sync",
+    "booked lead must leave Mojo Expired prospecting queue after reload/sync",
   );
+  assert.equal(matchesQueue(mojoBook, "nurture", booked), false);
+  assert.equal(matchesQueue(mojoBook, "new", booked), false);
   assert.equal(
     store
       .contacts()
@@ -280,12 +282,47 @@ check("sync stamps followUpDueDate onto Dialer contacts", () => {
     () => store.start("marco", "Marco", "", "", [mojoBook.id], "mojo"),
     /No callable contacts match this queue/,
   );
+  // Explicit open follow-up keeps single-line Due/Overdue (and Everyone) available.
+  createTask({
+    title: "Post-booking follow-up call",
+    type: "call",
+    priority: "normal",
+    source: "manual",
+    dueDate: today,
+    leadId: "lead-mojo-book",
+    assignedUserId: "marco",
+    status: "pending",
+  });
+  await syncDialer();
+  mojoBook = store.contacts().find((c) => c.crmId === "lead-mojo-book");
+  const bookedAfter = store.bookedAppointmentIds();
+  assert(bookedAfter.has(mojoBook.id));
+  assert.equal(mojoBook.followUpDueDate, today);
+  assert.equal(matchesQueue(mojoBook, "mojo", bookedAfter), false, "still out of Mojo after refresh");
+  assert.equal(matchesQueue(mojoBook, "due", bookedAfter), true, "Due today keeps explicit open task");
+  assert.equal(matchesQueue(mojoBook, "everyone", bookedAfter), true);
+  createTask({
+    title: "Overdue post-booking follow-up",
+    type: "follow_up",
+    priority: "normal",
+    source: "manual",
+    dueDate: yesterday,
+    leadId: "lead-mojo-book",
+    assignedUserId: "marco",
+    status: "pending",
+  });
+  await syncDialer();
+  mojoBook = store.contacts().find((c) => c.crmId === "lead-mojo-book");
+  assert.equal(mojoBook.followUpDueDate, yesterday);
+  assert.equal(matchesQueue(mojoBook, "mojo", store.bookedAppointmentIds()), false);
+  assert.equal(matchesQueue(mojoBook, "overdue", store.bookedAppointmentIds()), true);
+  assert.equal(matchesQueue(mojoBook, "due", store.bookedAppointmentIds()), false);
   const crm = await getLeadById("lead-mojo-book");
   assert(crm, "CRM lead must persist");
   assert.equal(crm.phone, "5125550410");
   assert.equal(crm.address, "1 Expired Ave");
   assert.deepEqual(crm.tags, ["Expired"]);
-  console.log("ok session Appointment Set excludes Mojo Expired queue after sync; CRM persists");
+  console.log("ok booked: out of Mojo, still in Due/Overdue with open task; CRM persists");
 }
 
 {

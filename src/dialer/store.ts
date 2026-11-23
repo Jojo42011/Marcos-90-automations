@@ -298,7 +298,7 @@ export class DialerStore {
     this.audit(actor, "list_created", g);
     return g;
   }
-  /** Contact ids already booked into Appointments — excluded from cold smart queues. */
+  /** Contact ids already booked into Appointments — excluded from prospecting queues. */
   bookedAppointmentIds(): Set<string> {
     const g = this.all<DialerList>("list").find((l) => l.system === "appointments");
     return new Set(g ? this.members(g.id) : []);
