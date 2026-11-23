@@ -16,6 +16,8 @@ import {
 
 import { Text, Heading } from "@astryxdesign/core/Text";
 
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
+
 import { Button } from "@astryxdesign/core/Button";
 
 import { Avatar } from "@astryxdesign/core/Avatar";
@@ -172,9 +174,11 @@ function lastTouch(row: Row, metrics?: Row) {
       title: [channels[a.type], a.meta?.Outcome ? label(a.meta.Outcome) : a.subType].filter(Boolean).join(" · ")});
   }
   for (const m of row._msgs || []) {
-    if (m.text && ["user","assistant"].includes(m.role)) touches.push({at: m.at, title: m.role === "user" ? "Message received" : "Message sent"});
+    if (!m.text || !["user","assistant"].includes(m.role)) continue;
+    const channel = ({ instagram: "Instagram DM", tiktok: "TikTok DM", sms: "SMS", email: "Email" } as Record<string,string>)[row.channel] || "Message";
+    touches.push({at: m.at, title: channel + (m.role === "user" ? " received" : " sent")});
   }
-  if (metrics?.lastSmsAt) touches.push({at: metrics.lastSmsAt, title: metrics.lastSmsDirection === "inbound" ? "Text received" : "Text sent"});
+  if (metrics?.lastSmsAt) touches.push({at: metrics.lastSmsAt, title: metrics.lastSmsDirection === "inbound" ? "SMS received" : "SMS sent"});
   return touches.filter(t => Number.isFinite(Date.parse(t.at))).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))[0];
 }
 
@@ -264,7 +268,7 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 // In-memory view state survives opening a profile; nothing is stored across accounts.
-const peopleView = {query:'',source:'all',status:'all',sort:'az',page:1,filters:false};
+const peopleView = {query:'',source:'all',status:'all',sort:'az',page:1,filters:false,scope:'all'};
 function People({ snapshot }: { snapshot: any }) {
   const [bucket, setBucket] = useState(snapshot.route.bucket || "all"),
     [query, setQuery] = useState(peopleView.query),
@@ -277,6 +281,8 @@ function People({ snapshot }: { snapshot: any }) {
     [error, setError] = useState("");
 
   useEffect(()=>{Object.assign(peopleView,{query,source,status,sort,page,filters});},[query,source,status,sort,page,filters]);
+  const [scope, setScope] = useState(peopleView.scope);
+  useEffect(() => { peopleView.scope = scope; }, [scope]);
   const narrow = useMediaQuery("(max-width: 700px)");
   const followUps = useDeskFacts(snapshot.dataReady);
 
@@ -307,10 +313,20 @@ function People({ snapshot }: { snapshot: any }) {
       : !archived &&
           (b === "all" || (b === "client" ? client : client && !past));
   };
+  const today = centralNow().slice(0,10);
+  const inScope = (r: Row) => {
+    if (scope === "mine") return Boolean(snapshot.viewerId && r.assignedUserId === snapshot.viewerId);
+    if (scope === "new") return r.crmStatus === "new";
+    if (scope === "due" || scope === "overdue") {
+      const due = followUps.schedules?.get(r.id)?.task?.dueDate;
+      return Boolean(due && (scope === "due" ? due === today : due < today));
+    }
+    return true;
+  };
   const rows = all
     .filter(
       (r: Row) =>
-        inBucket(r, bucket) &&
+        inBucket(r, bucket) && inScope(r) &&
         (source === "all" || r.source === source) &&
         (status === "all" || r.status === status) &&
         [r.name, r.email, r.phone, r.address, r.source].some((v) =>
@@ -333,7 +349,7 @@ function People({ snapshot }: { snapshot: any }) {
   const pages = Math.max(1, Math.ceil(rows.length / 25)),
     current = Math.min(page, pages);
 
-  useEffect(() => setPage(1), [bucket, query, source, status, sort]);
+  useEffect(() => setPage(1), [bucket, query, source, status, sort, scope]);
 
   const refresh = async () => {
     setBusy(true);
@@ -356,7 +372,7 @@ function People({ snapshot }: { snapshot: any }) {
         categories.find((c) => c[0] === bucket)?.[1] || "Archived people";
       await bridge.callInDialer(
         rows.map((r: Row) => r.id),
-        query || source !== "all" || status !== "all"
+        query || scope !== "all" || source !== "all" || status !== "all"
           ? name + " · filtered"
           : name,
       );
@@ -366,17 +382,15 @@ function People({ snapshot }: { snapshot: any }) {
   };
 
   const [editing, setEditing] = useState<Row | null>(null);
-  const [stageValue, setStageValue] = useState("");
   const [statusValue, setStatusValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const editPipeline = (r: Row) => {
-    setSaveError(""); setStageValue(r.crmStage || r.stage || ""); setStatusValue(r.crmStatus || ""); setEditing(r);
+  const editStatus = (r: Row) => {
+    setSaveError(""); setStatusValue(r.crmStatus || ""); setEditing(r);
   };
-  const savePipeline = async () => {
+  const saveStatus = async () => {
     if (!editing || saving) return;
     const patch: Row = {};
-    if (stageValue && stageValue !== (editing.crmStage || editing.stage)) patch.crmStage = stageValue;
     if (statusValue && statusValue !== editing.crmStatus) patch.crmStatus = statusValue;
     setSaving(true);
     try {
@@ -384,15 +398,36 @@ function People({ snapshot }: { snapshot: any }) {
       await bridge.refresh(); setEditing(null);
     } catch (e: any) { setSaveError(e.message); } finally { setSaving(false); }
   };
+  const [changingStage, setChangingStage] = useState("");
+  const saveStage = async (r: Row, value: string) => {
+    if (changingStage || value === (r.crmStage || r.stage)) return;
+    setChangingStage(r.id);
+    setError("");
+    try {
+      await api("/api/crm/lead/" + encodeURIComponent(r.id), "PATCH", { crmStage: value });
+      await bridge.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setChangingStage("");
+    }
+  };
   const columns = [
     { key:"name", header:"Person", renderCell:(r: Row) => <VStack gap={1}>
       <HStack><Button variant="ghost" label={r.name || "Unnamed contact"} onClick={() => bridge.openLead(r.id)} /></HStack>
       <Text type="supporting">{[r.crmIntent && label(r.crmIntent),r.source].filter(Boolean).join(" · ") || "Source not recorded"}</Text>
       <Text type="supporting" color="secondary">{r.assignedUserName || "Unassigned"}</Text></VStack> },
-    { key:"pipeline", header:"Pipeline", renderCell:(r: Row) => <VStack gap={1}>
-      <HStack><Button size="sm" variant="secondary" label={stageText(r,snapshot.stageOptions)} tooltip={"Edit stage and status for " + r.name} onClick={() => editPipeline(r)} /></HStack>
-      <Text type="supporting">{snapshot.statusOptions.find((o: Row) => o.value === r.crmStatus)?.label || label(r.crmStatus || r.status)}</Text>
-      {r.latestStageChange?.to === (r.crmStage || r.stage) ? <Text type="supporting" color="secondary">Since {date(r.latestStageChange.at)}</Text> : null}</VStack> },
+    { key:"stage", header:"Stage", renderCell:(r: Row) => <VStack gap={1}>
+      <HStack><Selector label={"Stage for " + r.name} isLabelHidden variant="ghost"
+        isDisabled={Boolean(changingStage)} value={r.crmStage || r.stage || ""}
+        options={withCurrent(snapshot.stageOptions, r.crmStage || r.stage || "")}
+        onChange={value => saveStage(r,value)} /></HStack>
+      <HStack gap={2} vAlign="center" wrap="wrap">
+        <Button size="sm" variant="ghost" label={snapshot.statusOptions.find((o: Row) => o.value === r.crmStatus)?.label || label(r.crmStatus || r.status)}
+          tooltip={"Edit status for " + r.name} onClick={() => editStatus(r)} />
+        {r.latestStageChange?.to === (r.crmStage || r.stage) && Number.isFinite(Date.parse(r.latestStageChange.at)) ?
+          <Text type="supporting" color="secondary">Since {new Date(r.latestStageChange.at).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</Text> : null}
+      </HStack></VStack> },
     { key:"touch", header:"Last touch", renderCell:(r: Row) => {
       const touch = lastTouch(r,followUps.metrics?.[r.id]);
       return <VStack gap={1}><Text>{touch?.title || (followUps.metrics ? "No recorded touch" : "Unavailable")}</Text>
@@ -404,7 +439,18 @@ function People({ snapshot }: { snapshot: any }) {
       return <VStack gap={1}><Text weight="semibold">{next?.title || (followUps.schedules ? "None scheduled" : "Unavailable")}</Text>
         {next && <Text type="supporting" color="secondary">{dueCue(next)}</Text>}</VStack>;
     }},
-    { key:"actions", header:"Actions", renderCell:(r: Row) => <ContactActions row={r} facts={followUps} /> },
+    { key:"actions", header:"", renderCell:(r: Row) => {
+      const dnc = blockedNumber(r, followUps.metrics?.[r.id]);
+      const disabled = dnc || !r.phone || !followUps.phoneFlagsReady;
+      return <HStack gap={2} vAlign="center">
+        {dnc && <Text type="supporting">Do not call</Text>}
+        <MoreMenu size="sm" label={"Actions for " + r.name} items={[
+          {label:"Call", isDisabled:disabled, onClick:() => bridge.action("call",r.id)},
+          {label:"Text", isDisabled:disabled, onClick:() => bridge.action("text",r.id)},
+          {label:"Messages", onClick:() => bridge.action("messages",r.id)},
+        ]} />
+      </HStack>;
+    } },
   ];
 
   return (
@@ -422,7 +468,7 @@ function People({ snapshot }: { snapshot: any }) {
                 </Heading>
                 <Text color="secondary">
                   {rows.length.toLocaleString()} {rows.length===1?'person':'people'}
-                  {query || source !== "all" || status !== "all"
+                  {query || scope !== "all" || source !== "all" || status !== "all"
                     ? " matching your filters"
                     : " in your workspace"}
                 </Text>
@@ -472,6 +518,13 @@ function People({ snapshot }: { snapshot: any }) {
                 />
               </HStack>
             </HStack>
+            <TabList value={scope} onChange={setScope}>
+              <Tab value="all" label="All" />
+              {snapshot.viewerId && <Tab value="mine" label="My leads" />}
+              <Tab value="due" label="Due today" />
+              <Tab value="overdue" label="Overdue" />
+              <Tab value="new" label="New" />
+            </TabList>
             {filters ? (
               <HStack gap={4} wrap="wrap">
                 <Selector
@@ -529,6 +582,7 @@ function People({ snapshot }: { snapshot: any }) {
                   : "Loading your contacts…"}
               </Notice>
             ) : null}
+            {(scope === "due" || scope === "overdue") && !followUps.schedules && <Notice>Task dates are unavailable. Use Refresh to retry.</Notice>}
             {error ? <Notice>{error}</Notice> : null}
             {narrow ? rows.slice((current - 1) * 25, current * 25).map((r: Row) => (
               <VStack key={r.id} gap={3}>
@@ -576,13 +630,12 @@ function People({ snapshot }: { snapshot: any }) {
       }
     />
     {editing && <Dialog isOpen onOpenChange={open => { if (!open && !saving) setEditing(null); }} purpose="form" width="28rem">
-      <DialogHeader title={"Pipeline · " + editing.name} />
+      <DialogHeader title={"Edit status · " + editing.name} />
       <VStack gap={4} padding={4}>
-        <Selector label="Stage" value={stageValue} onChange={setStageValue} options={withCurrent(snapshot.stageOptions, stageValue)} />
         <Selector label="Status" value={statusValue} onChange={setStatusValue} options={withCurrent(snapshot.statusOptions, statusValue)} />
         {saveError && <Notice>{saveError}</Notice>}
         <HStack gap={2}><Button label="Cancel" isDisabled={saving} onClick={()=>setEditing(null)} />
-          <Button label="Save pipeline" variant="primary" isDisabled={saving} onClick={savePipeline} /></HStack>
+          <Button label="Save status" variant="primary" isDisabled={saving} onClick={saveStatus} /></HStack>
       </VStack>
     </Dialog>}</>
   );
@@ -956,7 +1009,8 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                 <Tab value="notes" label="Notes" />
                 <Tab value="details" label="Details" />
               </TabList>
-              {error ? <Notice>{error}</Notice> : null}
+
+            {error ? <Notice>{error}</Notice> : null}
               {notice ? <Notice>{notice}</Notice> : null}
               {loading ? <Notice>Loading contact history…</Notice> : null}
               {tab === "activity" ? (
@@ -966,6 +1020,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                     <VStack gap={5}>
                       <HStack hAlign="between" vAlign="center" wrap="wrap">
                         <Heading level={2}>Conversation & activity</Heading>
+                        <Button label="Add note" size="sm" variant="ghost" onClick={() => setTab("notes")} />
                         <Selector
                           label="Activity type"
                           isLabelHidden

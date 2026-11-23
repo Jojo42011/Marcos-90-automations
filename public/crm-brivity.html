@@ -4124,7 +4124,7 @@ function mapLeadRow(l){
     id:l.id, accountOwnerId:l.accountOwnerId, accountOwnerName:l.accountOwnerName, name:l.name||l.username||"Unknown",
     intent:(l.crmIntent==="seller")?"seller":"buyer", crmIntent:l.crmIntent,
     crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
-    latestStageChange:l.latestStageChange, listingStatus:l.listingStatus, deal:l.deal,
+    channel:l.channel, latestStageChange:l.latestStageChange, listingStatus:l.listingStatus, deal:l.deal,
     stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
     phone:l.phone||"", email:l.email||null, source:l.source||"", platform:l.platform||"",
     /* Which SYSTEM the record came from, as distinct from which source NAME it
@@ -12719,7 +12719,7 @@ setInterval(function(){
   var button=document.getElementById('crmAccountSettings');
   if(button)button.onclick=function(){if(window.AccountSettings)window.AccountSettings.open();};
   fetch('/api/auth/me').then(function(r){return r.json();}).then(function(d){
-    if(!d.user)return;var name=d.user.name||'Account';
+    if(!d.user)return;if(button)button.dataset.userId=d.user.id;var name=d.user.name||'Account';
     document.getElementById('crmAccountName').textContent=name.split(/\s+/)[0];
     var av=document.getElementById('crmAccountAvatar');av.textContent=d.user.avatarInitials||name.slice(0,1);av.style.background=d.user.avatarColor||'#0e7490';av.style.color='#fff';
     av.classList.toggle('has-marco-photo',/^marco(?:\s|$)/i.test(name));

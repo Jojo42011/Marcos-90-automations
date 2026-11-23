@@ -9946,6 +9946,8 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
     return;
   }
   const metrics: Record<string, Record<string, unknown>> = {};
+  // A shared phone is not sufficient evidence that either lead owns a text.
+  const uniquePeers = new Map<string, string | null>();
   let phoneFlagsReady = false;
   const touch = (id: string) => (metrics[id] = metrics[id] || {});
 
@@ -10022,6 +10024,8 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
     const cr = await import("./core/contactRecordStore.js");
     const snap = await getDashboardSnapshot();
     for (const lead of snap.leads) {
+      const digits = String(lead.phone || "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+      if (/^\d{10}$/.test(digits)) uniquePeers.set(digits, uniquePeers.has(digits) ? null : lead.id);
       const phones = cr.listPhones(lead.id);
       const agreements = cr.listAgreements(lead.id);
       const team = cr.listAssignments(lead.id);
@@ -10031,8 +10035,8 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
         /* DNC is a legal flag a human set on a row. It is never inferred, and
            a number nobody has checked is "not marked", not "cleared to call". */
         row.phoneCount = phones.length;
-        const digits = (number: string) => number.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
-        row.primaryPhoneDnc = phones.some(p => p.dnc && digits(p.number) === digits(lead.phone || ""));
+        const normalizedPhone = (number: string) => number.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+        row.primaryPhoneDnc = phones.some(p => p.dnc && normalizedPhone(p.number) === digits);
         row.phoneDnc = phones.some((p) => p.dnc);
         row.phoneAllDnc = phones.every((p) => p.dnc);
       }
@@ -10113,6 +10117,30 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
     }
   } catch (err) {
     console.warn("[lead-metrics] SMS counts unavailable:", err);
+  }
+
+  if (phoneFlagsReady && uniquePeers.size) {
+    try {
+      const { getQuoDb } = await import("./core/quoStore.js");
+      // Compare stored timestamps only. Queued/failed attempts are not touches.
+      const messages = getQuoDb().prepare(`
+        SELECT peer_key, direction, MAX(created_at) AS at FROM quo_messages
+        WHERE text != '' AND (direction = 'incoming' OR
+          (direction = 'outgoing' AND LOWER(status) IN ('sent','delivered')))
+        GROUP BY peer_key, direction
+      `).all() as Array<{peer_key:string; direction:string; at:string}>;
+      for (const message of messages) {
+        const id = uniquePeers.get(message.peer_key);
+        if (!id || !Number.isFinite(Date.parse(message.at))) continue;
+        const row = touch(id);
+        if (!row.lastSmsAt || Date.parse(message.at) > Date.parse(String(row.lastSmsAt))) {
+          row.lastSmsAt = message.at;
+          row.lastSmsDirection = message.direction === "incoming" ? "inbound" : "outbound";
+        }
+      }
+    } catch (err) {
+      console.warn("[lead-metrics] Quo last touch unavailable:", err);
+    }
   }
 
   res.json({
