@@ -316,6 +316,7 @@
           '<small style="padding:7px 10px">No ' +
             (kind === "list" ? "lists" : "groups") +
             " yet</small>";
+      $("#startButton").disabled = !mySession() && view === "contacts" && !contactTotal;
       $("#startButton").textContent = mySession()
         ? "Resume session"
         : "Start session";
@@ -537,6 +538,8 @@
   }
   async function contacts() {
     const serial = ++requestSerial;
+    contactTotal = null;
+    $("#startButton").disabled = !mySession();
     const p = new URLSearchParams({
         q,
         listId,
@@ -549,6 +552,7 @@
     if (serial !== requestSerial || view !== "contacts") return;
     contactRows = d.contacts;
     contactTotal = d.total;
+    $("#startButton").disabled = !mySession() && !contactTotal;
     const s = mySession();
     if (s && s.queue[s.position]) {
       const c = await api(
@@ -632,12 +636,8 @@
         ? ""
         : '<div class="empty"><h2>No matching contacts</h2><p>' +
           (queueId
-            ? esc(
-                overview?.queues?.find((x) => x.id === queueId)?.description ||
-                  "Nothing in this queue yet.",
-              ) +
-              ' Use <button type="button" data-action="add-contact" class="contact-link">Add contact</button> or import a CSV.'
-            : "Try another search or import leads into this list.") +
+            ? "No shared dialer contacts match " + esc(queueLabel(queueId)) + " with these filters. Choose another queue or change the filters."
+            : "Try another search or choose another calling list.") +
           "</p></div>") +
       '</div><div class="pager"><span>' +
       fmt(d.total) +
@@ -953,6 +953,7 @@
       else go("contacts", s.listId || "");
       return;
     }
+    if (view === "contacts" && !contactTotal) return;
     numberData = await api("/numbers");
     const queueOptions = (overview.queues || [])
       .map(
@@ -961,6 +962,7 @@
           esc(qq.id) +
           '"' +
           (queueId === qq.id ? " selected" : "") +
+          (qq.count === 0 ? " disabled" : "") +
           ">" +
           esc(qq.label) +
           " (" +

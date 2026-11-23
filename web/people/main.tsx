@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 import { createRoot } from "react-dom/client";
 
@@ -661,36 +661,40 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
 
   const followUps = useDeskFacts(snapshot.dataReady);
 
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      setError("");
-      const results = await Promise.allSettled([
-        api(base + "/record"),
-        api(base + "/timeline"),
-        api(base + "/brief"),
-      ]);
-      if (signal?.aborted) return;
-
-      if (results[0].status === "fulfilled")
-        setRecord(results[0].value.record || {});
-
-      if (results[1].status === "fulfilled")
-        setItems(results[1].value.items || []);
-
-      if (results[2].status === "fulfilled") setBrief(results[2].value);
-
-      const failed = results.filter((r) => r.status === "rejected");
-      if (failed.length)
-        setError("Some contact history could not load. Refresh to try again.");
-      setLoading(false);
-    },
-    [base],
-  );
+  const revision = useRef(0);
+  const [historyError, setHistoryError] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(30);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    const generation = ++revision.current;
+    const current = () => !signal?.aborted && revision.current === generation;
+    setError("");
+    setHistoryError(false);
+    setLoading(true);
+    await Promise.all([
+      api(base + "/record").then(result => {
+        if (current()) setRecord(result.record || {});
+      }).catch(() => {
+        if (current()) setError("Contact details could not load.");
+      }),
+      api(base + "/timeline").then(result => {
+        if (current()) setItems(result.items || []);
+      }).catch(() => {
+        if (current()) setHistoryError(true);
+      }).finally(() => {
+        if (current()) setLoading(false);
+      }),
+      api(base + "/brief").then(result => {
+        if (current()) setBrief(result);
+      }).catch(() => {
+        if (current()) setNotice("The contact brief could not load.");
+      }),
+    ]);
+  }, [base]);
 
   useEffect(() => {
     const c = new AbortController();
     load(c.signal);
-    return () => c.abort();
+    return () => { c.abort(); revision.current++; };
   }, [load]);
 
   useEffect(() => {
@@ -995,7 +999,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
               <HStack gap={6} wrap="wrap">
                 <VStack gap={1}><Text type="supporting" color="secondary">Pipeline stage</Text><Text weight="semibold">{stageText(lead, snapshot.stageOptions)}</Text></VStack>
                 <Fact title="Last touch" value={latest ? latest.title + " · " + date(latest.at) : followUps.metrics ? "No recorded touch" : "Unavailable"} />
-                <Fact title="Next task" value={scheduleText(scheduled?.task, Boolean(followUps.schedules))} />
+                <VStack gap={2}><Fact title="Next task" value={scheduleText(scheduled?.task, Boolean(followUps.schedules))} /><Button label="Add follow-up" size="sm" variant="ghost" onClick={() => setSchedule("call")} /></VStack>
                 <Fact title="Upcoming appointment" value={upcomingShowing ? [showing.address,date(showing.scheduledAt)].filter(Boolean).join(" · ") : scheduleText(scheduled?.appointment, Boolean(followUps.schedules))} />
               </HStack>
             </VStack>
@@ -1025,7 +1029,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                           label="Activity type"
                           isLabelHidden
                           value={activityFilter}
-                          onChange={setActivityFilter}
+                          onChange={value => { setActivityFilter(value); setVisibleCount(30); }}
                           options={[
                             "history",
                             "all",
@@ -1043,15 +1047,16 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                           }))}
                         />
                       </HStack>
-                      {shown.length ? (
-                        shown.slice(0, 60).map((item: Row) => (
-                          <VStack key={item.id} gap={3} paddingBlock={3}>
+                      {historyError ? <Notice>Contact history could not load.</Notice> : loading && !shown.length ? <Notice>Loading contact history.</Notice> : shown.length ? (
+                        shown.slice(0, visibleCount).map((item: Row, index: number) => (
+                          <VStack key={item.id} gap={2} paddingBlock={2}>
+                            {(index === 0 || new Date(item.at).toDateString() !== new Date(shown[index-1].at).toDateString()) && <Heading level={3}>{new Date(item.at).toLocaleDateString(undefined, {weekday:"short",month:"short",day:"numeric",year:"numeric"})}</Heading>}
                             <HStack hAlign="between" wrap="wrap">
                               <Text weight="semibold">
                                 {item.title || label(item.category)}
                               </Text>
                               <Text type="supporting" color="secondary">
-                                {date(item.at)}
+                                {label(item.category)} · {new Date(item.at).toLocaleTimeString(undefined, {hour:"numeric",minute:"2-digit"})}
                               </Text>
                             </HStack>
                             <Text color="secondary">
@@ -1074,11 +1079,8 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                           No synced activity for this filter yet.
                         </Text>
                       )}
-                      {shown.length > 60 ? (
-                        <Text type="supporting">
-                          Showing the latest 60 entries. Use the activity filter
-                          to narrow the history.
-                        </Text>
+                      {shown.length > visibleCount ? (
+                        <Button label="Show older activity" size="sm" variant="ghost" onClick={() => setVisibleCount(count => count + 30)} />
                       ) : null}
                     </VStack>
                   </Section>
