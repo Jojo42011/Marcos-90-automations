@@ -466,12 +466,12 @@ function People({ snapshot }: { snapshot: any }) {
                   {categories.find((c) => c[0] === bucket)?.[1] ||
                     "Archived people"}
                 </Heading>
-                <Text color="secondary">
+                {snapshot.dataReady && <Text color="secondary">
                   {rows.length.toLocaleString()} {rows.length===1?'person':'people'}
                   {query || scope !== "all" || source !== "all" || status !== "all"
                     ? " matching your filters"
-                    : " in your workspace"}
-                </Text>
+                    : " in your CRM workspace"}
+                </Text>}
               </VStack>
 
             </HStack>

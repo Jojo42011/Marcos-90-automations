@@ -879,7 +879,10 @@
     if (!overview) return;
     if (view === "home") home();
     else if (view === "contacts") {
+      contactTotal = null;
+      $("#startButton").disabled = !mySession();
       if (!numberData.numbers.length) numberData = await api("/numbers");
+      if (view !== "contacts") return;
       await contacts();
     } else if (view === "sessions") sessions();
     else if (view === "calendar") calendar();
