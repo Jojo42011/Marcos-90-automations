@@ -338,12 +338,6 @@ function initShell(){
  }).join("");
 
 
- frames.innerHTML = TABS.map(function(t){
-   var src = t.key===home ? ' src="'+t.src+'"' : ''; // home loads now; others lazy-load on first open
-   return '<iframe class="frame'+(t.key===current?' active':'')+'" id="frame-'+t.key+'" data-src="'+t.src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';
- }).join("");
-
-
  function toast(m){ toastEl.innerHTML=m; toastEl.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(function(){toastEl.classList.remove("show");},3000); }
 
 
@@ -353,31 +347,23 @@ function initShell(){
    var f = document.getElementById("frame-"+key);
    var nextSrc = path || null;
    if(nextSrc && nextSrc.charAt(0)!=="/") nextSrc = null;
-   if(f){
-     if(nextSrc) f.src = nextSrc;
-     else if(!f.getAttribute("src")) f.src = f.getAttribute("data-src");  // lazy-load on first visit
-   }
+   if (!f) {
+     f = document.createElement("iframe");
+     f.className = "frame";
+     f.id = "frame-"+key;
+     f.title = byKey[key].label;
+     f.allow = "microphone; autoplay; camera";
+     f.src = nextSrc || byKey[key].src;
+     frames.appendChild(f);
+   } else if (nextSrc) f.src = nextSrc;
    TABS.forEach(function(t){
-     document.getElementById("frame-"+t.key).classList.toggle("active", t.key===key);
+     var mounted = document.getElementById("frame-"+t.key);
+     if(mounted) mounted.classList.toggle("active", t.key===key);
      var ni = nav.querySelector('.nav-item[data-key="'+t.key+'"]'); if(ni) ni.classList.toggle("active", t.key===key);
    });
    current = key;
    if(programmatic && key!==home) toast('Opened <b>'+byKey[key].label+'</b>');
  }
-
- /* Warm the other tabs in the background so CRM / Analytics / Tasks open
-    without a blank→"Loading…" flash on first click. Home stays the only
-    eager src; the rest fill in once the browser is idle. */
- function warmTabs(){
-   TABS.forEach(function(t){
-     if(t.key===home) return;
-     var f = document.getElementById("frame-"+t.key);
-     if(f && !f.getAttribute("src")) f.src = f.getAttribute("data-src");
-   });
- }
- if(typeof requestIdleCallback === "function") requestIdleCallback(warmTabs, {timeout:1800});
- else setTimeout(warmTabs, 500);
-
 
  /* Collapse → current tab goes full-screen. Persisted. */
  function setCollapsed(v){ shell.classList.toggle("collapsed", v); try{ localStorage.setItem("shell_collapsed", v?"1":"0"); }catch(_){} }
@@ -406,7 +392,7 @@ function initShell(){
 
 
  /* Optional deep link: ?tab=view2 */
- var q = new URLSearchParams(location.search).get("tab"); if(q && (byKey[q] || TAB_ALIASES[q])) activate(q);
+ var q = new URLSearchParams(location.search).get("tab"); activate(q && (byKey[q] || TAB_ALIASES[q]) ? q : home);
 
 
  /* Expose a tiny API in case you want to drive it from this window too. */

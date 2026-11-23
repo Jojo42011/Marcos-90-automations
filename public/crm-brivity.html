@@ -1310,7 +1310,7 @@
   <div class="topbar-right">
     <button class="icon-btn" id="crmRefresh" title="Refresh data from Brivity"><svg id="crmRefreshIco" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg></button>
     <button class="icon-btn" id="crmHelp" title="Help &amp; how-to guide"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12" y2="17"/></svg></button>
-    <button class="feed-pill">Activity Feed <span class="n" id="feedCount">0</span></button>
+    <button class="feed-pill">Activity Feed <span class="n" id="feedCount" title="Count loading">…</span></button>
     <button class="me" id="crmAccountSettings" title="Account settings" style="border:0;background:none;cursor:pointer"><span class="av" id="crmAccountAvatar">?</span><b id="crmAccountName">Account</b></button>
   </div>
 </header>
@@ -1955,7 +1955,7 @@ function renderPipelineOverview(){
         return;
       }
       PIPE_OVERVIEW=d;
-      el.innerHTML='<span class="po-selection">'+esc(d.agent||'Selected team')+'</span>'+poCardHTML(d.buyers)+poCardHTML(d.sellers);
+      el.innerHTML='<span class="po-selection">Tracker pipelines · '+esc(d.agent||'Selected team')+'</span>'+poCardHTML(d.buyers)+poCardHTML(d.sellers);
     })
     .catch(function(){
       if(request!==PO_REQUEST)return;
@@ -4082,10 +4082,6 @@ window.addEventListener("message", function(e){
   }catch(_){}
 })();
 
-(function(){
-  var fc=document.getElementById("feedCount");
-  if(fc) fc.textContent=String(Math.min(LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length,99));
-})();
 document.getElementById("poRefreshBtn").addEventListener("click",function(e){
   e.stopPropagation();
   var btn=e.currentTarget; if(btn.classList.contains("spinning"))return;
@@ -4240,6 +4236,7 @@ async function applyLive(body,brv,opts){
   if(txReal){ txBucket="all"; renderTx(); renderReport(currentReport); renderFinance(); }
 
   if(!body && !brv){
+    document.getElementById("feedCount").textContent="—"; document.getElementById("feedCount").title="Count unavailable";
     DEMO_REASON="the CRM request failed"; paintDataBanner(); return;
   }
 
@@ -4271,9 +4268,11 @@ async function applyLive(body,brv,opts){
 
   // reset paging + re-render everything that now has live data
   page=1; pPage=1; txBucket="all"; shown=8; openConvIdx=null;
-  renderTakeAction(); renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal(); renderReport(currentReport); renderNurture(); renderFinance();
+  renderFeed(); renderTracking(); renderConvos(); renderLeads(); renderPeople(); renderTx(); renderCal(); renderReport(currentReport); renderNurture(); renderFinance();
   const feedN=LEADS.filter(l=>l.crmStatus==="new"||l.crmStatus==="hot").length;
-  document.getElementById("feedCount").textContent=String(Math.min(feedN,99));
+  const badge=document.getElementById("feedCount");
+  badge.title="New and hot CRM leads";
+  badge.textContent=feedN>99?"99+":String(feedN);
   const tag=document.querySelector(".demo-tag");
   if(tag){
     tag.textContent="Live data · "+LEADS.length+" leads"+(brvPeople.length?" · "+brvPeople.length+" from Brivity":"")+(txCount?" · "+txCount+" transactions":"");
