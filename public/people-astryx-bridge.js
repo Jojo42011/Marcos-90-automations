@@ -21,6 +21,7 @@
   function snapshot() {
     return {
       route,
+      viewerId: document.getElementById("crmAccountSettings")?.dataset.userId,
       leads: LIVE_DATA ? LEADS : [],
       people: LIVE_DATA ? PEOPLE : [],
       dataReady: LIVE_DATA,
@@ -114,6 +115,11 @@
       const lead = LEADS.find((l) => l.id === id);
       if (!lead) return;
       switch (action) {
+        case "call":
+        case "text":
+          oldLead(id, action);
+          break;
+
         case "appointment":
           openAppointmentModal(lead);
           break;
@@ -135,7 +141,8 @@
           break;
 
         case "messages": {
-          const i = CONVOS.findIndex((c) => c.leadId === id);
+          const channelIndex = CONVOS.findIndex((c) => c.leadId === id && c.channel === lead.channel);
+          const i = channelIndex >= 0 ? channelIndex : CONVOS.findIndex((c) => c.leadId === id);
           if (i < 0) {
             crmToast("No linked conversation is loaded for this contact. Use contact tools to start a new message.");
             break;

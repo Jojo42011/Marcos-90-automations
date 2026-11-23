@@ -102,7 +102,12 @@ const quoDb = join(tmp, "quo.db");
   db.close();
 }
 
-writeFileSync(join(tmp, "db.json"), JSON.stringify({ idCounter: 1, leadsById: {}, leadKeyToId: {}, conversationsByLeadId: {}, commandTasks: [] }));
+const leadsById = Object.fromEntries(["5125550180","5125550181","5125550181"].map((phone,i) => {
+  const id = "fixture-" + i;
+  return [id,{id, platform:"crm", userId:id, name:"Contact " + i, phone, state:"new",
+    createdAt:"2026-08-01T00:00:00Z", updatedAt:"2026-08-01T00:00:00Z"}];
+}));
+writeFileSync(join(tmp, "db.json"), JSON.stringify({idCounter:3, leadsById, leadKeyToId:{}, conversationsByLeadId:{}, commandTasks:[]}));
 
 // ---- boot the server -------------------------------------------------------
 const srv = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")], {
@@ -116,7 +121,7 @@ const srv = spawn(process.execPath, [join(process.cwd(), "dist/src/server.js")],
     SITE_LOGIN_ENABLED: "0", DASHBOARD_TOKEN: TOKEN,
     DB_JSON_PATH: join(tmp, "db.json"), TASKS_JSON_PATH: join(tmp, "t.json"),
     EMAIL_DB_PATH: join(tmp, "e.db"), TRANSACTIONS_DB_PATH: join(tmp, "x.db"),
-    QUO_DB_PATH: quoDb,
+    QUO_DB_PATH: quoDb, DATA_DIR: tmp, SMS_DB_PATH: join(tmp,"sms.db"),
     /* A syntactically valid but fake key: the routes must work off the local
        mirror, and nothing here may reach the real Quo account. */
     QUO_API_KEY: "test-key-not-real", QUO_PHONE_NUMBER_ID: "PN1", QUO_PHONE_NUMBER: "+17372834703",
@@ -219,7 +224,7 @@ try {
   ok("opening a thread loads its full history", bubbles.length === 4, JSON.stringify(bubbles).slice(0, 200));
   ok("direction is preserved (their message is not shown as Marco's)",
     bubbles[0].me === false && bubbles[1].me === true, JSON.stringify(bubbles.slice(0, 2)));
-  const head = await page.textContent(".thread-head .th-sub");
+  const head = await page.textContent(".thread-head");
   ok("the thread header shows the real number", /\(210\) 555-0101/.test(head), head);
 
   // ---- the part that matters: a failed send leaves nothing behind ----------
@@ -253,8 +258,30 @@ try {
 
   await page.close();
   await br.close();
+
+  const mirror = new Database(quoDb);
+  try {
+    const insert = mirror.prepare("INSERT INTO quo_messages VALUES (?,?,?,?,?,?,?,?,?,?)");
+    for (const [id,peer,direction,status,at] of [
+      ["Q1","5125550180","incoming","received","2026-08-12T10:00:00Z"],
+      ["Q2","5125550180","outgoing","delivered","2026-08-12T11:00:00Z"],
+      ["Q3","5125550180","outgoing","failed","2026-08-12T12:00:00Z"],
+      ["Q4","5125550180","outgoing","queued","2026-08-12T13:00:00Z"],
+      ["Q5","5125550181","incoming","received","2026-08-12T14:00:00Z"],
+    ]) insert.run(id,"fixture","line",peer,"+1"+peer,direction,"Fixture text",status,at,null);
+  } finally { mirror.close(); }
+  const {metrics} = await (await q("/api/crm/lead-metrics")).json();
+  ok("confirmed Quo SMS supplies last touch despite newer failed or queued attempts",
+    metrics["fixture-0"]?.lastSmsAt === "2026-08-12T11:00:00Z" && metrics["fixture-0"].lastSmsDirection === "outbound");
+  ok("a shared phone attributes the SMS to neither CRM lead",
+    !metrics["fixture-1"]?.lastSmsAt && !metrics["fixture-2"]?.lastSmsAt);
+
 } finally {
-  srv.kill();
+  if (srv.exitCode === null && srv.signalCode === null) {
+    const exited = new Promise(resolve => srv.once("exit",resolve));
+    srv.kill();
+    await exited;
+  }
   rmSync(tmp, { recursive: true, force: true });
 }
 

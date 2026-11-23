@@ -317,7 +317,15 @@ export interface TagTemplate {
 /**
  * Lead — single source of truth per platform + userId.
  */
+export interface StageChange {
+  from: string;
+  to: string;
+  at: string;
+  actor?: string;
+}
+
 export interface Lead {
+  stageChanges?: StageChange[];
   id: string;
   platform: string;
   userId: string;
@@ -802,6 +810,7 @@ export interface Conversation {
 
 /** Read-only aggregate for the lead desk dashboard (from file-backed DB). */
 export interface DashboardLeadRow {
+  latestStageChange?: StageChange;
   id: string;
   platform: string;
   /**

@@ -8,7 +8,6 @@ import {
   Layout,
   LayoutHeader,
   LayoutContent,
-  LayoutPanel,
   VStack,
   HStack,
   StackItem,
@@ -17,13 +16,14 @@ import {
 
 import { Text, Heading } from "@astryxdesign/core/Text";
 
+import { MoreMenu } from "@astryxdesign/core/MoreMenu";
+
 import { Button } from "@astryxdesign/core/Button";
 
 import { Avatar } from "@astryxdesign/core/Avatar";
 
-import { Table, proportional } from "@astryxdesign/core/Table";
+import { Table } from "@astryxdesign/core/Table";
 
-import { SideNav, SideNavItem } from "@astryxdesign/core/SideNav";
 
 import { TextInput } from "@astryxdesign/core/TextInput";
 
@@ -94,6 +94,138 @@ async function api(path: string, method = "GET", body?: unknown) {
   return d;
 }
 
+type ScheduleFacts = { task?: Row; appointment?: Row };
+type DeskFacts = { phoneFlagsReady?: boolean; schedules?: Map<string, ScheduleFacts>; metrics?: Record<string, Row> };
+
+const centralClock = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+function centralNow(instant = new Date()) {
+  const parts = Object.fromEntries(centralClock.formatToParts(instant).map(p => [p.type,p.value]));
+  return parts.year + "-" + parts.month + "-" + parts.day + "T" + parts.hour + ":" + parts.minute;
+}
+function scheduleKey(t: Row, endOfDay = false) {
+  return t.dueDate + "T" + (t.dueTime || (endOfDay ? "23:59" : "00:00"));
+}
+function dueAt(task: Row) {
+  return new Date(task.dueDate + "T" + (task.dueTime || "00:00"));
+}
+
+function useDeskFacts(ready: boolean) {
+  const path = bridge?.url("/api/crm-tasks");
+  const [result, setResult] = useState<{path: string; facts: DeskFacts}>();
+  const [revision, refresh] = React.useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!ready || !path) return;
+    let active = true;
+    async function load() {
+      const [tasks, metrics] = await Promise.allSettled([
+        api("/api/crm-tasks"), api("/api/crm/lead-metrics"),
+      ]);
+      if (!active) return;
+      const facts: DeskFacts = {};
+      if (metrics.status === "fulfilled") {
+        facts.metrics = metrics.value.metrics;
+        facts.phoneFlagsReady = metrics.value.phoneFlagsReady === true;
+      }
+      if (tasks.status === "fulfilled" && Array.isArray(tasks.value.tasks)) {
+        facts.schedules = new Map();
+        for (const t of tasks.value.tasks) {
+          if (!t.leadId || !t.dueDate || !Number.isFinite(+dueAt(t)) ||
+              !["pending", "in_progress", "due_soon", "overdue"].includes(t.status)) continue;
+          const key = t.type === "appointment" ? "appointment" : "task";
+          if (key === "appointment" && (["cancelled", "completed"].includes(t.appointmentStatus) ||
+              scheduleKey(t,true) < centralNow())) continue;
+          const factsForLead = facts.schedules.get(t.leadId) || {};
+          if (!factsForLead[key] || +dueAt(t) < +dueAt(factsForLead[key]!)) factsForLead[key] = t;
+          facts.schedules.set(t.leadId, factsForLead);
+        }
+      }
+      setResult({ path, facts });
+    }
+    void load();
+    return () => { active = false; };
+  }, [path, ready, revision]);
+  return { ...(ready && result?.path === path ? result?.facts : {}), refresh };
+}
+
+function dueCue(task: Row) {
+  const due = dueAt(task);
+  const now = centralNow();
+  const overdue = task.dueDate < now.slice(0,10);
+  const day = task.dueDate === now.slice(0,10) ? "Today" :
+    due.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return [overdue && "Overdue", day, task.dueTime && task.dueTime + " CT"].filter(Boolean).join(" · ");
+}
+
+function scheduleText(task: Row | undefined, loaded: boolean) {
+  return task ? [task.title || label(task.type), dueCue(task)].join(" · ") : loaded ? "None scheduled" : "Unavailable";
+}
+
+const channels: Record<string, string> = {
+  call: "Call", call_made: "Call", email_sent: "Email sent", email_logged: "Email logged",
+  text_sent: "Text sent", text_received: "Text received", text_logged: "Text logged",
+};
+function lastTouch(row: Row, metrics?: Row) {
+  const touches: {at: string; title: string}[] = [];
+  for (const a of row.activity || []) {
+    if (channels[a.type]) touches.push({at: a.timestamp,
+      title: [channels[a.type], a.meta?.Outcome ? label(a.meta.Outcome) : a.subType].filter(Boolean).join(" · ")});
+  }
+  for (const m of row._msgs || []) {
+    if (!m.text || !["user","assistant"].includes(m.role)) continue;
+    const channel = ({ instagram: "Instagram DM", tiktok: "TikTok DM", sms: "SMS", email: "Email" } as Record<string,string>)[row.channel] || "Message";
+    touches.push({at: m.at, title: channel + (m.role === "user" ? " received" : " sent")});
+  }
+  if (metrics?.lastSmsAt) touches.push({at: metrics.lastSmsAt, title: metrics.lastSmsDirection === "inbound" ? "SMS received" : "SMS sent"});
+  return touches.filter(t => Number.isFinite(Date.parse(t.at))).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))[0];
+}
+
+function blockedNumber(r: Row, metrics?: Row) {
+  return Boolean(r.tags?.some((tag: string) => /^(do.not.call|dnc)$/i.test(tag)) || metrics?.primaryPhoneDnc || metrics?.phoneAllDnc);
+}
+
+function ContactActions({row, facts}: {row: Row; facts: DeskFacts}) {
+  const blocked = blockedNumber(row, facts.metrics?.[row.id]);
+  return <HStack gap={1} wrap="wrap" vAlign="center">
+    {blocked ? <Text type="supporting">Do not call</Text> : null}
+    {["call","text"].map(action => <Button key={action} size="sm" variant="secondary"
+      label={label(action)} tooltip={blocked ? "Do not call" : !facts.phoneFlagsReady ? "Phone flags unavailable" : label(action) + " · " + row.name}
+      isDisabled={!row.phone || !facts.phoneFlagsReady || blocked} onClick={() => bridge.action(action, row.id)} />)}
+  </HStack>;
+}
+
+function Fact({title, value}: {title: string; value: string}) {
+  return <VStack gap={1}><Text type="supporting" color="secondary">{title}</Text><Text weight="semibold">{value}</Text></VStack>;
+}
+
+function Qualification({lead, record}: {lead: Row; record: Row}) {
+  const c = lead.criteria || {};
+  const intent = lead.crmIntent;
+  const money = (n: unknown) => n != null && n !== "" && Number.isFinite(Number(n)) ?
+    Number(n).toLocaleString("en-US", {style:"currency", currency:"USD", maximumFractionDigits:0}) : undefined;
+  const sections = [
+    { show: ["buyer","buyer_seller"].includes(intent), title: "Buyer qualification", values: [
+      ["Budget cap",money(c.priceCap)],["Areas",c.area],["Timeline",c.timeline],
+      ["Financing",record.financing && label(record.financing)],["Bedrooms",c.beds],
+      ["Bathrooms",c.baths],["Recorded property views",record.propertyViews],
+      ["Property inquiry",lead.propertyInquired],
+    ] },
+    { show: ["seller","buyer_seller"].includes(intent), title: "Seller property", values: [
+      ["Property",lead.deal?.address || lead.propertyInquired],["Listing status",record.listing?.status || (lead.listingStatus && label(lead.listingStatus))],
+      ["List price",money(record.listing?.listPrice)],["Deal value",money(lead.deal?.value)],["Target close",lead.deal?.closeDate],
+      ["Property type",record.listing?.propertyType],["Deal notes",lead.deal?.notes],
+    ] },
+  ];
+  return <>{sections.filter(section => section.show).map(section => {
+    const fields = section.values.filter(([,v]) => v != null && v !== "");
+    return <Section key={section.title}><VStack gap={3}><Heading level={2}>{section.title}</Heading>
+      {fields.length ? <HStack gap={6} wrap="wrap">{fields.map(([k,v]) => <Fact key={k} title={k} value={String(v)} />)}</HStack> :
+        <Text color="secondary">No details recorded.</Text>}</VStack></Section>;
+  })}</>;
+}
+
 function useSnapshot() {
   const [state, setState] = useState(
     () =>
@@ -136,7 +268,7 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 // In-memory view state survives opening a profile; nothing is stored across accounts.
-const peopleView = {query:'',source:'all',status:'all',sort:'az',page:1,filters:false};
+const peopleView = {query:'',source:'all',status:'all',sort:'az',page:1,filters:false,scope:'all'};
 function People({ snapshot }: { snapshot: any }) {
   const [bucket, setBucket] = useState(snapshot.route.bucket || "all"),
     [query, setQuery] = useState(peopleView.query),
@@ -149,7 +281,10 @@ function People({ snapshot }: { snapshot: any }) {
     [error, setError] = useState("");
 
   useEffect(()=>{Object.assign(peopleView,{query,source,status,sort,page,filters});},[query,source,status,sort,page,filters]);
-  const narrow = useMediaQuery("(max-width: 800px)");
+  const [scope, setScope] = useState(peopleView.scope);
+  useEffect(() => { peopleView.scope = scope; }, [scope]);
+  const narrow = useMediaQuery("(max-width: 700px)");
+  const followUps = useDeskFacts(snapshot.dataReady);
 
   const all = useMemo(() => {
     const leads = new Map(snapshot.leads.map((l: Row) => [l.id, l]));
@@ -178,10 +313,20 @@ function People({ snapshot }: { snapshot: any }) {
       : !archived &&
           (b === "all" || (b === "client" ? client : client && !past));
   };
+  const today = centralNow().slice(0,10);
+  const inScope = (r: Row) => {
+    if (scope === "mine") return Boolean(snapshot.viewerId && r.assignedUserId === snapshot.viewerId);
+    if (scope === "new") return r.crmStatus === "new";
+    if (scope === "due" || scope === "overdue") {
+      const due = followUps.schedules?.get(r.id)?.task?.dueDate;
+      return Boolean(due && (scope === "due" ? due === today : due < today));
+    }
+    return true;
+  };
   const rows = all
     .filter(
       (r: Row) =>
-        inBucket(r, bucket) &&
+        inBucket(r, bucket) && inScope(r) &&
         (source === "all" || r.source === source) &&
         (status === "all" || r.status === status) &&
         [r.name, r.email, r.phone, r.address, r.source].some((v) =>
@@ -204,13 +349,14 @@ function People({ snapshot }: { snapshot: any }) {
   const pages = Math.max(1, Math.ceil(rows.length / 25)),
     current = Math.min(page, pages);
 
-  useEffect(() => setPage(1), [bucket, query, source, status, sort]);
+  useEffect(() => setPage(1), [bucket, query, source, status, sort, scope]);
 
   const refresh = async () => {
     setBusy(true);
     setError("");
     try {
       await bridge.refresh();
+      followUps.refresh();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -226,7 +372,7 @@ function People({ snapshot }: { snapshot: any }) {
         categories.find((c) => c[0] === bucket)?.[1] || "Archived people";
       await bridge.callInDialer(
         rows.map((r: Row) => r.id),
-        query || source !== "all" || status !== "all"
+        query || scope !== "all" || source !== "all" || status !== "all"
           ? name + " · filtered"
           : name,
       );
@@ -235,131 +381,85 @@ function People({ snapshot }: { snapshot: any }) {
     }
   };
 
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [statusValue, setStatusValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const editStatus = (r: Row) => {
+    setSaveError(""); setStatusValue(r.crmStatus || ""); setEditing(r);
+  };
+  const saveStatus = async () => {
+    if (!editing || saving) return;
+    const patch: Row = {};
+    if (statusValue && statusValue !== editing.crmStatus) patch.crmStatus = statusValue;
+    setSaving(true);
+    try {
+      if (Object.keys(patch).length) await api("/api/crm/lead/" + encodeURIComponent(editing.id), "PATCH", patch);
+      await bridge.refresh(); setEditing(null);
+    } catch (e: any) { setSaveError(e.message); } finally { setSaving(false); }
+  };
+  const [changingStage, setChangingStage] = useState("");
+  const saveStage = async (r: Row, value: string) => {
+    if (changingStage || value === (r.crmStage || r.stage)) return;
+    setChangingStage(r.id);
+    setError("");
+    try {
+      await api("/api/crm/lead/" + encodeURIComponent(r.id), "PATCH", { crmStage: value });
+      await bridge.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setChangingStage("");
+    }
+  };
   const columns = [
-    {
-      key: "name",
-      header: "Person",
-      width: proportional(2, { minWidth: 240 }),
-      renderCell: (r: Row) => (
-        <HStack gap={3} vAlign="center">
-          <Avatar
-            name={r.name || "Unnamed contact"}
-            size="md"
-            tooltip={false}
-          />
-          <VStack gap={1}>
-            <Button
-              variant="ghost"
-              label={r.name || "Unnamed contact"}
-              onClick={() => bridge.openLead(r.id)}
-            />
-            <Text type="supporting" color="secondary">
-              {r.email || r.phone || "No contact details yet"}
-            </Text>
-          </VStack>
-        </HStack>
-      ),
-    },
-
-    {
-      key: "status",
-      header: "Status",
-      renderCell: (r: Row) => <Text>{label(r.status)}</Text>,
-    },
-
-    {
-      key: "stage",
-      header: "Pipeline stage",
-      width: proportional(1, { minWidth: 150 }),
-      renderCell: (r: Row) => (
-        <Text color="secondary">{stageText(r, snapshot.stageOptions)}</Text>
-      ),
-    },
-
-    {
-      key: "source",
-      header: "Source",
-      renderCell: (r: Row) => (
-        <Text color="secondary">{r.source || "Unknown"}</Text>
-      ),
-    },
-
-    {
-      key: "assigned",
-      header: "Assigned to",
-      renderCell: (r: Row) => (
-        <Text color="secondary">{r.assignedUserName || "Unassigned"}</Text>
-      ),
-    },
-
-    {
-      key: "last",
-      header: "Last activity",
-      width: proportional(1, { minWidth: 170 }),
-      renderCell: (r: Row) => (
-        <Text type="supporting" color="secondary">
-          {date(r.lastActivity)}
-        </Text>
-      ),
-    },
-
-    {
-      key: "open",
-      header: "",
-      renderCell: (r: Row) => (
-        <Button
-          label="Open profile"
-          size="sm"
-          variant="secondary"
-          onClick={() => bridge.openLead(r.id)}
-        />
-      ),
-    },
+    { key:"name", header:"Person", renderCell:(r: Row) => <VStack gap={1}>
+      <HStack><Button variant="ghost" label={r.name || "Unnamed contact"} onClick={() => bridge.openLead(r.id)} /></HStack>
+      <Text type="supporting">{[r.crmIntent && label(r.crmIntent),r.source].filter(Boolean).join(" · ") || "Source not recorded"}</Text>
+      <Text type="supporting" color="secondary">{r.assignedUserName || "Unassigned"}</Text></VStack> },
+    { key:"stage", header:"Stage", renderCell:(r: Row) => <VStack gap={1}>
+      <HStack><Selector label={"Stage for " + r.name} isLabelHidden variant="ghost"
+        isDisabled={Boolean(changingStage)} value={r.crmStage || r.stage || ""}
+        options={withCurrent(snapshot.stageOptions, r.crmStage || r.stage || "")}
+        onChange={value => saveStage(r,value)} /></HStack>
+      <HStack gap={2} vAlign="center" wrap="wrap">
+        <Button size="sm" variant="ghost" label={snapshot.statusOptions.find((o: Row) => o.value === r.crmStatus)?.label || label(r.crmStatus || r.status)}
+          tooltip={"Edit status for " + r.name} onClick={() => editStatus(r)} />
+        {r.latestStageChange?.to === (r.crmStage || r.stage) && Number.isFinite(Date.parse(r.latestStageChange.at)) ?
+          <Text type="supporting" color="secondary">Since {new Date(r.latestStageChange.at).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</Text> : null}
+      </HStack></VStack> },
+    { key:"touch", header:"Last touch", renderCell:(r: Row) => {
+      const touch = lastTouch(r,followUps.metrics?.[r.id]);
+      return <VStack gap={1}><Text>{touch?.title || (followUps.metrics ? "No recorded touch" : "Unavailable")}</Text>
+        {touch && <Text type="supporting" color="secondary">{date(touch.at)}</Text>}</VStack>;
+    }},
+    { key:"next", header:"Next step", renderCell:(r: Row) => {
+      const schedule = followUps.schedules?.get(r.id);
+      const next = [schedule?.task,schedule?.appointment].filter((t): t is Row => Boolean(t)).sort((a,b)=>+dueAt(a)-+dueAt(b))[0];
+      return <VStack gap={1}><Text weight="semibold">{next?.title || (followUps.schedules ? "None scheduled" : "Unavailable")}</Text>
+        {next && <Text type="supporting" color="secondary">{dueCue(next)}</Text>}</VStack>;
+    }},
+    { key:"actions", header:"", renderCell:(r: Row) => {
+      const dnc = blockedNumber(r, followUps.metrics?.[r.id]);
+      const disabled = dnc || !r.phone || !followUps.phoneFlagsReady;
+      return <HStack gap={2} vAlign="center">
+        {dnc && <Text type="supporting">Do not call</Text>}
+        <MoreMenu size="sm" label={"Actions for " + r.name} items={[
+          {label:"Call", isDisabled:disabled, onClick:() => bridge.action("call",r.id)},
+          {label:"Text", isDisabled:disabled, onClick:() => bridge.action("text",r.id)},
+          {label:"Messages", onClick:() => bridge.action("messages",r.id)},
+        ]} />
+      </HStack>;
+    } },
   ];
 
-  const nav = (
-    <VStack gap={6}>
-      <Heading level={2}>People</Heading>
-      <SideNav>
-        {categories.map(([key, name]) => (
-          <SideNavItem
-            key={key}
-            label={name}
-            isSelected={bucket === key}
-            onClick={() => setBucket(key)}
-            endContent={
-              <Text type="supporting" hasTabularNumbers>
-                {all.filter((r: Row) => inBucket(r, key)).length}
-              </Text>
-            }
-          />
-        ))}
-      </SideNav>
-      <Divider />
-      <Button
-        label="Archived people"
-        variant="ghost"
-        onClick={() => setBucket("archived")}
-      />
-      <Text type="supporting" color="secondary">
-        Your relationships, together in one place.
-      </Text>
-    </VStack>
-  );
-
   return (
+    <>
     <Layout
       padding={4}
-      start={
-        !narrow ? (
-          <LayoutPanel width="15rem" hasDivider>
-            {nav}
-          </LayoutPanel>
-        ) : undefined
-      }
       header={
         <LayoutHeader hasDivider>
-          <VStack gap={6}>
+          <VStack gap={3}>
             <HStack hAlign="between" vAlign="center" wrap="wrap">
               <VStack gap={2}>
                 <Heading level={1}>
@@ -368,12 +468,37 @@ function People({ snapshot }: { snapshot: any }) {
                 </Heading>
                 <Text color="secondary">
                   {rows.length.toLocaleString()} {rows.length===1?'person':'people'}
-                  {query || source !== "all" || status !== "all"
+                  {query || scope !== "all" || source !== "all" || status !== "all"
                     ? " matching your filters"
                     : " in your workspace"}
                 </Text>
               </VStack>
-              <HStack gap={2}>
+
+            </HStack>
+            <HStack gap={2} vAlign="end" wrap="wrap">
+              <Selector label="People category" isLabelHidden value={bucket} onChange={setBucket}
+                options={[...categories, ["archived", "Archived people"]].map(([value, name]) => ({
+                  value, label: name + " (" + all.filter((r: Row) => inBucket(r, value)).length + ")"
+                }))} />
+              <TextInput label="Search people" isLabelHidden placeholder="Search people"
+                value={query} onChange={setQuery} hasClear />
+              <Selector
+                label="Sort people"
+                isLabelHidden
+                variant="secondary"
+                value={sort}
+                onChange={setSort}
+                options={[
+                  { value: "az", label: "Name · A–Z" },
+                  { value: "za", label: "Name · Z–A" },
+                  { value: "recent", label: "Recent activity" },
+                ]}
+              />
+              <Button
+                label={filters ? "Hide filters" : "Filters"}
+                onClick={() => setFilters(!filters)}
+              />
+              <HStack gap={2} wrap="wrap">
                 <Button
                   label={busy ? "Refreshing…" : "Refresh"}
                   isDisabled={busy}
@@ -393,41 +518,13 @@ function People({ snapshot }: { snapshot: any }) {
                 />
               </HStack>
             </HStack>
-            {narrow ? (
-              <TabList value={bucket} onChange={setBucket}>
-                {categories.map(([key, name]) => (
-                  <Tab key={key} value={key} label={name} />
-                ))}
-              </TabList>
-            ) : null}
-            <HStack gap={3} vAlign="end" wrap="wrap">
-              <StackItem size="fill">
-                <TextInput
-                  label="Search people"
-                  isLabelHidden
-                  placeholder="Search name, email, phone or address"
-                  value={query}
-                  onChange={setQuery}
-                  hasClear
-                />
-              </StackItem>
-              <Selector
-                label="Sort people"
-                isLabelHidden
-                variant="secondary"
-                value={sort}
-                onChange={setSort}
-                options={[
-                  { value: "az", label: "Name · A–Z" },
-                  { value: "za", label: "Name · Z–A" },
-                  { value: "recent", label: "Recent activity" },
-                ]}
-              />
-              <Button
-                label={filters ? "Hide filters" : "Filters"}
-                onClick={() => setFilters(!filters)}
-              />
-            </HStack>
+            <TabList value={scope} onChange={setScope}>
+              <Tab value="all" label="All" />
+              {snapshot.viewerId && <Tab value="mine" label="My leads" />}
+              <Tab value="due" label="Due today" />
+              <Tab value="overdue" label="Overdue" />
+              <Tab value="new" label="New" />
+            </TabList>
             {filters ? (
               <HStack gap={4} wrap="wrap">
                 <Selector
@@ -485,8 +582,18 @@ function People({ snapshot }: { snapshot: any }) {
                   : "Loading your contacts…"}
               </Notice>
             ) : null}
+            {(scope === "due" || scope === "overdue") && !followUps.schedules && <Notice>Task dates are unavailable. Use Refresh to retry.</Notice>}
             {error ? <Notice>{error}</Notice> : null}
-            <Table
+            {narrow ? rows.slice((current - 1) * 25, current * 25).map((r: Row) => (
+              <VStack key={r.id} gap={3}>
+                <HStack hAlign="between" vAlign="start" wrap="wrap">{columns[0].renderCell(r)}{columns[1].renderCell(r)}</HStack>
+                <HStack gap={6} wrap="wrap">
+                  <VStack gap={1}><Text type="supporting" color="secondary">Next step</Text>{columns[3].renderCell(r)}</VStack>
+                  <VStack gap={1}><Text type="supporting" color="secondary">Last touch</Text>{columns[2].renderCell(r)}</VStack>
+                </HStack>
+                {columns[4].renderCell(r)}<Divider />
+              </VStack>
+            )) : (<Table
               data={rows.slice((current - 1) * 25, current * 25)}
               columns={columns}
               idKey="id"
@@ -495,7 +602,7 @@ function People({ snapshot }: { snapshot: any }) {
               hasHover
               rowCount={rows.length}
               rowIndexStart={(current - 1) * 25 + 1}
-            />
+            />)}
             <HStack hAlign="between" vAlign="center">
               <Text type="supporting" color="secondary">
                 {rows.length
@@ -522,6 +629,15 @@ function People({ snapshot }: { snapshot: any }) {
         </LayoutContent>
       }
     />
+    {editing && <Dialog isOpen onOpenChange={open => { if (!open && !saving) setEditing(null); }} purpose="form" width="28rem">
+      <DialogHeader title={"Edit status · " + editing.name} />
+      <VStack gap={4} padding={4}>
+        <Selector label="Status" value={statusValue} onChange={setStatusValue} options={withCurrent(snapshot.statusOptions, statusValue)} />
+        {saveError && <Notice>{saveError}</Notice>}
+        <HStack gap={2}><Button label="Cancel" isDisabled={saving} onClick={()=>setEditing(null)} />
+          <Button label="Save status" variant="primary" isDisabled={saving} onClick={saveStatus} /></HStack>
+      </VStack>
+    </Dialog>}</>
   );
 }
 
@@ -540,10 +656,10 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState(false),
     [form, setForm] = useState<Row>({}),
-    [activityFilter, setActivityFilter] = useState("all"),
+    [activityFilter, setActivityFilter] = useState("history"),
     [schedule, setSchedule] = useState("");
 
-  const narrow = useMediaQuery("(max-width: 1000px)");
+  const followUps = useDeskFacts(snapshot.dataReady);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -655,8 +771,13 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
     }
   };
 
+  const latest = lastTouch(lead, followUps.metrics?.[id]);
+  const scheduled = followUps.schedules?.get(id);
+  const showing = record.showing;
+  const upcomingShowing = showing && showing.confirmationStatus !== "cancelled" && Date.parse(showing.scheduledAt) >= Date.now() &&
+    (!scheduled?.appointment || centralNow(new Date(showing.scheduledAt)) < scheduleKey(scheduled.appointment));
   const shown = items.filter(
-    (i) => activityFilter === "all" || i.category === activityFilter,
+    (i) => activityFilter === "history" ? ["call","email","text","note","stage"].includes(i.category) : activityFilter === "all" || i.category === activityFilter,
   );
 
   const contact = (
@@ -845,7 +966,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                   onClick={() => bridge.openPeople()}
                 />
               </HStack>
-              <HStack hAlign="between" vAlign="center" wrap="wrap">
+              <HStack gap={6} vAlign="center" wrap="wrap">
                 <HStack gap={4} vAlign="center">
                   <Avatar
                     name={lead.name || "Unnamed contact"}
@@ -857,12 +978,12 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                       {lead.name || "Unnamed contact"}
                     </Heading>
                     <Text color="secondary">
-                      {label(lead.crmIntent || lead.intent)} · {lead.source || "Unknown source"} ·{" "}
-                      {label(lead.statusDisp)}
+                      {[lead.crmIntent && label(lead.crmIntent),lead.source,lead.assignedUserName || "Unassigned"].filter(Boolean).join(" · ")}
                     </Text>
                   </VStack>
                 </HStack>
-                <HStack gap={2}>
+                <HStack gap={2} wrap="wrap">
+                  <ContactActions row={lead} facts={followUps} />
                   <Button label="Edit contact" onClick={openEdit} />
                   <Button
                     label="Schedule appointment"
@@ -871,40 +992,42 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                   />
                 </HStack>
               </HStack>
+              <HStack gap={6} wrap="wrap">
+                <VStack gap={1}><Text type="supporting" color="secondary">Pipeline stage</Text><Text weight="semibold">{stageText(lead, snapshot.stageOptions)}</Text></VStack>
+                <Fact title="Last touch" value={latest ? latest.title + " · " + date(latest.at) : followUps.metrics ? "No recorded touch" : "Unavailable"} />
+                <Fact title="Next task" value={scheduleText(scheduled?.task, Boolean(followUps.schedules))} />
+                <Fact title="Upcoming appointment" value={upcomingShowing ? [showing.address,date(showing.scheduledAt)].filter(Boolean).join(" · ") : scheduleText(scheduled?.appointment, Boolean(followUps.schedules))} />
+              </HStack>
+            </VStack>
+          </LayoutHeader>
+        }
+        content={
+          <LayoutContent>
+            <VStack gap={6}>
               <TabList value={tab} onChange={setTab} hasDivider>
                 <Tab value="activity" label="Activity" />
                 <Tab value="notes" label="Notes" />
                 <Tab value="details" label="Details" />
               </TabList>
-            </VStack>
-          </LayoutHeader>
-        }
-        end={
-          !narrow ? (
-            <LayoutPanel width="22rem" hasDivider>
-              {contact}
-            </LayoutPanel>
-          ) : undefined
-        }
-        content={
-          <LayoutContent>
-            <VStack gap={6}>
-              {error ? <Notice>{error}</Notice> : null}
+
+            {error ? <Notice>{error}</Notice> : null}
               {notice ? <Notice>{notice}</Notice> : null}
               {loading ? <Notice>Loading contact history…</Notice> : null}
               {tab === "activity" ? (
                 <>
-                  {harvey}
+                  <Qualification lead={lead} record={record} />
                   <Section>
                     <VStack gap={5}>
                       <HStack hAlign="between" vAlign="center" wrap="wrap">
                         <Heading level={2}>Conversation & activity</Heading>
+                        <Button label="Add note" size="sm" variant="ghost" onClick={() => setTab("notes")} />
                         <Selector
                           label="Activity type"
                           isLabelHidden
                           value={activityFilter}
                           onChange={setActivityFilter}
                           options={[
+                            "history",
                             "all",
                             "text",
                             "call",
@@ -912,9 +1035,11 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                             "appointment",
                             "task",
                             "note",
+                            "stage",
+                            "web",
                           ].map((v) => ({
                             value: v,
-                            label: v === "all" ? "All activity" : label(v),
+                            label: v === "all" ? "All activity" : v === "history" ? "Contact history" : label(v),
                           }))}
                         />
                       </HStack>
@@ -934,6 +1059,8 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                                 ? item.body
                                 : item.description || ""}
                             </Text>
+                            {item.category === "stage" && item.detail && <Text>{label(item.detail.From)} → {label(item.detail.To)}</Text>}
+                            {(item.detail?.Outcome || item.subType) && <Text type="supporting">{label(item.detail?.Outcome || item.subType)}</Text>}
                             {item.author ? (
                               <Text type="supporting" color="secondary">
                                 {item.author}
@@ -955,6 +1082,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                       ) : null}
                     </VStack>
                   </Section>
+                  {harvey}
                 </>
               ) : null}
               {tab === "notes" ? (
@@ -988,6 +1116,8 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                 </Section>
               ) : null}
               {tab === "details" ? (
+                <>
+                {contact}
                 <ContactDetails
                   record={record}
                   lead={lead}
@@ -997,8 +1127,9 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                     await bridge.refresh();
                   }}
                 />
+                </>
               ) : null}
-              {narrow ? contact : null}
+
             </VStack>
           </LayoutContent>
         }
@@ -1063,6 +1194,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
           close={() => setSchedule("")}
           saved={async () => {
             setSchedule("");
+            followUps.refresh();
             setNotice("Saved to this contact and the team calendar.");
             await load();
             await bridge.refresh();

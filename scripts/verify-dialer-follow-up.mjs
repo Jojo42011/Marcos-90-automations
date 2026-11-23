@@ -16,6 +16,8 @@ Object.assign(process.env, {
   ACCOUNT_ISOLATION: "true",
   SHARED_DIALER_DB_PATH: join(root, "dialer.db"),
   TRACKER_DB_PATH: join(root, "tracker.db"),
+  AUTO_PLANS_JSON_PATH: join(root, "plans.json"),
+  AUTO_PLAN_TRIGGERS_JSON_PATH: join(root, "triggers.json"),
   USERS_JSON_PATH: join(root, "users.json"),
   QUO_API_KEY: "",
   OPENPHONE_API_KEY: "",
@@ -39,7 +41,7 @@ const {
 const { matchesQueue, queueSummaries } = require("../dist/src/dialer/queues.js");
 const { dialerStore } = require("../dist/src/dialer/store.js");
 const { syncDialer } = require("../dist/src/dialer/sync.js");
-const { upsertLeadQuiet, getLeadById } = require("../dist/src/core/db.js");
+const { upsertLeadQuiet, getLeadById, updateLeadCrmFields } = require("../dist/src/core/db.js");
 const { createTask } = require("../dist/src/core/tasks.js");
 const { bumpTrackerFromDialerActivity } = require("../dist/src/core/trackerDialerBump.js");
 const {
@@ -470,6 +472,64 @@ check("MLS expired auto-feed stays blocked; Mojo/CSV path remains", () => {
   assert.match(routes, /automaticDialing: false/);
 });
 
+// A stage name alone must not book an appointment, move calling queues, or
+// enroll a lead even when an existing plan would match the unchanged status.
+{
+  const id = "lead-due-dated";
+  const before = await getLeadById(id);
+  const plan = { id:"fixture-plan", name:"Zero-step fixture", active:true, steps:[] };
+  require("../dist/src/core/autoPlans.js").saveAutoPlans([plan]);
+  require("../dist/src/core/autoPlanTriggers.js").createAutoPlanTrigger({
+    intent:null, source:null, tag:null, status:before.crmStatus, planId:plan.id,
+  });
+  const queues = async () => {
+    await syncDialer();
+    const store = dialerStore();
+    const c = store.contacts().find(contact => contact.crmId === id);
+    return ["new","nurture","due","overdue","mojo","everyone"].map(key => matchesQueue(c,key,store.bookedAppointmentIds()));
+  };
+  const original = await queues();
+  await updateLeadCrmFields({leadId:id,crmStage:"showing_set"});
+  assert.deepEqual(await queues(),original);
+  const staged = await getLeadById(id);
+  assert.equal(staged.crmStatus,before.crmStatus);
+  assert.deepEqual(staged.autoPlanEnrollments,before.autoPlanEnrollments);
+  await updateLeadCrmFields({leadId:id,crmStatus:"nurture"});
+  const changed = await queues();
+  assert.equal(changed[0],false);
+  assert.equal(changed[1],true);
+  await updateLeadCrmFields({leadId:id,crmStatus:before.crmStatus});
+  assert.ok((await getLeadById(id)).autoPlanEnrollments.some(e => e.planId === plan.id));
+  console.log("ok stage-only edit preserves queues/enrollments; status edit changes queue and matches configured plan");
+}
+
+// The CRM status drives Dialer queues. A status-only save must preserve DNC
+// and must never manufacture a stage event, including on a retried save.
+{
+  const id = "lead-due-dated";
+  const lead = await getLeadById(id);
+  upsertLeadQuiet({ ...lead, tags: ["do-not-call"] });
+  const update = { leadId: id, crmStatus: "hot", crmStage: "appointment_set", stageActor: "Fixture agent" };
+  await updateLeadCrmFields(update);
+  await updateLeadCrmFields(update);
+  await updateLeadCrmFields({ leadId: id, crmStatus: "watch" });
+  const saved = await getLeadById(id);
+  assert.equal(saved.crmStatus, "watch");
+  assert.deepEqual(saved.tags, ["do-not-call"]);
+  assert.equal(saved.stageChanges.length, (lead.stageChanges?.length || 0) + 1);
+  const event = saved.stageChanges.at(-1);
+  assert.equal(event.from, lead.crmStage);
+  assert.equal(event.to, "appointment_set");
+  assert.equal(event.actor, "Fixture agent");
+  assert.ok(Number.isFinite(Date.parse(event.at)));
+  await syncDialer();
+  const mirrored = dialerStore().contacts().find(contact => contact.crmId === id);
+  assert.equal(mirrored.crmStatus, "watch");
+  assert.equal(mirrored.dnc, true);
+  console.log("ok CRM status mirrors to Dialer, retains DNC, and records a stage change once");
+}
+
+dialerStore().db.close();
 getTrackerDb().close();
 rmSync(root, { recursive: true, force: true });
 
