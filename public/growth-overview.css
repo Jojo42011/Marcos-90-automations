@@ -39,7 +39,8 @@
 #pipeOverview .po-metrics{min-height:82px;gap:12px}
 #pipeOverview .po-funnel{flex:1}#pipeOverview .po-step{flex:1;min-height:56px}
 #pipeOverview .po-metric em{display:block;font-style:normal;font-size:10px;color:var(--po-num);margin-top:4px;font-variant-numeric:tabular-nums}
-#pipeOverview .po-metric[data-po-metric="talk_time"] strong{letter-spacing:-.5px}
+#pipeOverview .po-metric[data-po-metric="attempt_elapsed"] strong{letter-spacing:-.5px}
+#pipeOverview .po-metric[data-po-metric="connected_talk"] strong{opacity:.72;letter-spacing:0}
 #pipeOverview .po-window select{border:1px solid var(--line);background:var(--card);color:var(--text-1);border-radius:8px;padding:8px 10px;font:inherit;font-size:12px;cursor:pointer}
 #pipeOverview .po-window select:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
 .po-visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

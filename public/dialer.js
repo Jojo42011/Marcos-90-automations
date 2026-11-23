@@ -467,7 +467,7 @@
       s = mySession();
     $("#workspace").innerHTML =
       stats() +
-      '<section class="panel queue-home"><div class="panel-header"><div><h2>Calling queues</h2><p>CRM Due today, Mojo expired, New, and Nurture — same rules as the old CRM Dialer</p></div><button data-action="add-contact">Add contact</button></div><div class="queue-grid">' +
+      '<section class="panel queue-home"><div class="panel-header"><div><h2>Calling queues</h2><p>Due today and Overdue from CRM call/follow-up dates, plus Mojo expired, New, and Nurture — manual one-line dial</p></div><button data-action="add-contact">Add contact</button></div><div class="queue-grid">' +
       (overview.queues || [])
         .map(
           (qq) =>

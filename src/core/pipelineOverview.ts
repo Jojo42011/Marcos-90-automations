@@ -30,9 +30,17 @@ export interface FunnelStep {
   key: string;
   label: string;
   kind: FunnelStepKind;
-  count: number;
-  /** "duration" counts are seconds (talk time); rates never cross one. */
-  format?: "duration";
+  /**
+   * Metric/people count. Null only with format "unavailable" (no trustworthy
+   * source — never render as 0).
+   */
+  count: number | null;
+  /**
+   * "duration" = seconds (attempt elapsed). "unavailable" = no trustworthy
+   * connected-talk provider field in-repo (Quo call.completed alone is not
+   * connected evidence).
+   */
+  format?: "duration" | "unavailable";
   /** Conversion into this step from the previous step (null for the first). */
   rateFromPrev: number | null;
 }
@@ -202,8 +210,9 @@ const TALKED = new Set(["talked", "appointment_set"]);
 /**
  * Seller dial numbers from the shared Dialer, attributed by the caller's team
  * identity. Interrupted attempts were never placed, so they count nowhere.
- * Talk time is the logged span from opening the phone app to saving the
- * outcome; calls run in the device's phone app, so no carrier duration exists.
+ * `talkSeconds` is attempt elapsed (phone-app open → outcome saved), not
+ * connected talk. Quo has no trustworthy connected-duration field in this
+ * codebase; do not infer connected time from call.completed alone.
  */
 export function sellerDialMetrics(filter: string[], window: SellerWindow): SellerDialMetrics {
   const out: SellerDialMetrics = { talkSeconds: 0, numbersCalled: 0, conversations: 0, appointmentsFromCalls: 0 };
@@ -434,12 +443,26 @@ async function socialTop(): Promise<{
 }
 
 function withRates(
-  steps: Array<{ key: string; label: string; kind: FunnelStepKind; count: number; format?: "duration" }>,
+  steps: Array<{
+    key: string;
+    label: string;
+    kind: FunnelStepKind;
+    count: number | null;
+    format?: "duration" | "unavailable";
+  }>,
 ): FunnelStep[] {
   return steps.map((s, i) => {
     let rateFromPrev: number | null = null;
     const prev = steps[i - 1];
-    if (prev && !s.format && !prev.format) rateFromPrev = rate(s.count, prev.count);
+    if (
+      prev &&
+      !s.format &&
+      !prev.format &&
+      typeof s.count === "number" &&
+      typeof prev.count === "number"
+    ) {
+      rateFromPrev = rate(s.count, prev.count);
+    }
     return { ...s, rateFromPrev };
   });
 }
@@ -593,8 +616,27 @@ export async function buildPipelineOverview(opts: {
     buyerStepsRaw.push({ key: s.key, label: s.label, kind: "people", count: s.count });
   }
 
-  const sellerStepsRaw: Array<{ key: string; label: string; kind: FunnelStepKind; count: number; format?: "duration" }> = [
-    { key: "talk_time", label: "Talk time", kind: "metric", count: dial.talkSeconds, format: "duration" },
+  const sellerStepsRaw: Array<{
+    key: string;
+    label: string;
+    kind: FunnelStepKind;
+    count: number | null;
+    format?: "duration" | "unavailable";
+  }> = [
+    {
+      key: "attempt_elapsed",
+      label: "Attempt elapsed",
+      kind: "metric",
+      count: dial.talkSeconds,
+      format: "duration",
+    },
+    {
+      key: "connected_talk",
+      label: "Connected talk",
+      kind: "metric",
+      count: null,
+      format: "unavailable",
+    },
     { key: "called", label: "Numbers called", kind: "metric", count: dial.numbersCalled },
     { key: "conversations", label: "Conversations", kind: "metric", count: dial.conversations },
   ];
@@ -609,7 +651,8 @@ export async function buildPipelineOverview(opts: {
     "Buyer funnel: Views → Comments → DMs → Number → Appt set → Appt show → Showing → U/C → Closed (no Call). People steps are cumulative from CRM stages + Tracker.",
   );
   notes.push(
-    `Seller Dialer numbers (${sellerWindow.label.toLowerCase()}) come from saved Dialer outcomes by the caller's team identity: numbers called excludes interrupted attempts, conversations are Talked + Appointment set, and talk time is the logged span from opening the phone app to saving the outcome.`,
+    `Seller Dialer numbers (${sellerWindow.label.toLowerCase()}) come from saved Dialer outcomes by the caller's team identity: numbers called excludes interrupted attempts, conversations are Talked + Appointment set, and attempt elapsed is the logged span from opening the phone app to saving the outcome — not connected talk.`,
+    "Connected talk is unavailable: Quo has no trustworthy connected-duration field in this codebase, and call.completed alone is not connected evidence.",
     sellerWindow.since
       ? "Seller stage steps count people who reached that stage or later during the window, using Tracker stage-entry dates. Rows staged without a date only count in All time."
       : "Seller stage steps are cumulative from the Buyers & Sellers Tracker (reached this stage or later).",
@@ -646,7 +689,7 @@ export async function buildPipelineOverview(opts: {
     sellers: {
       side: "seller",
       title: "Sellers",
-      subtitle: "Talk time → Sold",
+      subtitle: "Attempt elapsed → Sold",
       steps: withRates(sellerStepsRaw),
       inPipeline: seller.total,
       unstaged: seller.unstaged,

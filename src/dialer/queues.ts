@@ -1,4 +1,5 @@
 import { Contact, phoneKey } from "./store.js";
+import { followUpBucket } from "./followUpDue.js";
 
 /** Same display mapping the CRM Dialer used for New / Nurture queues. */
 const STATUS_DISP: Record<string, string> = {
@@ -12,7 +13,7 @@ const STATUS_DISP: Record<string, string> = {
   contacted: "nurture",
 };
 
-export type QueueId = "due" | "mojo" | "new" | "nurture" | "everyone";
+export type QueueId = "due" | "overdue" | "mojo" | "new" | "nurture" | "everyone";
 
 export const QUEUE_DEFS: {
   id: QueueId;
@@ -22,7 +23,12 @@ export const QUEUE_DEFS: {
   {
     id: "due",
     label: "Due today",
-    description: "Leads flagged urgent or due for a call today.",
+    description: "Open CRM call/follow-up due today (Central), or flagged urgent when not overdue. Manual one-line dial.",
+  },
+  {
+    id: "overdue",
+    label: "Overdue",
+    description: "Open CRM call/follow-up past due (Central). Manual one-line dial.",
   },
   {
     id: "mojo",
@@ -77,11 +83,31 @@ export function isCallable(c: Contact): boolean {
   return !c.dnc && !c.archived && phoneKey(c.phone).length >= 10;
 }
 
-export function matchesQueue(c: Contact, queueId: string): boolean {
+/**
+ * Cold prospecting queues only. Booked Appointments-group contacts stay out of
+ * these. Due today / Overdue remain available when an open qualifying follow-up
+ * exists; Everyone stays callable (DNC/archive still apply).
+ */
+const PROSPECTING_QUEUES = new Set<QueueId>(["mojo", "new", "nurture"]);
+
+export function isProspectingQueue(queueId: string): boolean {
+  return PROSPECTING_QUEUES.has(queueId as QueueId);
+}
+
+/**
+ * @param bookedIds contact ids in the team Appointments group (left prospecting).
+ */
+export function matchesQueue(
+  c: Contact,
+  queueId: string,
+  bookedIds: ReadonlySet<string> = new Set(),
+): boolean {
   if (!QUEUE_DEFS.some((q) => q.id === queueId)) return false;
   if (queueId === "everyone") return isCallable(c) || (!!phoneKey(c.phone) && !c.archived);
+  if (isProspectingQueue(queueId) && bookedIds.has(c.id)) return false;
   if (!phoneKey(c.phone)) return false;
-  if (queueId === "due") return c.crmCallQueue === "urgent";
+  if (queueId === "due") return followUpBucket(c) === "due";
+  if (queueId === "overdue") return followUpBucket(c) === "overdue";
   if (queueId === "mojo") return isMojoExpired(c);
   if (queueId === "new") return statusDisp(c.crmStatus) === "new";
   if (queueId === "nurture") return statusDisp(c.crmStatus) === "nurture";
@@ -93,13 +119,20 @@ export function parseQueueId(raw: unknown): QueueId | "" {
   return QUEUE_DEFS.some((q) => q.id === id) ? (id as QueueId) : "";
 }
 
-export function queueContacts(contacts: Contact[], queueId: string): Contact[] {
-  return contacts.filter((c) => matchesQueue(c, queueId));
+export function queueContacts(
+  contacts: Contact[],
+  queueId: string,
+  bookedIds: ReadonlySet<string> = new Set(),
+): Contact[] {
+  return contacts.filter((c) => matchesQueue(c, queueId, bookedIds));
 }
 
-export function queueSummaries(contacts: Contact[]) {
+export function queueSummaries(
+  contacts: Contact[],
+  bookedIds: ReadonlySet<string> = new Set(),
+) {
   return QUEUE_DEFS.map((q) => ({
     ...q,
-    count: queueContacts(contacts, q.id).filter(isCallable).length,
+    count: queueContacts(contacts, q.id, bookedIds).filter(isCallable).length,
   }));
 }
