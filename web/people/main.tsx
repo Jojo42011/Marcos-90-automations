@@ -8,7 +8,6 @@ import {
   Layout,
   LayoutHeader,
   LayoutContent,
-  LayoutPanel,
   VStack,
   HStack,
   StackItem,
@@ -23,7 +22,6 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 
 import { Table, proportional } from "@astryxdesign/core/Table";
 
-import { SideNav, SideNavItem } from "@astryxdesign/core/SideNav";
 
 import { TextInput } from "@astryxdesign/core/TextInput";
 
@@ -94,6 +92,42 @@ async function api(path: string, method = "GET", body?: unknown) {
   return d;
 }
 
+type FollowUps = Map<string, string>;
+function useFollowUps(ready: boolean) {
+  const path = bridge?.url("/api/crm-tasks");
+  const [result, setResult] = useState<{ path: string; dates: FollowUps }>();
+  const [revision, refresh] = React.useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!path || !ready) return;
+    const controller = new AbortController();
+    fetch(path, { signal: controller.signal }).then(async response => {
+      if (!response.ok) throw Error();
+      const { tasks } = await response.json();
+      const dates: FollowUps = new Map();
+      for (const task of tasks) {
+        if (!task.leadId || !task.dueDate || ["completed", "cancelled"].includes(task.status)) continue;
+        const earliest = dates.get(task.leadId);
+        if (!earliest || task.dueDate < earliest) dates.set(task.leadId, task.dueDate);
+      }
+      if (!controller.signal.aborted) setResult({ path, dates });
+    }).catch(() => { if (!controller.signal.aborted) setResult(undefined); });
+    return () => controller.abort();
+  }, [path, ready, revision]);
+  return { dates: ready && result?.path === path ? result?.dates : undefined, refresh };
+}
+
+function followUp(dates: FollowUps | undefined, id: string) {
+  if (!dates) return "Unavailable";
+  const day = dates.get(id);
+  if (!day) return "None scheduled";
+  const due = new Date(day + "T00:00:00");
+  if (Number.isNaN(due.getTime())) return "Unavailable";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (due.getTime() === today.getTime()) return "Today";
+  return (due < today ? "Overdue · " : "") + due.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 function useSnapshot() {
   const [state, setState] = useState(
     () =>
@@ -149,7 +183,8 @@ function People({ snapshot }: { snapshot: any }) {
     [error, setError] = useState("");
 
   useEffect(()=>{Object.assign(peopleView,{query,source,status,sort,page,filters});},[query,source,status,sort,page,filters]);
-  const narrow = useMediaQuery("(max-width: 800px)");
+  const narrow = useMediaQuery("(max-width: 700px)");
+  const followUps = useFollowUps(snapshot.dataReady);
 
   const all = useMemo(() => {
     const leads = new Map(snapshot.leads.map((l: Row) => [l.id, l]));
@@ -211,6 +246,7 @@ function People({ snapshot }: { snapshot: any }) {
     setError("");
     try {
       await bridge.refresh();
+      followUps.refresh();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -262,104 +298,37 @@ function People({ snapshot }: { snapshot: any }) {
     },
 
     {
-      key: "status",
-      header: "Status",
-      renderCell: (r: Row) => <Text>{label(r.status)}</Text>,
+      key: "pipeline",
+      header: "Pipeline",
+      renderCell: (r: Row) => <VStack gap={1}>
+        <Text weight="semibold">{stageText(r, snapshot.stageOptions)}</Text>
+        <Text type="supporting" color="secondary">{label(r.status)}</Text>
+      </VStack>,
     },
-
     {
-      key: "stage",
-      header: "Pipeline stage",
-      width: proportional(1, { minWidth: 150 }),
-      renderCell: (r: Row) => (
-        <Text color="secondary">{stageText(r, snapshot.stageOptions)}</Text>
-      ),
+      key: "follow",
+      header: "Next follow-up",
+      renderCell: (r: Row) => <VStack gap={1}>
+        <Text weight="semibold">{followUp(followUps.dates, r.id)}</Text>
+        <Text type="supporting" color="secondary">Last activity · {date(r.lastActivity)}</Text>
+      </VStack>,
     },
-
     {
-      key: "source",
-      header: "Source",
-      renderCell: (r: Row) => (
-        <Text color="secondary">{r.source || "Unknown"}</Text>
-      ),
-    },
-
-    {
-      key: "assigned",
-      header: "Assigned to",
-      renderCell: (r: Row) => (
-        <Text color="secondary">{r.assignedUserName || "Unassigned"}</Text>
-      ),
-    },
-
-    {
-      key: "last",
-      header: "Last activity",
-      width: proportional(1, { minWidth: 170 }),
-      renderCell: (r: Row) => (
-        <Text type="supporting" color="secondary">
-          {date(r.lastActivity)}
-        </Text>
-      ),
-    },
-
-    {
-      key: "open",
-      header: "",
-      renderCell: (r: Row) => (
-        <Button
-          label="Open profile"
-          size="sm"
-          variant="secondary"
-          onClick={() => bridge.openLead(r.id)}
-        />
-      ),
+      key: "owner",
+      header: "Assignment",
+      renderCell: (r: Row) => <VStack gap={1}>
+        <Text>{r.assignedUserName || "Unassigned"}</Text>
+        <Text type="supporting" color="secondary">{r.source || "Unknown source"}</Text>
+      </VStack>,
     },
   ];
-
-  const nav = (
-    <VStack gap={6}>
-      <Heading level={2}>People</Heading>
-      <SideNav>
-        {categories.map(([key, name]) => (
-          <SideNavItem
-            key={key}
-            label={name}
-            isSelected={bucket === key}
-            onClick={() => setBucket(key)}
-            endContent={
-              <Text type="supporting" hasTabularNumbers>
-                {all.filter((r: Row) => inBucket(r, key)).length}
-              </Text>
-            }
-          />
-        ))}
-      </SideNav>
-      <Divider />
-      <Button
-        label="Archived people"
-        variant="ghost"
-        onClick={() => setBucket("archived")}
-      />
-      <Text type="supporting" color="secondary">
-        Your relationships, together in one place.
-      </Text>
-    </VStack>
-  );
 
   return (
     <Layout
       padding={4}
-      start={
-        !narrow ? (
-          <LayoutPanel width="15rem" hasDivider>
-            {nav}
-          </LayoutPanel>
-        ) : undefined
-      }
       header={
         <LayoutHeader hasDivider>
-          <VStack gap={6}>
+          <VStack gap={3}>
             <HStack hAlign="between" vAlign="center" wrap="wrap">
               <VStack gap={2}>
                 <Heading level={1}>
@@ -373,7 +342,32 @@ function People({ snapshot }: { snapshot: any }) {
                     : " in your workspace"}
                 </Text>
               </VStack>
-              <HStack gap={2}>
+
+            </HStack>
+            <HStack gap={2} vAlign="end" wrap="wrap">
+              <Selector label="People category" isLabelHidden value={bucket} onChange={setBucket}
+                options={[...categories, ["archived", "Archived people"]].map(([value, name]) => ({
+                  value, label: name + " (" + all.filter((r: Row) => inBucket(r, value)).length + ")"
+                }))} />
+              <TextInput label="Search people" isLabelHidden placeholder="Search people"
+                value={query} onChange={setQuery} hasClear />
+              <Selector
+                label="Sort people"
+                isLabelHidden
+                variant="secondary"
+                value={sort}
+                onChange={setSort}
+                options={[
+                  { value: "az", label: "Name · A–Z" },
+                  { value: "za", label: "Name · Z–A" },
+                  { value: "recent", label: "Recent activity" },
+                ]}
+              />
+              <Button
+                label={filters ? "Hide filters" : "Filters"}
+                onClick={() => setFilters(!filters)}
+              />
+              <HStack gap={2} wrap="wrap">
                 <Button
                   label={busy ? "Refreshing…" : "Refresh"}
                   isDisabled={busy}
@@ -392,41 +386,6 @@ function People({ snapshot }: { snapshot: any }) {
                   onClick={() => bridge.action("import", snapshot.leads[0]?.id)}
                 />
               </HStack>
-            </HStack>
-            {narrow ? (
-              <TabList value={bucket} onChange={setBucket}>
-                {categories.map(([key, name]) => (
-                  <Tab key={key} value={key} label={name} />
-                ))}
-              </TabList>
-            ) : null}
-            <HStack gap={3} vAlign="end" wrap="wrap">
-              <StackItem size="fill">
-                <TextInput
-                  label="Search people"
-                  isLabelHidden
-                  placeholder="Search name, email, phone or address"
-                  value={query}
-                  onChange={setQuery}
-                  hasClear
-                />
-              </StackItem>
-              <Selector
-                label="Sort people"
-                isLabelHidden
-                variant="secondary"
-                value={sort}
-                onChange={setSort}
-                options={[
-                  { value: "az", label: "Name · A–Z" },
-                  { value: "za", label: "Name · Z–A" },
-                  { value: "recent", label: "Recent activity" },
-                ]}
-              />
-              <Button
-                label={filters ? "Hide filters" : "Filters"}
-                onClick={() => setFilters(!filters)}
-              />
             </HStack>
             {filters ? (
               <HStack gap={4} wrap="wrap">
@@ -486,7 +445,18 @@ function People({ snapshot }: { snapshot: any }) {
               </Notice>
             ) : null}
             {error ? <Notice>{error}</Notice> : null}
-            <Table
+            {narrow ? rows.slice((current - 1) * 25, current * 25).map((r: Row) => (
+              <VStack key={r.id} gap={2}>
+                <HStack hAlign="between" vAlign="center" wrap="wrap">
+                  <Button variant="ghost" label={r.name || "Unnamed contact"} onClick={() => bridge.openLead(r.id)} />
+                  <Text weight="semibold">{stageText(r, snapshot.stageOptions)}</Text>
+                </HStack>
+                <Text>Next follow-up · {followUp(followUps.dates, r.id)}</Text>
+                <Text type="supporting" color="secondary">{r.email || r.phone || "No contact details yet"} · {label(r.status)}</Text>
+                <Text type="supporting" color="secondary">{r.assignedUserName || "Unassigned"} · {r.source || "Unknown source"} · Last activity {date(r.lastActivity)}</Text>
+                <Divider />
+              </VStack>
+            )) : (<Table
               data={rows.slice((current - 1) * 25, current * 25)}
               columns={columns}
               idKey="id"
@@ -495,7 +465,7 @@ function People({ snapshot }: { snapshot: any }) {
               hasHover
               rowCount={rows.length}
               rowIndexStart={(current - 1) * 25 + 1}
-            />
+            />)}
             <HStack hAlign="between" vAlign="center">
               <Text type="supporting" color="secondary">
                 {rows.length
@@ -543,7 +513,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
     [activityFilter, setActivityFilter] = useState("all"),
     [schedule, setSchedule] = useState("");
 
-  const narrow = useMediaQuery("(max-width: 1000px)");
+  const followUps = useFollowUps(snapshot.dataReady);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -845,7 +815,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                   onClick={() => bridge.openPeople()}
                 />
               </HStack>
-              <HStack hAlign="between" vAlign="center" wrap="wrap">
+              <HStack gap={6} vAlign="center" wrap="wrap">
                 <HStack gap={4} vAlign="center">
                   <Avatar
                     name={lead.name || "Unnamed contact"}
@@ -862,7 +832,9 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                     </Text>
                   </VStack>
                 </HStack>
-                <HStack gap={2}>
+                <HStack gap={2} wrap="wrap">
+                  <Button label="Call" isDisabled={!lead.phone} onClick={() => bridge.action("call", id)} />
+                  <Button label="Text" isDisabled={!lead.phone} onClick={() => bridge.action("text", id)} />
                   <Button label="Edit contact" onClick={openEdit} />
                   <Button
                     label="Schedule appointment"
@@ -871,30 +843,26 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                   />
                 </HStack>
               </HStack>
+              <HStack gap={6} wrap="wrap">
+                <VStack gap={1}><Text type="supporting" color="secondary">Pipeline stage</Text><Text weight="semibold">{stageText(lead, snapshot.stageOptions)}</Text></VStack>
+                <VStack gap={1}><Text type="supporting" color="secondary">Next follow-up</Text><Text weight="semibold">{followUp(followUps.dates, id)}</Text></VStack>
+              </HStack>
+            </VStack>
+          </LayoutHeader>
+        }
+        content={
+          <LayoutContent>
+            <VStack gap={6}>
               <TabList value={tab} onChange={setTab} hasDivider>
                 <Tab value="activity" label="Activity" />
                 <Tab value="notes" label="Notes" />
                 <Tab value="details" label="Details" />
               </TabList>
-            </VStack>
-          </LayoutHeader>
-        }
-        end={
-          !narrow ? (
-            <LayoutPanel width="22rem" hasDivider>
-              {contact}
-            </LayoutPanel>
-          ) : undefined
-        }
-        content={
-          <LayoutContent>
-            <VStack gap={6}>
               {error ? <Notice>{error}</Notice> : null}
               {notice ? <Notice>{notice}</Notice> : null}
               {loading ? <Notice>Loading contact history…</Notice> : null}
               {tab === "activity" ? (
                 <>
-                  {harvey}
                   <Section>
                     <VStack gap={5}>
                       <HStack hAlign="between" vAlign="center" wrap="wrap">
@@ -955,6 +923,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                       ) : null}
                     </VStack>
                   </Section>
+                  {harvey}
                 </>
               ) : null}
               {tab === "notes" ? (
@@ -988,6 +957,8 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                 </Section>
               ) : null}
               {tab === "details" ? (
+                <>
+                {contact}
                 <ContactDetails
                   record={record}
                   lead={lead}
@@ -997,8 +968,9 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                     await bridge.refresh();
                   }}
                 />
+                </>
               ) : null}
-              {narrow ? contact : null}
+
             </VStack>
           </LayoutContent>
         }
@@ -1063,6 +1035,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
           close={() => setSchedule("")}
           saved={async () => {
             setSchedule("");
+            followUps.refresh();
             setNotice("Saved to this contact and the team calendar.");
             await load();
             await bridge.refresh();

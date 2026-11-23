@@ -114,6 +114,11 @@
       const lead = LEADS.find((l) => l.id === id);
       if (!lead) return;
       switch (action) {
+        case "call":
+        case "text":
+          oldLead(id, action);
+          break;
+
         case "appointment":
           openAppointmentModal(lead);
           break;
