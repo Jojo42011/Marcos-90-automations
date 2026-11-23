@@ -77,11 +77,26 @@ check("earliestFollowUpDueDate prefers open call/follow_up only", () => {
     { leadId: "a", type: "call", status: "pending", dueDate: yesterday },
     { leadId: "a", type: "appointment", status: "pending", dueDate: "2000-01-01" },
     { leadId: "a", type: "call", status: "completed", dueDate: "1999-01-01" },
+    { leadId: "a", type: "follow_up", status: "cancelled", dueDate: "1998-01-01" },
+    { leadId: "a", type: "call", status: "on_hold", dueDate: "1997-01-01" },
     { leadId: "b", type: "follow_up", status: "due_soon", dueDate: today },
   ];
   assert.equal(earliestFollowUpDueDate(tasks, "a"), yesterday);
   assert.equal(earliestFollowUpDueDate(tasks, "b"), today);
   assert.equal(earliestFollowUpDueDate(tasks, "missing"), "");
+});
+
+check("completed and canceled follow-ups alone yield no due date", () => {
+  assert.equal(
+    earliestFollowUpDueDate(
+      [
+        { leadId: "c", type: "call", status: "completed", dueDate: yesterday },
+        { leadId: "c", type: "follow_up", status: "cancelled", dueDate: today },
+      ],
+      "c",
+    ),
+    "",
+  );
 });
 
 check("followUpBucket: overdue wins over urgent; due today; urgent without date", () => {
@@ -206,22 +221,125 @@ check("sync stamps followUpDueDate onto Dialer contacts", () => {
 });
 
 {
-  const list = store.createList("marco", "Cold expireds", "list");
-  store.addMembers(list.id, [overC.id]);
-  assert(store.members(list.id).includes(overC.id));
-  const before = await getLeadById("lead-overdue-dated");
-  assert.equal(before.phone, "5125550402");
-  assert.equal(before.address, "9 Cold Lane");
-  store.moveToAppointments("marco", [overC.id], list.id);
-  assert(!store.members(list.id).includes(overC.id));
-  const appt = store.appointmentsGroup("marco");
-  assert(store.members(appt.id).includes(overC.id));
-  const after = await getLeadById("lead-overdue-dated");
-  assert(after, "CRM lead must remain after leaving cold queue");
-  assert.equal(after.phone, "5125550402");
-  assert.equal(after.address, "9 Cold Lane");
-  assert.equal(after.name, "Overdue Dated");
-  console.log("ok appointment_set leaves cold list; CRM lead persists");
+  // Session Appointment Set on Mojo Expired smart queue (not a physical list).
+  upsertLeadQuiet({
+    id: "lead-mojo-book",
+    platform: "crm",
+    userId: "mojobook",
+    username: null,
+    name: "Mojo Booked Seller",
+    phone: "5125550410",
+    email: null,
+    state: "new",
+    source: "Mojo",
+    adCampaign: null,
+    propertyInquired: null,
+    address: "1 Expired Ave",
+    criteria: null,
+    brivityId: null,
+    crmStatus: "nurture",
+    crmStage: "new",
+    crmPriority: "normal",
+    crmIntent: "seller",
+    crmCallQueue: "none",
+    crmNotes: null,
+    assignedUserId: "marco",
+    assignedUserName: "Marco",
+    tags: ["Expired"],
+  });
+  await syncDialer();
+  let mojoBook = store.contacts().find((c) => c.crmId === "lead-mojo-book");
+  assert(mojoBook);
+  assert.equal(matchesQueue(mojoBook, "mojo", store.bookedAppointmentIds()), true);
+  const session = store.start("marco", "Marco", "", "", undefined, "mojo");
+  assert.equal(session.queueId, "mojo");
+  assert(session.queue.includes(mojoBook.id));
+  assert.equal(session.queue[session.position], mojoBook.id);
+  const call = store.beginCall(session.id, "marco");
+  assert.equal(call.contactId, mojoBook.id);
+  store.finishCall(call.id, "marco", "appointment_set", "Booked listing appt");
+  store.sessionAction(session.id, "marco", "end");
+  await syncDialer(); // CRM re-sync keeps Mojo+Expired tags
+  mojoBook = store.contacts().find((c) => c.crmId === "lead-mojo-book");
+  const booked = store.bookedAppointmentIds();
+  assert(booked.has(mojoBook.id), "must land in Appointments group");
+  assert.equal(
+    matchesQueue(mojoBook, "mojo", booked),
+    false,
+    "booked lead must leave Mojo Expired cold queue after reload/sync",
+  );
+  assert.equal(
+    store
+      .contacts()
+      .filter((c) => matchesQueue(c, "mojo", booked))
+      .some((c) => c.crmId === "lead-mojo-book"),
+    false,
+  );
+  // Starting Mojo again must not requeue the booked contact.
+  assert.throws(
+    () => store.start("marco", "Marco", "", "", [mojoBook.id], "mojo"),
+    /No callable contacts match this queue/,
+  );
+  const crm = await getLeadById("lead-mojo-book");
+  assert(crm, "CRM lead must persist");
+  assert.equal(crm.phone, "5125550410");
+  assert.equal(crm.address, "1 Expired Ave");
+  assert.deepEqual(crm.tags, ["Expired"]);
+  console.log("ok session Appointment Set excludes Mojo Expired queue after sync; CRM persists");
+}
+
+{
+  // Completing the only open follow-up clears due/overdue after re-sync.
+  const { updateTask, getTasks } = require("../dist/src/core/tasks.js");
+  const open = getTasks().find((t) => t.leadId === "lead-due-dated" && t.status === "pending");
+  assert(open);
+  updateTask(open.id, { status: "completed", completedAt: new Date().toISOString() });
+  await syncDialer();
+  const cleared = store.contacts().find((c) => c.crmId === "lead-due-dated");
+  assert.equal(cleared.followUpDueDate || "", "");
+  assert.equal(matchesQueue(cleared, "due", store.bookedAppointmentIds()), false);
+  console.log("ok completed follow-up clears due queue after sync");
+}
+
+{
+  // Tenant scope: this worker only syncs its owner; foreign-owner Dialer rows keep their stamp.
+  const foreign = {
+    id: "crm:wesley:lead-foreign-due",
+    ownerId: "wesley",
+    crmId: "lead-foreign-due",
+    name: "Wesley Due",
+    phone: "5125550499",
+    email: "",
+    address: "",
+    city: "",
+    source: "Manual",
+    assignedTo: "wesley",
+    intent: "seller",
+    dnc: false,
+    archived: false,
+    crmLinked: true,
+    tags: [],
+    crmStatus: "new",
+    crmCallQueue: "none",
+    followUpDueDate: "2099-01-01",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  store.put("contact", foreign);
+  createTask({
+    title: "Should not rewrite Wesley contact",
+    type: "call",
+    priority: "normal",
+    source: "manual",
+    dueDate: today,
+    leadId: "lead-foreign-due",
+    assignedUserId: "marco",
+    status: "pending",
+  });
+  await syncDialer();
+  assert.equal(store.get("contact", foreign.id).followUpDueDate, "2099-01-01");
+  assert.equal(store.get("contact", foreign.id).ownerId, "wesley");
+  console.log("ok tenant sync leaves other-owner Dialer contacts untouched");
 }
 
 check("status-to-stage: Dialer Talked advances seller New → Contacted", () => {

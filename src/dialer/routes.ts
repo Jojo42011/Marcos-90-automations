@@ -128,7 +128,7 @@ export function registerDialer(
       },
       sync: s.all("sync"),
       pendingSync: pending.count,
-      queues: queueSummaries(contacts),
+      queues: queueSummaries(contacts, s.bookedAppointmentIds()),
       capabilities: {
         callMode: "external_phone",
         automaticDialing: false,
@@ -180,17 +180,19 @@ export function registerDialer(
   }));
   register("get", "/queues", async () => {
     await syncDialer();
-    return { queues: queueSummaries(dialerStore().contacts()) };
+    const s = dialerStore();
+    return { queues: queueSummaries(s.contacts(), s.bookedAppointmentIds()) };
   });
   register("get", "/contacts", (req) => {
     const s = dialerStore();
     let rows = s.contacts();
+    const booked = s.bookedAppointmentIds();
     const q = text(req.query.q).toLowerCase(),
       listId = text(req.query.listId),
       assigned = text(req.query.assignedTo),
       queueId = parseQueueId(req.query.queue);
     if (req.query.queue && !queueId) fail("Choose a valid calling queue.");
-    if (queueId) rows = queueContacts(rows, queueId);
+    if (queueId) rows = queueContacts(rows, queueId, booked);
     if (listId) {
       const ids = new Set(s.members(listId));
       rows = rows.filter((c) => ids.has(c.id));

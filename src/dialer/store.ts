@@ -298,6 +298,11 @@ export class DialerStore {
     this.audit(actor, "list_created", g);
     return g;
   }
+  /** Contact ids already booked into Appointments — excluded from cold smart queues. */
+  bookedAppointmentIds(): Set<string> {
+    const g = this.all<DialerList>("list").find((l) => l.system === "appointments");
+    return new Set(g ? this.members(g.id) : []);
+  }
   /**
    * Move contacts into the Appointments group and, when given, off the calling
    * list they were worked from. CRM records are untouched.
@@ -393,11 +398,12 @@ export class DialerStore {
       const members = listId ? new Set(this.members(listId)) : null;
       if (listId && !this.get("list", listId)) fail("List not found", 404);
       const chosen = ids ? new Set(ids) : null;
+      const booked = this.bookedAppointmentIds();
       const queue = this.contacts()
         .filter(
           (c) =>
             isCallable(c) &&
-            (!smartQueue || matchesQueue(c, smartQueue)) &&
+            (!smartQueue || matchesQueue(c, smartQueue, booked)) &&
             (!members || members.has(c.id)) &&
             (!chosen || chosen.has(c.id)),
         )

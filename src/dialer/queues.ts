@@ -83,9 +83,24 @@ export function isCallable(c: Contact): boolean {
   return !c.dnc && !c.archived && phoneKey(c.phone).length >= 10;
 }
 
-export function matchesQueue(c: Contact, queueId: string): boolean {
+/** Cold prospecting queues — booked Appointments-group contacts stay out. */
+const COLD_QUEUES = new Set<QueueId>(["due", "overdue", "mojo", "new", "nurture"]);
+
+export function isColdQueue(queueId: string): boolean {
+  return COLD_QUEUES.has(queueId as QueueId);
+}
+
+/**
+ * @param bookedIds contact ids in the team Appointments group (left the cold queue).
+ */
+export function matchesQueue(
+  c: Contact,
+  queueId: string,
+  bookedIds: ReadonlySet<string> = new Set(),
+): boolean {
   if (!QUEUE_DEFS.some((q) => q.id === queueId)) return false;
   if (queueId === "everyone") return isCallable(c) || (!!phoneKey(c.phone) && !c.archived);
+  if (isColdQueue(queueId) && bookedIds.has(c.id)) return false;
   if (!phoneKey(c.phone)) return false;
   if (queueId === "due") return followUpBucket(c) === "due";
   if (queueId === "overdue") return followUpBucket(c) === "overdue";
@@ -100,13 +115,20 @@ export function parseQueueId(raw: unknown): QueueId | "" {
   return QUEUE_DEFS.some((q) => q.id === id) ? (id as QueueId) : "";
 }
 
-export function queueContacts(contacts: Contact[], queueId: string): Contact[] {
-  return contacts.filter((c) => matchesQueue(c, queueId));
+export function queueContacts(
+  contacts: Contact[],
+  queueId: string,
+  bookedIds: ReadonlySet<string> = new Set(),
+): Contact[] {
+  return contacts.filter((c) => matchesQueue(c, queueId, bookedIds));
 }
 
-export function queueSummaries(contacts: Contact[]) {
+export function queueSummaries(
+  contacts: Contact[],
+  bookedIds: ReadonlySet<string> = new Set(),
+) {
   return QUEUE_DEFS.map((q) => ({
     ...q,
-    count: queueContacts(contacts, q.id).filter(isCallable).length,
+    count: queueContacts(contacts, q.id, bookedIds).filter(isCallable).length,
   }));
 }

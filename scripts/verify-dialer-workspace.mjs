@@ -356,6 +356,56 @@ try {
   await api("/sessions/" + apptSession.id + "/action", { action: "end" });
   const patDetail = await api("/contacts/" + pat.id);
   assert.deepEqual(patDetail.groups.map((g) => g.system), ["appointments"]);
+  // After CRM re-sync, Mojo Expired smart queue must still exclude booked Pat.
+  await syncDialer();
+  assert.equal(
+    (await api("/contacts?queue=mojo")).contacts.some((x) => x.id === pat.id),
+    false,
+  );
+  const patLead = await getLeadById(pat.crmId);
+  assert(patLead, "imported Mojo CRM lead must persist after Appointment Set");
+  assert.equal(String(patLead.phone).replace(/\D/g, "").slice(-10), "5125550301");
+
+  // Smart-queue session (no physical list): Appointment Set leaves Mojo Expired.
+  assert.equal(
+    (await api("/contacts?queue=mojo")).contacts.some((x) => x.crmId === "lead-mojo-1"),
+    true,
+  );
+  const mojoQueueSession = (await api("/sessions", { queueId: "mojo" })).session;
+  assert.equal(mojoQueueSession.queueId, "mojo");
+  assert(mojoQueueSession.queue.includes(mojoContact.id));
+  const mojoCall = (await api("/sessions/" + mojoQueueSession.id + "/calls", {})).call;
+  assert.equal(mojoCall.contactId, mojoQueueSession.queue[0]);
+  // Work the queue until lead-mojo-1 is current, then book.
+  let currentId = mojoCall.contactId;
+  if (currentId !== mojoContact.id) {
+    await api("/calls/" + mojoCall.id + "/outcome", { outcome: "no_answer" });
+    while (true) {
+      const s = store.get("session", mojoQueueSession.id);
+      const nextId = s.queue[s.position];
+      if (!nextId) break;
+      const c = (await api("/sessions/" + mojoQueueSession.id + "/calls", {})).call;
+      if (c.contactId === mojoContact.id) {
+        await api("/calls/" + c.id + "/outcome", { outcome: "appointment_set" });
+        currentId = mojoContact.id;
+        break;
+      }
+      await api("/calls/" + c.id + "/outcome", { outcome: "no_answer" });
+    }
+  } else {
+    await api("/calls/" + mojoCall.id + "/outcome", { outcome: "appointment_set" });
+  }
+  assert.equal(currentId, mojoContact.id);
+  await api("/sessions/" + mojoQueueSession.id + "/action", { action: "end" });
+  await syncDialer();
+  assert.equal(
+    (await api("/contacts?queue=mojo")).contacts.some((x) => x.crmId === "lead-mojo-1"),
+    false,
+    "Mojo Expired smart queue must drop booked lead after reload/sync",
+  );
+  assert.equal((await getLeadById("lead-mojo-1")).name, "Mojo Expired Lead");
+  assert.equal((await getLeadById("lead-mojo-1")).phone, "5125550202");
+
   await api("/lists/" + mojoList.id + "/members", { contactIds: [dueContact.id] });
   const moved = await api("/appointments-group/members", { contactIds: [dueContact.id], fromListId: mojoList.id });
   assert.equal(moved.group.id, apptGroup.id);
