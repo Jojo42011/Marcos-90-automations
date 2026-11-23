@@ -20,7 +20,7 @@ import { Button } from "@astryxdesign/core/Button";
 
 import { Avatar } from "@astryxdesign/core/Avatar";
 
-import { Table, proportional } from "@astryxdesign/core/Table";
+import { Table } from "@astryxdesign/core/Table";
 
 
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -92,40 +92,134 @@ async function api(path: string, method = "GET", body?: unknown) {
   return d;
 }
 
-type FollowUps = Map<string, string>;
-function useFollowUps(ready: boolean) {
-  const path = bridge?.url("/api/crm-tasks");
-  const [result, setResult] = useState<{ path: string; dates: FollowUps }>();
-  const [revision, refresh] = React.useReducer((n: number) => n + 1, 0);
-  useEffect(() => {
-    if (!path || !ready) return;
-    const controller = new AbortController();
-    fetch(path, { signal: controller.signal }).then(async response => {
-      if (!response.ok) throw Error();
-      const { tasks } = await response.json();
-      const dates: FollowUps = new Map();
-      for (const task of tasks) {
-        if (!task.leadId || !task.dueDate || ["completed", "cancelled"].includes(task.status)) continue;
-        const earliest = dates.get(task.leadId);
-        if (!earliest || task.dueDate < earliest) dates.set(task.leadId, task.dueDate);
-      }
-      if (!controller.signal.aborted) setResult({ path, dates });
-    }).catch(() => { if (!controller.signal.aborted) setResult(undefined); });
-    return () => controller.abort();
-  }, [path, ready, revision]);
-  return { dates: ready && result?.path === path ? result?.dates : undefined, refresh };
+type ScheduleFacts = { task?: Row; appointment?: Row };
+type DeskFacts = { phoneFlagsReady?: boolean; schedules?: Map<string, ScheduleFacts>; metrics?: Record<string, Row> };
+
+const centralClock = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+function centralNow(instant = new Date()) {
+  const parts = Object.fromEntries(centralClock.formatToParts(instant).map(p => [p.type,p.value]));
+  return parts.year + "-" + parts.month + "-" + parts.day + "T" + parts.hour + ":" + parts.minute;
+}
+function scheduleKey(t: Row, endOfDay = false) {
+  return t.dueDate + "T" + (t.dueTime || (endOfDay ? "23:59" : "00:00"));
+}
+function dueAt(task: Row) {
+  return new Date(task.dueDate + "T" + (task.dueTime || "00:00"));
 }
 
-function followUp(dates: FollowUps | undefined, id: string) {
-  if (!dates) return "Unavailable";
-  const day = dates.get(id);
-  if (!day) return "None scheduled";
-  const due = new Date(day + "T00:00:00");
-  if (Number.isNaN(due.getTime())) return "Unavailable";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (due.getTime() === today.getTime()) return "Today";
-  return (due < today ? "Overdue · " : "") + due.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+function useDeskFacts(ready: boolean) {
+  const path = bridge?.url("/api/crm-tasks");
+  const [result, setResult] = useState<{path: string; facts: DeskFacts}>();
+  const [revision, refresh] = React.useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!ready || !path) return;
+    let active = true;
+    async function load() {
+      const [tasks, metrics] = await Promise.allSettled([
+        api("/api/crm-tasks"), api("/api/crm/lead-metrics"),
+      ]);
+      if (!active) return;
+      const facts: DeskFacts = {};
+      if (metrics.status === "fulfilled") {
+        facts.metrics = metrics.value.metrics;
+        facts.phoneFlagsReady = metrics.value.phoneFlagsReady === true;
+      }
+      if (tasks.status === "fulfilled" && Array.isArray(tasks.value.tasks)) {
+        facts.schedules = new Map();
+        for (const t of tasks.value.tasks) {
+          if (!t.leadId || !t.dueDate || !Number.isFinite(+dueAt(t)) ||
+              !["pending", "in_progress", "due_soon", "overdue"].includes(t.status)) continue;
+          const key = t.type === "appointment" ? "appointment" : "task";
+          if (key === "appointment" && (["cancelled", "completed"].includes(t.appointmentStatus) ||
+              scheduleKey(t,true) < centralNow())) continue;
+          const factsForLead = facts.schedules.get(t.leadId) || {};
+          if (!factsForLead[key] || +dueAt(t) < +dueAt(factsForLead[key]!)) factsForLead[key] = t;
+          facts.schedules.set(t.leadId, factsForLead);
+        }
+      }
+      setResult({ path, facts });
+    }
+    void load();
+    return () => { active = false; };
+  }, [path, ready, revision]);
+  return { ...(ready && result?.path === path ? result?.facts : {}), refresh };
+}
+
+function dueCue(task: Row) {
+  const due = dueAt(task);
+  const now = centralNow();
+  const overdue = task.dueDate < now.slice(0,10);
+  const day = task.dueDate === now.slice(0,10) ? "Today" :
+    due.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return [overdue && "Overdue", day, task.dueTime && task.dueTime + " CT"].filter(Boolean).join(" · ");
+}
+
+function scheduleText(task: Row | undefined, loaded: boolean) {
+  return task ? [task.title || label(task.type), dueCue(task)].join(" · ") : loaded ? "None scheduled" : "Unavailable";
+}
+
+const channels: Record<string, string> = {
+  call: "Call", call_made: "Call", email_sent: "Email sent", email_logged: "Email logged",
+  text_sent: "Text sent", text_received: "Text received", text_logged: "Text logged",
+};
+function lastTouch(row: Row, metrics?: Row) {
+  const touches: {at: string; title: string}[] = [];
+  for (const a of row.activity || []) {
+    if (channels[a.type]) touches.push({at: a.timestamp,
+      title: [channels[a.type], a.meta?.Outcome ? label(a.meta.Outcome) : a.subType].filter(Boolean).join(" · ")});
+  }
+  for (const m of row._msgs || []) {
+    if (m.text && ["user","assistant"].includes(m.role)) touches.push({at: m.at, title: m.role === "user" ? "Message received" : "Message sent"});
+  }
+  if (metrics?.lastSmsAt) touches.push({at: metrics.lastSmsAt, title: metrics.lastSmsDirection === "inbound" ? "Text received" : "Text sent"});
+  return touches.filter(t => Number.isFinite(Date.parse(t.at))).sort((a,b) => Date.parse(b.at) - Date.parse(a.at))[0];
+}
+
+function blockedNumber(r: Row, metrics?: Row) {
+  return Boolean(r.tags?.some((tag: string) => /^(do.not.call|dnc)$/i.test(tag)) || metrics?.primaryPhoneDnc || metrics?.phoneAllDnc);
+}
+
+function ContactActions({row, facts}: {row: Row; facts: DeskFacts}) {
+  const blocked = blockedNumber(row, facts.metrics?.[row.id]);
+  return <HStack gap={1} wrap="wrap" vAlign="center">
+    {blocked ? <Text type="supporting">Do not call</Text> : null}
+    {["call","text"].map(action => <Button key={action} size="sm" variant="secondary"
+      label={label(action)} tooltip={blocked ? "Do not call" : !facts.phoneFlagsReady ? "Phone flags unavailable" : label(action) + " · " + row.name}
+      isDisabled={!row.phone || !facts.phoneFlagsReady || blocked} onClick={() => bridge.action(action, row.id)} />)}
+  </HStack>;
+}
+
+function Fact({title, value}: {title: string; value: string}) {
+  return <VStack gap={1}><Text type="supporting" color="secondary">{title}</Text><Text weight="semibold">{value}</Text></VStack>;
+}
+
+function Qualification({lead, record}: {lead: Row; record: Row}) {
+  const c = lead.criteria || {};
+  const intent = lead.crmIntent;
+  const money = (n: unknown) => n != null && n !== "" && Number.isFinite(Number(n)) ?
+    Number(n).toLocaleString("en-US", {style:"currency", currency:"USD", maximumFractionDigits:0}) : undefined;
+  const sections = [
+    { show: ["buyer","buyer_seller"].includes(intent), title: "Buyer qualification", values: [
+      ["Budget cap",money(c.priceCap)],["Areas",c.area],["Timeline",c.timeline],
+      ["Financing",record.financing && label(record.financing)],["Bedrooms",c.beds],
+      ["Bathrooms",c.baths],["Recorded property views",record.propertyViews],
+      ["Property inquiry",lead.propertyInquired],
+    ] },
+    { show: ["seller","buyer_seller"].includes(intent), title: "Seller property", values: [
+      ["Property",lead.deal?.address || lead.propertyInquired],["Listing status",record.listing?.status || (lead.listingStatus && label(lead.listingStatus))],
+      ["List price",money(record.listing?.listPrice)],["Deal value",money(lead.deal?.value)],["Target close",lead.deal?.closeDate],
+      ["Property type",record.listing?.propertyType],["Deal notes",lead.deal?.notes],
+    ] },
+  ];
+  return <>{sections.filter(section => section.show).map(section => {
+    const fields = section.values.filter(([,v]) => v != null && v !== "");
+    return <Section key={section.title}><VStack gap={3}><Heading level={2}>{section.title}</Heading>
+      {fields.length ? <HStack gap={6} wrap="wrap">{fields.map(([k,v]) => <Fact key={k} title={k} value={String(v)} />)}</HStack> :
+        <Text color="secondary">No details recorded.</Text>}</VStack></Section>;
+  })}</>;
 }
 
 function useSnapshot() {
@@ -184,7 +278,7 @@ function People({ snapshot }: { snapshot: any }) {
 
   useEffect(()=>{Object.assign(peopleView,{query,source,status,sort,page,filters});},[query,source,status,sort,page,filters]);
   const narrow = useMediaQuery("(max-width: 700px)");
-  const followUps = useFollowUps(snapshot.dataReady);
+  const followUps = useDeskFacts(snapshot.dataReady);
 
   const all = useMemo(() => {
     const leads = new Map(snapshot.leads.map((l: Row) => [l.id, l]));
@@ -271,59 +365,50 @@ function People({ snapshot }: { snapshot: any }) {
     }
   };
 
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [stageValue, setStageValue] = useState("");
+  const [statusValue, setStatusValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const editPipeline = (r: Row) => {
+    setSaveError(""); setStageValue(r.crmStage || r.stage || ""); setStatusValue(r.crmStatus || ""); setEditing(r);
+  };
+  const savePipeline = async () => {
+    if (!editing || saving) return;
+    const patch: Row = {};
+    if (stageValue && stageValue !== (editing.crmStage || editing.stage)) patch.crmStage = stageValue;
+    if (statusValue && statusValue !== editing.crmStatus) patch.crmStatus = statusValue;
+    setSaving(true);
+    try {
+      if (Object.keys(patch).length) await api("/api/crm/lead/" + encodeURIComponent(editing.id), "PATCH", patch);
+      await bridge.refresh(); setEditing(null);
+    } catch (e: any) { setSaveError(e.message); } finally { setSaving(false); }
+  };
   const columns = [
-    {
-      key: "name",
-      header: "Person",
-      width: proportional(2, { minWidth: 240 }),
-      renderCell: (r: Row) => (
-        <HStack gap={3} vAlign="center">
-          <Avatar
-            name={r.name || "Unnamed contact"}
-            size="md"
-            tooltip={false}
-          />
-          <VStack gap={1}>
-            <Button
-              variant="ghost"
-              label={r.name || "Unnamed contact"}
-              onClick={() => bridge.openLead(r.id)}
-            />
-            <Text type="supporting" color="secondary">
-              {r.email || r.phone || "No contact details yet"}
-            </Text>
-          </VStack>
-        </HStack>
-      ),
-    },
-
-    {
-      key: "pipeline",
-      header: "Pipeline",
-      renderCell: (r: Row) => <VStack gap={1}>
-        <Text weight="semibold">{stageText(r, snapshot.stageOptions)}</Text>
-        <Text type="supporting" color="secondary">{label(r.status)}</Text>
-      </VStack>,
-    },
-    {
-      key: "follow",
-      header: "Next follow-up",
-      renderCell: (r: Row) => <VStack gap={1}>
-        <Text weight="semibold">{followUp(followUps.dates, r.id)}</Text>
-        <Text type="supporting" color="secondary">Last activity · {date(r.lastActivity)}</Text>
-      </VStack>,
-    },
-    {
-      key: "owner",
-      header: "Assignment",
-      renderCell: (r: Row) => <VStack gap={1}>
-        <Text>{r.assignedUserName || "Unassigned"}</Text>
-        <Text type="supporting" color="secondary">{r.source || "Unknown source"}</Text>
-      </VStack>,
-    },
+    { key:"name", header:"Person", renderCell:(r: Row) => <VStack gap={1}>
+      <HStack><Button variant="ghost" label={r.name || "Unnamed contact"} onClick={() => bridge.openLead(r.id)} /></HStack>
+      <Text type="supporting">{[r.crmIntent && label(r.crmIntent),r.source].filter(Boolean).join(" · ") || "Source not recorded"}</Text>
+      <Text type="supporting" color="secondary">{r.assignedUserName || "Unassigned"}</Text></VStack> },
+    { key:"pipeline", header:"Pipeline", renderCell:(r: Row) => <VStack gap={1}>
+      <HStack><Button size="sm" variant="secondary" label={stageText(r,snapshot.stageOptions)} tooltip={"Edit stage and status for " + r.name} onClick={() => editPipeline(r)} /></HStack>
+      <Text type="supporting">{snapshot.statusOptions.find((o: Row) => o.value === r.crmStatus)?.label || label(r.crmStatus || r.status)}</Text>
+      {r.latestStageChange?.to === (r.crmStage || r.stage) ? <Text type="supporting" color="secondary">Since {date(r.latestStageChange.at)}</Text> : null}</VStack> },
+    { key:"touch", header:"Last touch", renderCell:(r: Row) => {
+      const touch = lastTouch(r,followUps.metrics?.[r.id]);
+      return <VStack gap={1}><Text>{touch?.title || (followUps.metrics ? "No recorded touch" : "Unavailable")}</Text>
+        {touch && <Text type="supporting" color="secondary">{date(touch.at)}</Text>}</VStack>;
+    }},
+    { key:"next", header:"Next step", renderCell:(r: Row) => {
+      const schedule = followUps.schedules?.get(r.id);
+      const next = [schedule?.task,schedule?.appointment].filter((t): t is Row => Boolean(t)).sort((a,b)=>+dueAt(a)-+dueAt(b))[0];
+      return <VStack gap={1}><Text weight="semibold">{next?.title || (followUps.schedules ? "None scheduled" : "Unavailable")}</Text>
+        {next && <Text type="supporting" color="secondary">{dueCue(next)}</Text>}</VStack>;
+    }},
+    { key:"actions", header:"Actions", renderCell:(r: Row) => <ContactActions row={r} facts={followUps} /> },
   ];
 
   return (
+    <>
     <Layout
       padding={4}
       header={
@@ -446,15 +531,13 @@ function People({ snapshot }: { snapshot: any }) {
             ) : null}
             {error ? <Notice>{error}</Notice> : null}
             {narrow ? rows.slice((current - 1) * 25, current * 25).map((r: Row) => (
-              <VStack key={r.id} gap={2}>
-                <HStack hAlign="between" vAlign="center" wrap="wrap">
-                  <Button variant="ghost" label={r.name || "Unnamed contact"} onClick={() => bridge.openLead(r.id)} />
-                  <Text weight="semibold">{stageText(r, snapshot.stageOptions)}</Text>
+              <VStack key={r.id} gap={3}>
+                <HStack hAlign="between" vAlign="start" wrap="wrap">{columns[0].renderCell(r)}{columns[1].renderCell(r)}</HStack>
+                <HStack gap={6} wrap="wrap">
+                  <VStack gap={1}><Text type="supporting" color="secondary">Next step</Text>{columns[3].renderCell(r)}</VStack>
+                  <VStack gap={1}><Text type="supporting" color="secondary">Last touch</Text>{columns[2].renderCell(r)}</VStack>
                 </HStack>
-                <Text>Next follow-up · {followUp(followUps.dates, r.id)}</Text>
-                <Text type="supporting" color="secondary">{r.email || r.phone || "No contact details yet"} · {label(r.status)}</Text>
-                <Text type="supporting" color="secondary">{r.assignedUserName || "Unassigned"} · {r.source || "Unknown source"} · Last activity {date(r.lastActivity)}</Text>
-                <Divider />
+                {columns[4].renderCell(r)}<Divider />
               </VStack>
             )) : (<Table
               data={rows.slice((current - 1) * 25, current * 25)}
@@ -492,6 +575,16 @@ function People({ snapshot }: { snapshot: any }) {
         </LayoutContent>
       }
     />
+    {editing && <Dialog isOpen onOpenChange={open => { if (!open && !saving) setEditing(null); }} purpose="form" width="28rem">
+      <DialogHeader title={"Pipeline · " + editing.name} />
+      <VStack gap={4} padding={4}>
+        <Selector label="Stage" value={stageValue} onChange={setStageValue} options={withCurrent(snapshot.stageOptions, stageValue)} />
+        <Selector label="Status" value={statusValue} onChange={setStatusValue} options={withCurrent(snapshot.statusOptions, statusValue)} />
+        {saveError && <Notice>{saveError}</Notice>}
+        <HStack gap={2}><Button label="Cancel" isDisabled={saving} onClick={()=>setEditing(null)} />
+          <Button label="Save pipeline" variant="primary" isDisabled={saving} onClick={savePipeline} /></HStack>
+      </VStack>
+    </Dialog>}</>
   );
 }
 
@@ -510,10 +603,10 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState(false),
     [form, setForm] = useState<Row>({}),
-    [activityFilter, setActivityFilter] = useState("all"),
+    [activityFilter, setActivityFilter] = useState("history"),
     [schedule, setSchedule] = useState("");
 
-  const followUps = useFollowUps(snapshot.dataReady);
+  const followUps = useDeskFacts(snapshot.dataReady);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -625,8 +718,13 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
     }
   };
 
+  const latest = lastTouch(lead, followUps.metrics?.[id]);
+  const scheduled = followUps.schedules?.get(id);
+  const showing = record.showing;
+  const upcomingShowing = showing && showing.confirmationStatus !== "cancelled" && Date.parse(showing.scheduledAt) >= Date.now() &&
+    (!scheduled?.appointment || centralNow(new Date(showing.scheduledAt)) < scheduleKey(scheduled.appointment));
   const shown = items.filter(
-    (i) => activityFilter === "all" || i.category === activityFilter,
+    (i) => activityFilter === "history" ? ["call","email","text","note","stage"].includes(i.category) : activityFilter === "all" || i.category === activityFilter,
   );
 
   const contact = (
@@ -827,14 +925,12 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                       {lead.name || "Unnamed contact"}
                     </Heading>
                     <Text color="secondary">
-                      {label(lead.crmIntent || lead.intent)} · {lead.source || "Unknown source"} ·{" "}
-                      {label(lead.statusDisp)}
+                      {[lead.crmIntent && label(lead.crmIntent),lead.source,lead.assignedUserName || "Unassigned"].filter(Boolean).join(" · ")}
                     </Text>
                   </VStack>
                 </HStack>
                 <HStack gap={2} wrap="wrap">
-                  <Button label="Call" isDisabled={!lead.phone} onClick={() => bridge.action("call", id)} />
-                  <Button label="Text" isDisabled={!lead.phone} onClick={() => bridge.action("text", id)} />
+                  <ContactActions row={lead} facts={followUps} />
                   <Button label="Edit contact" onClick={openEdit} />
                   <Button
                     label="Schedule appointment"
@@ -845,7 +941,9 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
               </HStack>
               <HStack gap={6} wrap="wrap">
                 <VStack gap={1}><Text type="supporting" color="secondary">Pipeline stage</Text><Text weight="semibold">{stageText(lead, snapshot.stageOptions)}</Text></VStack>
-                <VStack gap={1}><Text type="supporting" color="secondary">Next follow-up</Text><Text weight="semibold">{followUp(followUps.dates, id)}</Text></VStack>
+                <Fact title="Last touch" value={latest ? latest.title + " · " + date(latest.at) : followUps.metrics ? "No recorded touch" : "Unavailable"} />
+                <Fact title="Next task" value={scheduleText(scheduled?.task, Boolean(followUps.schedules))} />
+                <Fact title="Upcoming appointment" value={upcomingShowing ? [showing.address,date(showing.scheduledAt)].filter(Boolean).join(" · ") : scheduleText(scheduled?.appointment, Boolean(followUps.schedules))} />
               </HStack>
             </VStack>
           </LayoutHeader>
@@ -863,6 +961,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
               {loading ? <Notice>Loading contact history…</Notice> : null}
               {tab === "activity" ? (
                 <>
+                  <Qualification lead={lead} record={record} />
                   <Section>
                     <VStack gap={5}>
                       <HStack hAlign="between" vAlign="center" wrap="wrap">
@@ -873,6 +972,7 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                           value={activityFilter}
                           onChange={setActivityFilter}
                           options={[
+                            "history",
                             "all",
                             "text",
                             "call",
@@ -880,9 +980,11 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                             "appointment",
                             "task",
                             "note",
+                            "stage",
+                            "web",
                           ].map((v) => ({
                             value: v,
-                            label: v === "all" ? "All activity" : label(v),
+                            label: v === "all" ? "All activity" : v === "history" ? "Contact history" : label(v),
                           }))}
                         />
                       </HStack>
@@ -902,6 +1004,8 @@ function Profile({ lead, snapshot }: { lead: Row; snapshot: any }) {
                                 ? item.body
                                 : item.description || ""}
                             </Text>
+                            {item.category === "stage" && item.detail && <Text>{label(item.detail.From)} → {label(item.detail.To)}</Text>}
+                            {(item.detail?.Outcome || item.subType) && <Text type="supporting">{label(item.detail?.Outcome || item.subType)}</Text>}
                             {item.author ? (
                               <Text type="supporting" color="secondary">
                                 {item.author}

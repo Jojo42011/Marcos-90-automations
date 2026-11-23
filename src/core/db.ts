@@ -711,6 +711,7 @@ export function upsertLeadQuiet(
   const existing = input.id ? leadsById.get(input.id) : undefined;
   if (existing) {
     const merged = normalizeCrmDefaults({ ...existing, ...input, id: existing.id, updatedAt: now });
+    recordStageChange(existing, merged);
     leadsById.set(existing.id, merged);
     persistToFile();
     return merged;
@@ -734,7 +735,17 @@ export function recoverHistoricalPhone(lead: Lead, phone: string): Lead {
   return recovered;
 }
 
-export async function updateLead(lead: Lead): Promise<Lead | undefined> {
+function recordStageChange(existing: Lead, next: Lead, actor?: string) {
+  next.stageChanges = existing.stageChanges;
+  if (existing.crmStage && next.crmStage && existing.crmStage !== next.crmStage) {
+    next.stageChanges = [...(existing.stageChanges || []), {
+      from: existing.crmStage, to: next.crmStage, at: nowIso(),
+      ...(actor ? { actor } : {}),
+    }];
+  }
+}
+
+export async function updateLead(lead: Lead, stageActor?: string): Promise<Lead | undefined> {
   const existing = leadsById.get(lead.id);
   if (!existing) {
     let normalized = normalizeCrmDefaults({ ...lead, createdAt: nowIso(), updatedAt: nowIso() });
@@ -745,6 +756,7 @@ export async function updateLead(lead: Lead): Promise<Lead | undefined> {
     return leadsById.get(lead.id);
   }
   const normalized = normalizeCrmDefaults({ ...lead, updatedAt: nowIso() });
+  recordStageChange(existing, normalized, stageActor);
   const updated = applyPhoneCaptureTransition(existing, normalized);
   leadsById.set(lead.id, updated);
   persistToFile();
@@ -1320,6 +1332,7 @@ export async function getDashboardSnapshot(
       brivityId: lead.brivityId,
       crmStatus: lead.crmStatus,
       crmStage: lead.crmStage,
+      latestStageChange: lead.stageChanges?.at(-1),
       crmPriority: lead.crmPriority,
       crmIntent: lead.crmIntent,
       crmCallQueue: lead.crmCallQueue,
@@ -1468,6 +1481,7 @@ export function normalizeIsoDay(raw: unknown): string | null {
 }
 
 export async function updateLeadCrmFields(input: {
+  stageActor?: string;
   leadId: string;
   crmStatus?: CrmStatusValue;
   crmStage?: Lead["crmStage"];
@@ -1685,6 +1699,6 @@ export async function updateLeadCrmFields(input: {
      impossible. */
   const managed = input.autoPlanEnrollments !== undefined;
   const finalNext = managed ? next : applyAutoPlanAutomations(lead, next);
-  await updateLead(finalNext);
+  await updateLead(finalNext, input.stageActor);
   return finalNext;
 }

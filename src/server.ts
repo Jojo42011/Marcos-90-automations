@@ -3609,6 +3609,7 @@ app.patch("/api/crm/lead/:id", express.json(), async (req, res) => {
   try {
     const updated = await updateLeadCrmFields({
       leadId: id,
+      stageActor: crmStage ? (await currentSessionUser(req))?.name : undefined,
       crmStatus: crmStatus as any,
       crmStage: crmStage as any,
       crmPriority: crmPriority as any,
@@ -3924,7 +3925,12 @@ app.get("/api/crm/lead/:id/record", async (req, res) => {
   if (!lead) return;
   try {
     const store = await import("./core/contactRecordStore.js");
-    res.json({ ok: true, record: store.getContactRecord(lead.id), docTypes: store.CONTACT_DOC_TYPES });
+    res.json({ ok: true, record: {
+      ...store.getContactRecord(lead.id),
+      financing: lead.preApprovalStatus, propertyViews: lead.propertyViewsCount,
+      listing: (await import("./dialer/property.js")).propertyFromMls(lead.mlsListingKey),
+      showing: lead.showingAppointment,
+    }, docTypes: store.CONTACT_DOC_TYPES });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
@@ -5771,7 +5777,7 @@ app.put("/api/settings/ui-prefs", express.json({ limit: "8kb" }), async (req, re
    ═══════════════════════════════════════════════════════════════════════ */
 
 /** The nine buckets the filter bar offers, in the order it renders them. */
-type TimelineCategory = "note" | "email" | "call" | "text" | "appointment" | "task" | "other" | "web";
+type TimelineCategory = "stage" | "note" | "email" | "call" | "text" | "appointment" | "task" | "other" | "web";
 
 interface TimelineItem {
   id: string;
@@ -5869,6 +5875,10 @@ app.get("/api/crm/lead/:id/timeline", async (req, res) => {
     const push = (it: TimelineItem) => { if (it.at) items.push(it); };
 
     /* ── 1. the lead's own activity ── */
+    for (const [index, change] of (lead.stageChanges || []).entries()) {
+      push({ id: "stage_" + index, category: "stage", title: "Pipeline stage changed",
+        at: change.at, author: change.actor, detail: { From: change.from, To: change.to } });
+    }
     const contactName = lead.name || "this contact";
     const activity = normalizeCrmActivity(lead.activity);
     activity.forEach((a, i) => {
@@ -6003,7 +6013,7 @@ app.get("/api/crm/lead/:id/timeline", async (req, res) => {
     const unavailable: Array<{ scope: string; reason: string }> = [
       { scope: "email", reason: "Mail goes out through Marco's Gmail, which reports no opens or clicks back — email cards show no tracking rather than a zero." },
       { scope: "web", reason: "There is no website visit tracking connected. This counts only listing-alert and market-report activity, which this system sends and measures itself." },
-      { scope: "profile", reason: "Nothing records a per-field change log on a lead, so there are no status/address change entries to show." },
+      { scope: "profile", reason: "Stage transitions appear when recorded. Earlier stages and changes to other fields have no historical log." },
     ];
 
     res.json({ ok: true, items: items.slice(0, 400), counts, unavailable, outreachTracked });
@@ -9936,6 +9946,7 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
     return;
   }
   const metrics: Record<string, Record<string, unknown>> = {};
+  let phoneFlagsReady = false;
   const touch = (id: string) => (metrics[id] = metrics[id] || {});
 
   try {
@@ -10020,6 +10031,8 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
         /* DNC is a legal flag a human set on a row. It is never inferred, and
            a number nobody has checked is "not marked", not "cleared to call". */
         row.phoneCount = phones.length;
+        const digits = (number: string) => number.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+        row.primaryPhoneDnc = phones.some(p => p.dnc && digits(p.number) === digits(lead.phone || ""));
         row.phoneDnc = phones.some((p) => p.dnc);
         row.phoneAllDnc = phones.every((p) => p.dnc);
       }
@@ -10039,6 +10052,7 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
       }
       if (team.length) row.collaborators = team.map((t) => t.userId);
     }
+    phoneFlagsReady = true;
   } catch (err) {
     console.warn("[lead-metrics] contact record facets unavailable:", err);
   }
@@ -10086,10 +10100,14 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
     const sms = await import("./core/smsStore.js");
     const db = sms.getSmsDb();
     for (const r of db
-      .prepare(`SELECT lead_id, direction, COUNT(*) n FROM sms_threads GROUP BY lead_id, direction`)
-      .all() as Array<{ lead_id: string; direction: string; n: number }>) {
+      .prepare(`SELECT lead_id, direction, COUNT(*) n, MAX(sent_at) last_at FROM sms_threads WHERE message_body != '' GROUP BY lead_id, direction`)
+      .all() as Array<{ lead_id: string; direction: string; n: number; last_at: string }>) {
       if (!r.lead_id) continue;
       const row = touch(String(r.lead_id));
+      if (r.last_at && (!row.lastSmsAt || Date.parse(r.last_at) > Date.parse(String(row.lastSmsAt)))) {
+        row.lastSmsAt = r.last_at;
+        row.lastSmsDirection = r.direction;
+      }
       if (String(r.direction) === "outbound") row.textsSent = Number(r.n) || 0;
       else row.textsReceived = Number(r.n) || 0;
     }
@@ -10099,6 +10117,7 @@ app.get("/api/crm/lead-metrics", async (req, res) => {
 
   res.json({
     metrics,
+    phoneFlagsReady,
     count: Object.keys(metrics).length,
     unavailable: [
       { field: "homeApp", label: "Home App", reason: "There is no client mobile app, so there is no adoption to report." },

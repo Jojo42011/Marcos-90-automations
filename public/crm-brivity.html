@@ -4124,6 +4124,7 @@ function mapLeadRow(l){
     id:l.id, accountOwnerId:l.accountOwnerId, accountOwnerName:l.accountOwnerName, name:l.name||l.username||"Unknown",
     intent:(l.crmIntent==="seller")?"seller":"buyer", crmIntent:l.crmIntent,
     crmStatus:l.crmStatus, statusDisp:STATUS_MAP[l.crmStatus]||"nurture",
+    latestStageChange:l.latestStageChange, listingStatus:l.listingStatus, deal:l.deal,
     stage:l.crmStage, stageLabel:STAGE_MAP[l.crmStage]||"NEW LEAD",
     phone:l.phone||"", email:l.email||null, source:l.source||"", platform:l.platform||"",
     /* Which SYSTEM the record came from, as distinct from which source NAME it

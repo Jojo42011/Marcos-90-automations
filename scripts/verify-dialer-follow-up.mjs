@@ -39,7 +39,7 @@ const {
 const { matchesQueue, queueSummaries } = require("../dist/src/dialer/queues.js");
 const { dialerStore } = require("../dist/src/dialer/store.js");
 const { syncDialer } = require("../dist/src/dialer/sync.js");
-const { upsertLeadQuiet, getLeadById } = require("../dist/src/core/db.js");
+const { upsertLeadQuiet, getLeadById, updateLeadCrmFields } = require("../dist/src/core/db.js");
 const { createTask } = require("../dist/src/core/tasks.js");
 const { bumpTrackerFromDialerActivity } = require("../dist/src/core/trackerDialerBump.js");
 const {
@@ -470,6 +470,33 @@ check("MLS expired auto-feed stays blocked; Mojo/CSV path remains", () => {
   assert.match(routes, /automaticDialing: false/);
 });
 
+// The CRM status drives Dialer queues. A status-only save must preserve DNC
+// and must never manufacture a stage event, including on a retried save.
+{
+  const id = "lead-due-dated";
+  const lead = await getLeadById(id);
+  upsertLeadQuiet({ ...lead, tags: ["do-not-call"] });
+  const update = { leadId: id, crmStatus: "hot", crmStage: "appointment_set", stageActor: "Fixture agent" };
+  await updateLeadCrmFields(update);
+  await updateLeadCrmFields(update);
+  await updateLeadCrmFields({ leadId: id, crmStatus: "watch" });
+  const saved = await getLeadById(id);
+  assert.equal(saved.crmStatus, "watch");
+  assert.deepEqual(saved.tags, ["do-not-call"]);
+  assert.equal(saved.stageChanges.length, 1);
+  const [event] = saved.stageChanges;
+  assert.equal(event.from, lead.crmStage);
+  assert.equal(event.to, "appointment_set");
+  assert.equal(event.actor, "Fixture agent");
+  assert.ok(Number.isFinite(Date.parse(event.at)));
+  await syncDialer();
+  const mirrored = dialerStore().contacts().find(contact => contact.crmId === id);
+  assert.equal(mirrored.crmStatus, "watch");
+  assert.equal(mirrored.dnc, true);
+  console.log("ok CRM status mirrors to Dialer, retains DNC, and records a stage change once");
+}
+
+dialerStore().db.close();
 getTrackerDb().close();
 rmSync(root, { recursive: true, force: true });
 
